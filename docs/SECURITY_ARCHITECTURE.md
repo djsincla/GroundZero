@@ -1,5 +1,5 @@
 # Security Architecture Whitepaper
-## VCF / vSphere 9.1 HCI Readiness Assessment Tool (`vcf_hci`)
+## GroundZero — VCF / vSphere 9.1 HCI Readiness (`groundzero`)
 
 > **Target Audience:** Information Security (InfoSec), Cybersecurity Architecture, Compliance, and Security Operations (SOC) teams evaluating authorization for execution in enterprise datacenter environments.
 
@@ -7,14 +7,14 @@
 
 ## 1. Executive Summary: Why Security Teams Approve This Tool
 
-The **VCF / vSphere 9.1 HCI Readiness Assessment Tool** is a non-intrusive, read-only hardware auditor designed to evaluate enterprise server compatibility against VMware Cloud Foundation (VCF) 9.1 and vSAN Express Storage Architecture (ESA) standards.
+The **GroundZero — VCF / vSphere 9.1 HCI Readiness** is a non-intrusive, read-only hardware auditor designed to evaluate enterprise server compatibility against VMware Cloud Foundation (VCF) 9.1 and vSAN Express Storage Architecture (ESA) standards.
 
 From an Information Security and Cyber Risk perspective, the tool is engineered with a strict minimal-attack-surface philosophy:
 
 1. **Zero Hypervisor / OS Footprint:** Requires **no** host agents, kernel modules, OS daemons, or in-band credentials. It operates entirely out-of-band (OOB).
 2. **Principle of Least Privilege:** Connects strictly via **read-only** Baseboard Management Controller (BMC) accounts over standard HTTPS (port 443). Zero write, reboot, firmware flashing, or configuration mutation actions are performed.
 3. **100% Python Standard Library (Zero Third-Party Dependencies):** Package code uses **only** built-in Python 3.9+ modules (`urllib.request`, `ssl`, `json`, `hashlib`). No unvetted third-party `pip` packages (e.g., `requests`, `aiohttp`, `jinja2`) are bundled or imported, eliminating supply-chain attack vectors.
-4. **Complete Source Auditability (No Opaque Binaries Required):** While convenience executables are published, the tool can be inspected and run purely as plain-text Python source code (`python3 vcfr_web.py` or `python3 -m vcf_hci`).
+4. **Complete Source Auditability (No Opaque Binaries Required):** While convenience executables are published, the tool can be inspected and run purely as plain-text Python source code (`python3 groundzero_web.py` or `python3 -m groundzero`).
 5. **Zero Egress / No "Phone-Home":** The tool contains **no** analytics beacons, crash telemetry, license validation check-ins, or background egress channels. All compatibility evaluations and report generation occur 100% locally.
 6. **Air-Gap / Dark-Site Support:** Operates seamlessly in isolated air-gapped networks. Public Broadcom Hardware Compatibility List (HCL) datasets can be packaged offline (`--bundle-hcl`) and imported (`--import-hcl`), eliminating any need for dual-homed management workstations.
 7. **Deterministic Data Obfuscation:** Built-in cryptographic PII sanitization hashes IPs, MACs, serial numbers, hostnames, and WWNs with a random salt while preserving essential hardware and topology relationships for external review.
@@ -30,7 +30,7 @@ From an Information Security and Cyber Risk perspective, the tool is engineered 
 │              OPERATOR WORKSTATION / BASTION HOST                         │
 │                                                                          │
 │   ┌──────────────────────────────────────────────────────────────────┐   │
-│   │  Local Web UI (127.0.0.1:7182) or CLI (vcfr_collector.py)        │   │
+│   │  Local Web UI (127.0.0.1:7182) or CLI (groundzero_collector.py)        │   │
 │   │  • Bound to localhost loopback only                              │   │
 │   │  • Protected by CSRF & high-entropy launch token                 │   │
 │   │  • SSRF filtering blocks cloud metadata endpoints                │   │
@@ -95,7 +95,7 @@ The assessment tool requires access only to the Out-of-Band management plane and
 
 ### 3.3 Optional Encrypted Local Credential Vault (opt-in, off by default)
 
-Fleets with several server generations frequently use different BMC passwords per rack or cluster. To avoid plaintext credential CSV files lingering on operator workstations, the tool ships an **optional** encrypted local vault (`vcf_hci/vault/`). It is **never** used unless the operator explicitly opts in (`python -m vcf_hci.vault init`, `vcfr_collector.py --vault`, or the Web UI *Encrypted Credential Vault* card). All pre-existing credential paths (`--username` / `--password-env`, environment variables, Web UI per-host inputs, OS-keychain-backed profiles) are unchanged.
+Fleets with several server generations frequently use different BMC passwords per rack or cluster. To avoid plaintext credential CSV files lingering on operator workstations, the tool ships an **optional** encrypted local vault (`groundzero/vault/`). It is **never** used unless the operator explicitly opts in (`python -m groundzero.vault init`, `groundzero_collector.py --vault`, or the Web UI *Encrypted Credential Vault* card). All pre-existing credential paths (`--username` / `--password-env`, environment variables, Web UI per-host inputs, OS-keychain-backed profiles) are unchanged.
 
 **What it protects against / what it does not**
 
@@ -109,7 +109,7 @@ Fleets with several server generations frequently use different BMC passwords pe
 | Forgotten passphrase | **No recovery** | Delete the vault file and re-create it |
 | Secrets lingering in process memory | **Best effort** | Python cannot reliably zero memory; `lock()` drops references |
 
-**Cryptographic construction (auditable in ~120 lines: `vcf_hci/vault/crypto.py`)**
+**Cryptographic construction (auditable in ~120 lines: `groundzero/vault/crypto.py`)**
 
 The Python standard library contains **no AES implementation**, and this project is stdlib-only by hard constraint. A pure-Python AES was deliberately rejected (timing side channels, large review surface). The vault therefore uses an Encrypt-then-MAC construction built exclusively from OpenSSL-backed primitives reachable through `hashlib`, `hmac`, and `secrets`:
 
@@ -124,7 +124,7 @@ This is the same shape as Fernet (separately derived encrypt and MAC keys, encry
 
 **Storage and hygiene**
 
-- Location: `~/.vcf-readiness/credentials.vault` (override with `--vault PATH`). Written atomically (temp file + `os.replace`) with `0600` permissions; on Windows an `icacls /inheritance:r /grant:r <user>:(R,W)` ACL is applied.
+- Location: `~/.groundzero/credentials.vault` (override with `--vault PATH`). Written atomically (temp file + `os.replace`) with `0600` permissions; on Windows an `icacls /inheritance:r /grant:r <user>:(R,W)` ACL is applied.
 - Contents: JSON envelope with base64 fields — no plaintext usernames, passwords, hostnames, or notes are ever on disk.
 - Passphrases and BMC passwords are never accepted on the command line (`argv` is visible to other processes); they are read via `getpass` or from an environment variable you name (`--vault-passphrase-env`, `--password-env`).
 - `list` / `GET /api/vault/entries` return targets, kinds, usernames, and notes — **never passwords**. There is deliberately no "reveal" or "export plaintext" command.
@@ -138,10 +138,10 @@ This is the same shape as Fernet (separately derived encrypt and MAC keys, encry
 
 A remote scan is still started from the workstation UI on `127.0.0.1`. The workstation opens SSH to a Linux jump host and runs a short-lived copy of the collector.
 
-- The jump host process is unprivileged. It writes only under `/tmp/vcfr_remote_<hex>` with mode `0700`.
+- The jump host process is unprivileged. It writes only under `/tmp/gz_remote_<hex>` with mode `0700`.
 - BMC passwords are sent on the collector's stdin (`--creds-stdin`). They are not placed in argv and not written into the remote directory.
 - An embedded SSH private key has to be a file because OpenSSH reads `IdentityFile` from disk. The workstation writes it as mode `0600` in a private temp directory and deletes that directory when the SSH session ends. A key path such as `~/.ssh/id_ed25519` is not copied into the vault.
-- Remote deletion runs a small Python program that rejects every path except the sandbox pattern, resolves symlinks with `realpath`, and reads `.vcfr_marker` before `rmtree`.
+- Remote deletion runs a small Python program that rejects every path except the sandbox pattern, resolves symlinks with `realpath`, and reads `.gz_marker` before `rmtree`.
 - Jump-host profiles, including any stored private key, sit in the same PBKDF2-HMAC-SHA256 vault as BMC passwords.
 - `--allow-remote` (binding the web server beyond localhost) still disables the vault. Remote *execution* requires the opposite: a localhost UI and an unlocked vault.
 
@@ -157,14 +157,14 @@ You do not need to execute compiled binaries (`.exe` or macOS `.app`). The tool 
 python3 --version
 
 # Launch the hardened Web UI directly from source
-python3 vcfr_web.py
+python3 groundzero_web.py
 
 # Or execute a CLI scan directly from source
-python3 vcfr_collector.py --targets 192.0.2.10-192.0.2.20 --user readonly_audit --output-dir ./audit_reports
+python3 groundzero_collector.py --targets 192.0.2.10-192.0.2.20 --user readonly_audit --output-dir ./audit_reports
 ```
 
 ### Zero External Package Dependencies
-Unlike typical Python utilities, `vcf_hci` imports **zero external pip packages**. Runtime package code uses exclusively Python standard library modules:
+Unlike typical Python utilities, `groundzero` imports **zero external pip packages**. Runtime package code uses exclusively Python standard library modules:
 
 ```python
 # Permitted Runtime Imports (Enforced via static analysis & CI lint gates)
@@ -183,7 +183,7 @@ import sys, threading, time, urllib.parse, urllib.request, zipfile
 
 ### Zero "Phone-Home" Guarantee
 - **No External Communication:** The tool does not transmit telemetry, analytics, health pings, usage metrics, or license status to Broadcom, VMware, or any third party.
-- **Self-Contained Evaluation:** All compatibility rules (CPU generation matrices, vSAN ESA certification logic, BIOS security benchmarks) are embedded directly in the local source code (`vcf_hci/compat/` and `vcf_hci/constants.py`).
+- **Self-Contained Evaluation:** All compatibility rules (CPU generation matrices, vSAN ESA certification logic, BIOS security benchmarks) are embedded directly in the local source code (`groundzero/compat/` and `groundzero/constants.py`).
 - **No Remote Code Execution / No Dynamic Scripts:** Reports are generated as self-contained static HTML files with inline CSS and client-side JavaScript. No external CDNs, fonts, or tracking pixels are referenced.
 
 ### Air-Gapped / Dark-Site Operation (Isolated OOB Networks)
@@ -191,14 +191,14 @@ To prevent security concerns where an operator device would require simultaneous
 
 ```
 [ Step 1: Internet-Connected Workstation ]
-$ python3 -m vcf_hci --bundle-hcl
+$ python3 -m groundzero --bundle-hcl
   └─► Auto-downloads public Broadcom vSAN HCL datasets (all.json)
   └─► Packages into standalone encrypted/checksummed 'vcf_hcl_bundle_YYYYMMDD.zip'
 
 [ Step 2: Transfer via Approved Secure File Ingestion (USB / Bastion) ]
 
 [ Step 3: Air-Gapped Bastion Workstation on OOB Network ]
-$ python3 -m vcf_hci --targets 192.0.2.10-20 --import-hcl vcf_hcl_bundle_YYYYMMDD.zip
+$ python3 -m groundzero --targets 192.0.2.10-20 --import-hcl vcf_hcl_bundle_YYYYMMDD.zip
   └─► 100% offline evaluation against certified hardware database
   └─► Zero internet connectivity required
 ```
@@ -234,7 +234,7 @@ When assessment reports must be shared with external Solution Architects or Broa
 
 ## 7. Local Web Server Hardening Specification
 
-When running the interactive Browser UI (`vcfr_web.py`), the internal HTTP server (`vcf_hci.web.server`) implements enterprise-grade application security controls:
+When running the interactive Browser UI (`groundzero_web.py`), the internal HTTP server (`groundzero.web.server`) implements enterprise-grade application security controls:
 
 ```mermaid
 flowchart TD
@@ -263,7 +263,7 @@ flowchart TD
    - is refused with `403` whenever the server was started with `--allow-remote` (the vault is a local-workstation feature only);
    - never returns a password in any response body — entry listings and coverage previews are password-free;
    - answers `423 Locked` when no vault is unlocked, `401` on a wrong passphrase (with a 0.5 s delay on top of the PBKDF2 cost), and `409` if a create would overwrite an existing vault.
-   At most one vault is held unlocked in server memory (`vcf_hci/web/vault_session.py`); it auto-locks after 60 minutes idle and on `/api/shutdown` or Ctrl-C. When a scan is submitted with `use_vault: true`, credentials are resolved on the server; the browser-supplied username/password become only a fallback for targets with no vault match. `use_vault` defaults to `false` and the UI checkbox is disabled until a vault is unlocked.
+   At most one vault is held unlocked in server memory (`groundzero/web/vault_session.py`); it auto-locks after 60 minutes idle and on `/api/shutdown` or Ctrl-C. When a scan is submitted with `use_vault: true`, credentials are resolved on the server; the browser-supplied username/password become only a fallback for targets with no vault match. `use_vault` defaults to `false` and the UI checkbox is disabled until a vault is unlocked.
 
 ---
 
@@ -318,16 +318,16 @@ This checklist is provided for InfoSec risk assessors completing internal archit
 
 | Security Question | Architecture Finding | Evidence / Reference |
 |---|---|---|
-| **Does the tool install agents on OS/hypervisors?** | **No.** Operates purely via Out-of-Band BMC network. | `vcf_hci/collector/` |
+| **Does the tool install agents on OS/hypervisors?** | **No.** Operates purely via Out-of-Band BMC network. | `groundzero/collector/` |
 | **Are administrator write privileges required?** | **No.** Standard read-only BMC accounts are used. | [Section 3](#3-principle-of-least-privilege-credentials--access) |
-| **Does the software execute binary code that cannot be inspected?** | **No.** Plain Python 3.9+ source is fully auditable. | `vcfr_web.py`, `vcf_hci/` |
-| **Does the tool introduce external supply-chain dependencies?** | **No.** Zero third-party `pip` dependencies (stdlib only). | `pyproject.toml`, `vcf_hci/` |
+| **Does the software execute binary code that cannot be inspected?** | **No.** Plain Python 3.9+ source is fully auditable. | `groundzero_web.py`, `groundzero/` |
+| **Does the tool introduce external supply-chain dependencies?** | **No.** Zero third-party `pip` dependencies (stdlib only). | `pyproject.toml`, `groundzero/` |
 | **Does the tool transmit customer data outside the company?** | **No.** Zero telemetry, zero analytics, zero external network calls. | [Section 5](#5-network-egress-telemetry--air-gapped-operation) |
-| **Can the tool function in an air-gapped network?** | **Yes.** Supports offline dark-site HCL zip bundles. | `vcf_hci/hcl/bundle_manager.py` |
-| **Can sensitive identifiers be redacted before sharing reports?** | **Yes.** SHA-256 deterministic salted PII hashing engine. | `vcf_hci/obfuscation.py` |
-| **Is the local web UI protected against CSRF and DNS rebinding?** | **Yes.** Bound to loopback, launch token auth, strict host headers. | `vcf_hci/web/server.py` |
-| **Can enterprise CA certificates and TLS pinning be enforced?** | **Yes.** `--verify-ssl`, `--ca-bundle`, and TOFU thumbprint pinning. | `vcf_hci/tls_utils.py` |
-| **How are per-host BMC passwords stored if the operator opts in?** | **Encrypted, off by default.** PBKDF2-HMAC-SHA256 (600k) + HMAC-SHA256 Encrypt-then-MAC, `0600` file, no plaintext export, disabled under `--allow-remote`. Not AES (stdlib has none). | [Section 3.3](#33-optional-encrypted-local-credential-vault-opt-in-off-by-default), `vcf_hci/vault/` |
+| **Can the tool function in an air-gapped network?** | **Yes.** Supports offline dark-site HCL zip bundles. | `groundzero/hcl/bundle_manager.py` |
+| **Can sensitive identifiers be redacted before sharing reports?** | **Yes.** SHA-256 deterministic salted PII hashing engine. | `groundzero/obfuscation.py` |
+| **Is the local web UI protected against CSRF and DNS rebinding?** | **Yes.** Bound to loopback, launch token auth, strict host headers. | `groundzero/web/server.py` |
+| **Can enterprise CA certificates and TLS pinning be enforced?** | **Yes.** `--verify-ssl`, `--ca-bundle`, and TOFU thumbprint pinning. | `groundzero/tls_utils.py` |
+| **How are per-host BMC passwords stored if the operator opts in?** | **Encrypted, off by default.** PBKDF2-HMAC-SHA256 (600k) + HMAC-SHA256 Encrypt-then-MAC, `0600` file, no plaintext export, disabled under `--allow-remote`. Not AES (stdlib has none). | [Section 3.3](#33-optional-encrypted-local-credential-vault-opt-in-off-by-default), `groundzero/vault/` |
 | **Does the audit align with federal CISA/NSA BMC hardening guidance?** | **Yes.** Directly evaluates controls aligned with CISA/NSA *Harden Baseboard Management Controllers* (CSI). | [Section 12](#12-regulatory--hardening-compliance-baselines-cisa-nsa-nist-vcf-scg) |
 | **Is the organization permitted to run SAST and LLM code audits?** | **Yes.** Permissive worldwide royalty-free license grant. | `LICENSE.md` |
 
@@ -341,13 +341,13 @@ To execute the assessment under maximum security controls:
 2. **Inspect the Python Source:** (Optional) Run `git clone`, inspect the codebase, and verify runtime dependencies using your internal SAST/LLM tools.
 3. **Run on an Isolated Workstation:** Execute from an operator workstation or bastion host connected to the OOB management network:
    ```bash
-   python3 vcfr_collector.py \
+   python3 groundzero_collector.py \
        --targets 192.0.2.10-192.0.2.30 \
        --user sec_audit_user \
        --obfuscate \
-       --output-dir ./vcf_assessment_results
+       --output-dir ./groundzeroment_results
    ```
-4. **Review & Revoke:** Inspect the resulting standalone HTML reports in `./vcf_assessment_results/`, then deactivate the temporary BMC audit credentials.
+4. **Review & Revoke:** Inspect the resulting standalone HTML reports in `./groundzeroment_results/`, then deactivate the temporary BMC audit credentials.
 
 ---
 

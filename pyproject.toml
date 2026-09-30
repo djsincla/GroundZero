@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "vcf-readiness"
+name = "groundzero"
 version = "9.7.3"
-description = "VCF / vSphere 9.1 Readiness Assessment Tool — Redfish-based hardware compatibility scanner"
+description = "GroundZero — VCF / vSphere 9.1 HCI Readiness — Redfish-based hardware compatibility scanner"
 readme = "README.md"
 license = { text = "CA, Inc. Software License Agreement" }
 requires-python = ">=3.9"
@@ -31,12 +31,12 @@ classifiers = [
 ]
 
 [project.scripts]
-vcf-assess = "vcf_hci.cli:main"
+groundzero = "groundzero.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/johnnicholson-vmw/vcf-readiness"
-"Bug Tracker" = "https://github.com/johnnicholson-vmw/vcf-readiness/issues"
-Documentation = "https://github.com/johnnicholson-vmw/vcf-readiness/blob/main/docs/"
+Homepage = "https://github.com/djsincla/GroundZero"
+"Bug Tracker" = "https://github.com/djsincla/GroundZero/issues"
+Documentation = "https://github.com/djsincla/GroundZero/blob/main/docs/"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-xdist>=3.5", "ruff>=0.6", "ty==0.0.79"]
@@ -46,8 +46,8 @@ dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-xdist>=3.5", "ruff>=0.6", "ty==
 target-version = "py39"
 line-length = 120
 extend-exclude = [
-    "vcf_hci/web/assets.py",      # generated/bundled — do not lint
-    "vcf_hci/web/docs_data.py",   # generated/bundled — do not lint
+    "groundzero/web/assets.py",      # generated/bundled — do not lint
+    "groundzero/web/docs_data.py",   # generated/bundled — do not lint
     "vestigial",
     "samples",
     "dist",
@@ -64,7 +64,7 @@ select = [
     "C4",        # comprehensions
     "SIM",       # simplify
     "RUF",       # ruff-native
-    "T20",       # flake8-print: bans print() — repo hard constraint in vcf_hci/
+    "T20",       # flake8-print: bans print() — repo hard constraint in groundzero/
     "TID",       # tidy-imports: powers banned-api below
     "S110", "S112",  # try/except/pass|continue swallowing — security-ish, low noise
 ]
@@ -105,31 +105,31 @@ ignore = [
 
 # THE KEY SECTION: mechanical enforcement of the zero-runtime-dependency rule.
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-"requests".msg       = "vcf_hci is stdlib-only (see .cursorrules) — use urllib.request"
-"urllib3".msg        = "vcf_hci is stdlib-only — use urllib.request"
-"aiohttp".msg        = "vcf_hci is stdlib-only — use urllib.request + concurrent.futures"
-"pandas".msg         = "vcf_hci is stdlib-only — use csv/json"
-"jinja2".msg         = "vcf_hci is stdlib-only — use string templates in report/"
-"bs4".msg            = "vcf_hci is stdlib-only — use html.parser / re"
-"beautifulsoup4".msg = "vcf_hci is stdlib-only"
-"lxml".msg           = "vcf_hci is stdlib-only — use xml.etree.ElementTree"
+"requests".msg       = "groundzero is stdlib-only (see .cursorrules) — use urllib.request"
+"urllib3".msg        = "groundzero is stdlib-only — use urllib.request"
+"aiohttp".msg        = "groundzero is stdlib-only — use urllib.request + concurrent.futures"
+"pandas".msg         = "groundzero is stdlib-only — use csv/json"
+"jinja2".msg         = "groundzero is stdlib-only — use string templates in report/"
+"bs4".msg            = "groundzero is stdlib-only — use html.parser / re"
+"beautifulsoup4".msg = "groundzero is stdlib-only"
+"lxml".msg           = "groundzero is stdlib-only — use xml.etree.ElementTree"
 
 [tool.ruff.lint.per-file-ignores]
 # print() is allowed ONLY in CLI entry points, tests, and dev tooling — never in library modules.
-"vcfr_web.py"          = ["T20"]
-"vcfr_collector.py"    = ["T20"]
+"groundzero_web.py"          = ["T20"]
+"groundzero_collector.py"    = ["T20"]
 "redfish_web.py"       = ["T20"]
 "redfish_collector.py" = ["T20"]
-"vcf_hci/cli.py"       = ["T20"]
-"vcf_hci/vault/__main__.py" = ["T20"]   # vault management CLI entry point
-"vcf_hci/web/server.py" = ["T20"]
+"groundzero/cli.py"       = ["T20"]
+"groundzero/vault/__main__.py" = ["T20"]   # vault management CLI entry point
+"groundzero/web/server.py" = ["T20"]
 "tests/**"             = ["T20", "S"]
 "tools/**"             = ["T20"]
 "scripts/**"           = ["T20"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["vcf_hci*"]
+include = ["groundzero*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -150,15 +150,15 @@ markers = [
 
 [tool.pyinstaller]
 # Build targets — run via build-web.sh or build-web.bat
-# macOS:   pyinstaller --onefile --collect-all vcf_hci vcfr_web.py
-# Windows: pyinstaller --onefile --collect-all vcf_hci vcfr_web.py
+# macOS:   pyinstaller --onefile --collect-all groundzero groundzero_web.py
+# Windows: pyinstaller --onefile --collect-all groundzero groundzero_web.py
 
 [tool.coverage.run]
-source = ["vcf_hci"]
+source = ["groundzero"]
 omit = [
-    "vcf_hci/web/assets.py",      # generated/bundled UI assets
-    "vcf_hci/web/docs_data.py",   # generated/bundled docs
-    "vcf_hci/__main__.py",        # thin CLI shim
+    "groundzero/web/assets.py",      # generated/bundled UI assets
+    "groundzero/web/docs_data.py",   # generated/bundled docs
+    "groundzero/__main__.py",        # thin CLI shim
 ]
 
 [tool.coverage.report]
@@ -174,10 +174,10 @@ exclude_lines = [
 python-version = "3.9"   # match the repo's runtime floor
 
 [tool.ty.src]
-include = ["vcf_hci"]
+include = ["groundzero"]
 exclude = [
-    "vcf_hci/web/assets.py",     # generated
-    "vcf_hci/web/docs_data.py",  # generated
+    "groundzero/web/assets.py",     # generated
+    "groundzero/web/docs_data.py",  # generated
 ]
 
 

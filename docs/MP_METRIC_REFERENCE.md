@@ -3,7 +3,7 @@
 > **Adapter Kind:** `VcfReadinessAdapter` | **Status:** Experimental / Tech Preview
 > **Notice:** The VCF Operations Management Pack (`VcfReadinessAdapter_9.7.0_EXPERIMENTAL.pak`) is currently an experimental integration. Metrics, properties, and resource kinds are subject to evolution as integration requirements develop.
 
-This document provides the complete specification of all Resource Kinds, identifiers, properties, and time-series metrics emitted by the VCF Readiness Management Pack into VMware Cloud Foundation Operations / VMware Aria Operations.
+This document provides the complete specification of all Resource Kinds, identifiers, properties, and time-series metrics emitted by the GroundZero Management Pack into VMware Cloud Foundation Operations / VMware Aria Operations.
 
 ---
 

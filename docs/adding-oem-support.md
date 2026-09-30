@@ -1,6 +1,6 @@
 # Adding OEM Support — Full ABC Interface Reference
 
-This guide is the authoritative reference for implementing a new OEM Redfish adapter in the VCF Readiness Tool.
+This guide is the authoritative reference for implementing a new OEM Redfish adapter in the GroundZero.
 
 ---
 
@@ -15,7 +15,7 @@ This guide is the authoritative reference for implementing a new OEM Redfish ada
 ---
 
 ```
-vcf_hci/collector/
+groundzero/collector/
 ├── base.py                  ← BaseRedfishCollector ABC (core scan pipeline)
 ├── http_session.py          ← RedfishSessionManager (session lifecycle)
 ├── discovery.py             ← DiscoveryMixin (dynamic URI root discovery)
@@ -279,7 +279,7 @@ Look at the captured data and note any OEM-specific response fields. Common patt
 ### 3. Create the Collector
 
 ```python
-# vcf_hci/collector/oem/myvendor.py
+# groundzero/collector/oem/myvendor.py
 from .generic import GenericCollector
 
 
@@ -299,7 +299,7 @@ class MyVendorCollector(GenericCollector):
 ### 4. Register in the Factory
 
 ```python
-# vcf_hci/collector/oem/__init__.py
+# groundzero/collector/oem/__init__.py
 from .myvendor import MyVendorCollector
 
 _REGISTRY: list = [
@@ -315,7 +315,7 @@ Note: first match wins; put more specific vendors before generic ones. Intel is 
 Create `tests/test_collector_myvendor.py` (or add a class to `test_collector_oem.py`):
 
 ```python
-from vcf_hci.collector.oem.myvendor import MyVendorCollector
+from groundzero.collector.oem.myvendor import MyVendorCollector
 
 class TestMyVendorCollector:
     def test_oem_bios_date(self):
@@ -353,7 +353,7 @@ If a BMC temporarily returns a "scan in progress" or "not ready" JSON body (as H
 ## Contributing Chassis Maps & Front Panel Layouts
 
 In addition to Redfish collector hooks, OEMs and partners are encouraged to contribute chassis mapping data to enhance visual report fidelity:
-- **Order SKUs & Model Databases**: Add entries to `DELL_SKU_CHASSIS_DB`, `HPE_SKU_CHASSIS_DB`, or `DELL_MODEL_CHASSIS_DB` in `vcf_hci/constants.py`.
+- **Order SKUs & Model Databases**: Add entries to `DELL_SKU_CHASSIS_DB`, `HPE_SKU_CHASSIS_DB`, or `DELL_MODEL_CHASSIS_DB` in `groundzero/constants.py`.
 - **Chassis SVG Overlays**: Submit slot numbering patterns and vector front-panel graphics for standalone HTML report diagrams.
 - **Redfish Dump Mockups**: Submit sanitized BMC JSON dumps via `tools/crawl_oem_host.py` to populate `samples/<vendor>/`.
 

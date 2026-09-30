@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "vcf-readiness"
+name = "groundzero"
 version = "9.7.2"
-description = "VCF / vSphere 9.1 Readiness Assessment Tool — Redfish-based hardware compatibility scanner"
+description = "GroundZero — VCF / vSphere 9.1 HCI Readiness — Redfish-based hardware compatibility scanner"
 readme = "README.md"
 license = { text = "CA, Inc. Software License Agreement" }
 requires-python = ">=3.9"
@@ -31,19 +31,19 @@ classifiers = [
 ]
 
 [project.scripts]
-vcf-assess = "vcf_hci.cli:main"
+groundzero = "groundzero.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/johnnicholson-vmw/vcf-readiness"
-"Bug Tracker" = "https://github.com/johnnicholson-vmw/vcf-readiness/issues"
-Documentation = "https://github.com/johnnicholson-vmw/vcf-readiness/blob/main/docs/"
+Homepage = "https://github.com/djsincla/GroundZero"
+"Bug Tracker" = "https://github.com/djsincla/GroundZero/issues"
+Documentation = "https://github.com/djsincla/GroundZero/blob/main/docs/"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["vcf_hci*"]
+include = ["groundzero*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -64,5 +64,5 @@ markers = [
 
 [tool.pyinstaller]
 # Build targets — run via build-web.sh or build-web.bat
-# macOS:   pyinstaller --onefile --collect-all vcf_hci vcfr_web.py
-# Windows: pyinstaller --onefile --collect-all vcf_hci vcfr_web.py
+# macOS:   pyinstaller --onefile --collect-all groundzero groundzero_web.py
+# Windows: pyinstaller --onefile --collect-all groundzero groundzero_web.py

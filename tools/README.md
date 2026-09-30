@@ -7,12 +7,12 @@
 ## Utility Index
 
 ### 1. `tools/bundle_assets.py`
-- **Purpose:** Fetches the Clarity Design System CSS stylesheet, compresses it using gzip, base64 encodes it, and regenerates `vcf_hci/web/assets.py`.
+- **Purpose:** Fetches the Clarity Design System CSS stylesheet, compresses it using gzip, base64 encodes it, and regenerates `groundzero/web/assets.py`.
 - **Usage:**
   ```bash
   python tools/bundle_assets.py
   ```
-- **Constraint:** Requires an active internet connection. `vcf_hci/web/assets.py` is committed to source control so the application runs offline without running this script.
+- **Constraint:** Requires an active internet connection. `groundzero/web/assets.py` is committed to source control so the application runs offline without running this script.
 
 ---
 

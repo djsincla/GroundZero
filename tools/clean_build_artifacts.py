@@ -18,24 +18,24 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 VERSION_PATTERN = re.compile(
-    r"^(?P<prefix>VCF-Readiness-Web|vcf-assess|vcf-hci-readiness-adapter|VcfReadinessAdapter|vcf-readiness-adapter)[-_]v?(?P<version>\d+(?:\.\d+)+)(?:-(?P<platform>mac|win|linux))?(?P<suffix>.*)$",
+    r"^(?P<prefix>GroundZero-Web|groundzero|vcf-hci-readiness-adapter|VcfReadinessAdapter|groundzero-adapter)[-_]v?(?P<version>\d+(?:\.\d+)+)(?:-(?P<platform>mac|win|linux))?(?P<suffix>.*)$",
     re.IGNORECASE,
 )
 
 ALLOWED_BIN_ROOT_NAMES = {
-    "VCF-Readiness-Web-mac",
-    "VCF-Readiness-Web-linux",
-    "VCF-Readiness-Web.exe",
-    "vcf-assess",
-    "vcf-assess.exe",
-    "VCF-Readiness-Web-mac.app",
-    "vcf-assess.app",
+    "GroundZero-Web-mac",
+    "GroundZero-Web-linux",
+    "GroundZero-Web.exe",
+    "groundzero",
+    "groundzero.exe",
+    "GroundZero-Web-mac.app",
+    "groundzero.app",
     "VcfReadinessAdapter.pak",
     "VcfReadinessAdapter_EXPERIMENTAL.pak",
     "vcf-hci-readiness-adapter.pak",
-    "vcf-readiness-adapter.pak",
+    "groundzero-adapter.pak",
     "HOW_TO_OPEN_ON_MAC.txt",
-    "Launch-VCF-Readiness-Web.command",
+    "Launch-GroundZero-Web.command",
     "README.md",
     ".gitkeep",
     ".gitignore",
@@ -72,7 +72,7 @@ def clean_scratch_artifacts(workspace_dir: str) -> None:
     # Clean *.spec files in root
     try:
         for fname in os.listdir(workspace_dir):
-            if fname.endswith(".spec") and ("VCF-Readiness-Web" in fname or "vcf-assess" in fname):
+            if fname.endswith(".spec") and ("GroundZero-Web" in fname or "groundzero" in fname):
                 spec_path = os.path.join(workspace_dir, fname)
                 remove_path(spec_path)
                 print(f"  Cleaned {fname}")
@@ -96,7 +96,7 @@ def clean_loose_bin_files(bin_dir: str) -> None:
         match = VERSION_PATTERN.match(item)
         if match:
             prefix = match.group("prefix")
-            if prefix not in ("vcf-hci-readiness-adapter", "VcfReadinessAdapter", "vcf-readiness-adapter"):
+            if prefix not in ("vcf-hci-readiness-adapter", "VcfReadinessAdapter", "groundzero-adapter"):
                 continue
 
         # Purge non-whitelisted items (stray subdirectories, misplaced .pak files, loose libs, etc.)
@@ -117,7 +117,7 @@ def prune_versions_in_dir(
         return {}
 
     # Group items by (prefix, platform) -> dict of version -> list of paths
-    # e.g. ("VCF-Readiness-Web", "mac") -> {"6.15.9": ["...-mac", "...-mac.zip"]}
+    # e.g. ("GroundZero-Web", "mac") -> {"6.15.9": ["...-mac", "...-mac.zip"]}
     groups: Dict[Tuple[str, str], Dict[str, List[str]]] = {}
 
     for item in os.listdir(target_dir):
@@ -200,21 +200,21 @@ def update_unversioned_aliases(bin_dir: str, dist_dir: str, platform_filter: Opt
     # Update aliases in bin/
     for (prefix, plat), (_, ver_str, source_path) in latest_targets.items():
         alias_name = ""
-        if prefix == "VCF-Readiness-Web":
+        if prefix == "GroundZero-Web":
             if plat == "mac":
-                alias_name = "VCF-Readiness-Web-mac"
+                alias_name = "GroundZero-Web-mac"
             elif plat == "win":
-                alias_name = "VCF-Readiness-Web.exe"
+                alias_name = "GroundZero-Web.exe"
             elif plat == "linux":
-                alias_name = "VCF-Readiness-Web-linux"
-        elif prefix == "vcf-assess":
+                alias_name = "GroundZero-Web-linux"
+        elif prefix == "groundzero":
             if plat == "mac":
-                alias_name = "vcf-assess"
+                alias_name = "groundzero"
             elif plat == "win":
-                alias_name = "vcf-assess.exe"
+                alias_name = "groundzero.exe"
             elif plat == "linux":
-                alias_name = "vcf-assess"
-        elif prefix in ("VcfReadinessAdapter", "vcf-hci-readiness-adapter", "vcf-readiness-adapter"):
+                alias_name = "groundzero"
+        elif prefix in ("VcfReadinessAdapter", "vcf-hci-readiness-adapter", "groundzero-adapter"):
             alias_name = f"{prefix}.pak"
 
         if alias_name:

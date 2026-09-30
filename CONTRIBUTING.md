@@ -1,4 +1,4 @@
-# Contributing to VCF Readiness Tool
+# Contributing to GroundZero
 
 Thank you for your interest in contributing! This guide covers everything you need to get started.
 
@@ -16,11 +16,11 @@ Thank you for your interest in contributing! This guide covers everything you ne
 ## Quick Start
 
 ```bash
-git clone https://github.com/johnnicholson-vmw/vcf-readiness.git
+git clone https://github.com/djsincla/GroundZero.git
 cd Distribution-Redfish-Scraper
 
 # Python 3.9+ required, no pip install needed (zero external runtime deps)
-python3 vcf_hci/cli.py --help
+python3 groundzero/cli.py --help
 
 # Run tests (requires pytest — only dev dependency)
 pip install pytest
@@ -31,20 +31,20 @@ python -m pytest tests/ -v
 
 ## Adding OEM Support
 
-The tool uses an **OEM ABC pattern**: each vendor gets a single file in `vcf_hci/collector/oem/` that subclasses `GenericCollector` and overrides only the methods that differ from DMTF-standard Redfish.
+The tool uses an **OEM ABC pattern**: each vendor gets a single file in `groundzero/collector/oem/` that subclasses `GenericCollector` and overrides only the methods that differ from DMTF-standard Redfish.
 
 ### 5-Step Recipe
 
 **1. Create the file**
 
 ```bash
-touch vcf_hci/collector/oem/myvendor.py
+touch groundzero/collector/oem/myvendor.py
 ```
 
 **2. Subclass `GenericCollector`**
 
 ```python
-# vcf_hci/collector/oem/myvendor.py
+# groundzero/collector/oem/myvendor.py
 from .generic import GenericCollector
 
 
@@ -65,7 +65,7 @@ class MyVendorCollector(GenericCollector):
 **3. Register it**
 
 ```python
-# vcf_hci/collector/oem/__init__.py
+# groundzero/collector/oem/__init__.py
 from .myvendor import MyVendorCollector
 
 _REGISTRY = [
@@ -119,19 +119,19 @@ Server OEMs, hardware vendors, and solution partners are strongly encouraged to 
 
 ### CPU Verdicts
 
-Edit `vcf_hci/compat/cpu.py` → `evaluate_cpu()` (re-exported by `VCF9CompatibilityEngine.evaluate_cpu()` in `vcf_hci/compat_engine.py`).
+Edit `groundzero/compat/cpu.py` → `evaluate_cpu()` (re-exported by `VCF9CompatibilityEngine.evaluate_cpu()` in `groundzero/compat_engine.py`).
 
 The matching logic uses regex patterns on the CPU model string to return the VCF 9.1 support status, microarchitecture label, memory channels, memory speed, and PCIe lane ceiling:
 
 ```python
-# In vcf_hci/compat/cpu.py evaluate_cpu():
+# In groundzero/compat/cpu.py evaluate_cpu():
 if re.search(r"\bNEW_FAMILY\b", s):
     return "🟢 Fully Supported", "New Microarchitecture (8 Channel DDR5)", 8, 5600, 128
 ```
 
 ### BIOS Baselines
 
-Add rows to `BIOS_BASELINES` in `vcf_hci/constants.py`:
+Add rows to `BIOS_BASELINES` in `groundzero/constants.py`:
 
 ```python
 "ProLiant DL360 Gen11": {
@@ -203,19 +203,19 @@ CI will run pytest automatically on every PR. PRs with failing tests will not be
 No build step needed. From the project root:
 
 ```bash
-python vcfr_web.py
+python groundzero_web.py
 # Opens http://127.0.0.1:7182 in your default browser
 ```
 
-Press `Ctrl-C` in the terminal or click **Quit** in the browser to stop the server. Any changes to `vcf_hci/web/server.py` or `vcf_hci/web/app_html.py` take effect on the next `python vcfr_web.py` run (the server is not a live-reload dev server).
+Press `Ctrl-C` in the terminal or click **Quit** in the browser to stop the server. Any changes to `groundzero/web/server.py` or `groundzero/web/app_html.py` take effect on the next `python groundzero_web.py` run (the server is not a live-reload dev server).
 
-### `vcf_hci/web/assets.py` is auto-generated
+### `groundzero/web/assets.py` is auto-generated
 
-`vcf_hci/web/assets.py` is **auto-generated** by `tools/bundle_assets.py`. It contains Clarity Design System CSS compressed with gzip and encoded in base64 so the web UI can embed it without an internet connection.
+`groundzero/web/assets.py` is **auto-generated** by `tools/bundle_assets.py`. It contains Clarity Design System CSS compressed with gzip and encoded in base64 so the web UI can embed it without an internet connection.
 
-**Never include `vcf_hci/web/assets.py` in a pull request.** It is a large, machine-generated file. If your PR changes the Clarity CSS version, run `tools/bundle_assets.py` locally and verify the UI looks correct — but omit the file from the PR diff.
+**Never include `groundzero/web/assets.py` in a pull request.** It is a large, machine-generated file. If your PR changes the Clarity CSS version, run `tools/bundle_assets.py` locally and verify the UI looks correct — but omit the file from the PR diff.
 
-> The `.gitattributes` file marks `vcf_hci/web/assets.py` as `linguist-generated=true` so GitHub collapses it in diffs automatically.
+> The `.gitattributes` file marks `groundzero/web/assets.py` as `linguist-generated=true` so GitHub collapses it in diffs automatically.
 
 ### Refreshing the bundled Clarity CSS
 
@@ -226,7 +226,7 @@ If a new Clarity CSS release is available and you want to update it:
 python tools/bundle_assets.py
 ```
 
-This fetches the latest Clarity CSS, compresses it, and overwrites `vcf_hci/web/assets.py`. Re-run the web UI to verify everything still looks correct before committing.
+This fetches the latest Clarity CSS, compresses it, and overwrites `groundzero/web/assets.py`. Re-run the web UI to verify everything still looks correct before committing.
 
 ---
 

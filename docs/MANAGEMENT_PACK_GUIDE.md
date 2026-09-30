@@ -5,7 +5,7 @@
 
 ## 1. Supported Platform Versions & Requirements
 
-The **VCF Readiness Management Pack (VCF-R)** (`VcfReadinessAdapter`) is architected for modern containerized VMware Operations deployments:
+The **GroundZero Management Pack (VCF-R)** (`VcfReadinessAdapter`) is architected for modern containerized VMware Operations deployments:
 
 - **Supported Platforms:**
   - VMware Cloud Foundation Operations (VCF Operations) 9.0, 9.1, and future 9.x releases.
@@ -64,13 +64,13 @@ In VCF Operations 9.x, unsigned Management Pack installations are blocked by def
 3. **Thread-Safe Bounded Concurrency:**
    The adapter uses Python's standard `concurrent.futures.ThreadPoolExecutor` bounded by the `max_collection_threads` configuration knob (default 25, clamped between 1 and 100).
 4. **Persistent JSON Scan Caching:**
-   Inventory state is cached in persistent storage (`/data/vcf-readiness-cache/scan_cache.json`) inside the container volume. If a Cloud Proxy container restarts, it loads cached hardware profiles immediately, avoiding thundering-herd rescans across the entire physical fleet.
+   Inventory state is cached in persistent storage (`/data/groundzero-cache/scan_cache.json`) inside the container volume. If a Cloud Proxy container restarts, it loads cached hardware profiles immediately, avoiding thundering-herd rescans across the entire physical fleet.
 
 ---
 
 ## 4. Configuration Parameter Reference
 
-When adding or editing a **VCF Readiness Adapter** account instance in VCF Operations, the following parameters are available:
+When adding or editing a **GroundZero Adapter** account instance in VCF Operations, the following parameters are available:
 
 | Configuration Key | Label | Type | Default | Description |
 |---|---|---|---|---|
@@ -118,4 +118,4 @@ The **VCF-Operations-Hardware-vCommunity** initiative provides open-source hardw
 
 - **Phase A (Coexistence):** Side-by-side deployment of `VcfReadinessAdapter` alongside vendor-specific community packs.
 - **Phase B (Shared Dashboards):** Unified dashboard templates referencing both multi-vendor `PhysicalServer` resources and vendor-specific metrics.
-- **Phase C (Consolidation):** Offering `vcf_hci` as a unified multi-vendor backend collection engine while preserving existing resource kind identifiers for historical continuity.
+- **Phase C (Consolidation):** Offering `groundzero` as a unified multi-vendor backend collection engine while preserving existing resource kind identifiers for historical continuity.

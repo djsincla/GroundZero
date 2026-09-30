@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Dev-only script: downloads @cds/core/global.min.css from unpkg and embeds it
-as a gzip+base64 string constant in vcf_hci/web/assets.py.
+as a gzip+base64 string constant in groundzero/web/assets.py.
 
 Run once after checkout or whenever Clarity needs updating:
     python tools/bundle_assets.py
@@ -17,14 +17,14 @@ import urllib.request
 
 CLARITY_CSS_URL = "https://unpkg.com/@cds/core/global.min.css"
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-OUT_PATH = os.path.join(THIS_DIR, "..", "vcf_hci", "web", "assets.py")
+OUT_PATH = os.path.join(THIS_DIR, "..", "groundzero", "web", "assets.py")
 
 
 def _download(url: str) -> bytes:
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    req = urllib.request.Request(url, headers={"User-Agent": "vcf-readiness/bundle"})
+    req = urllib.request.Request(url, headers={"User-Agent": "groundzero/bundle"})
     with urllib.request.urlopen(req, context=ctx, timeout=60) as resp:
         return resp.read()
 

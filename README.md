@@ -1,10 +1,10 @@
-# VCF Readiness Assessment Tool
+# GroundZero
 
 > Zero-dependency Python tool for VMware Sales Engineers and Solution Architects to assess legacy server hardware for VMware Cloud Foundation 9.1 repurposing.
 
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://python.org)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero-green.svg)](#)
-[![Latest Release](https://img.shields.io/github/v/release/johnnicholson-vmw/vcf-readiness?label=Download)](https://github.com/johnnicholson-vmw/vcf-readiness/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/djsincla/GroundZero?label=Download)](https://github.com/djsincla/GroundZero/releases/latest)
 [![Presentation Kit](https://img.shields.io/badge/Presentation-Infographic%20Kit-blueviolet.svg)](docs/INFOGRAPHIC.md)
 
 ---
@@ -48,13 +48,13 @@ Need to present hardware repurposing findings to customer leadership, enterprise
 
 ## Download
 
-**No Python required** — grab the pre-built binary for your platform from the [**Latest Release page →**](https://github.com/johnnicholson-vmw/vcf-readiness/releases/latest)
+**No Python required** — grab the pre-built binary for your platform from the [**Latest Release page →**](https://github.com/djsincla/GroundZero/releases/latest)
 
 | Platform | File | Notes |
 |----------|------|-------|
-| Windows | `VCF-Readiness-Web-v<version>-win.exe` / `.zip` | Double-click; opens browser automatically |
-| macOS | `VCF-Readiness-Web-v<version>-mac.zip` | Unzip → double-click `Launch-VCF-Readiness-Web.command` (Right-click Open on first launch) |
-| Linux | `VCF-Readiness-Web-v<version>-linux.zip` | Extract → run executable |
+| Windows | `GroundZero-Web-v<version>-win.exe` / `.zip` | Double-click; opens browser automatically |
+| macOS | `GroundZero-Web-v<version>-mac.zip` | Unzip → double-click `Launch-GroundZero-Web.command` (Right-click Open on first launch) |
+| Linux | `GroundZero-Web-v<version>-linux.zip` | Extract → run executable |
 
 > Already have Python 3.9+? Skip the binary and [run from source](#run-from-source-no-binary-needed) — it's one command.
 
@@ -67,14 +67,14 @@ Need to present hardware repurposing findings to customer leadership, enterprise
 ### Step 1 — Download and launch
 
 **Windows:**
-1. Download `VCF-Readiness-Web-v<version>-win.exe` from the [release page](https://github.com/johnnicholson-vmw/vcf-readiness/releases/latest)
+1. Download `GroundZero-Web-v<version>-win.exe` from the [release page](https://github.com/djsincla/GroundZero/releases/latest)
 2. Double-click it. If Windows SmartScreen appears, click **More info → Run anyway**
 3. Your browser opens automatically at `http://127.0.0.1:7182`
 
 **macOS:**
-1. Download `VCF-Readiness-Web-v<version>-mac.zip` from the [release page](https://github.com/johnnicholson-vmw/vcf-readiness/releases/latest)
+1. Download `GroundZero-Web-v<version>-mac.zip` from the [release page](https://github.com/djsincla/GroundZero/releases/latest)
 2. Double-click the zip to unzip it
-3. Double-click **`Launch-VCF-Readiness-Web.command`** (If Gatekeeper warns: right-click → **Open** → **Open**)
+3. Double-click **`Launch-GroundZero-Web.command`** (If Gatekeeper warns: right-click → **Open** → **Open**)
 4. Your browser opens automatically at `http://127.0.0.1:7182`
 
 **Linux / headless server:** See [Run from source](#run-from-source-no-binary-needed) below.
@@ -97,7 +97,7 @@ The tool has **zero external dependencies** — if you have Python 3.9+ installe
 
 ```bash
 # Clone or download the repository, then:
-python vcfr_web.py
+python groundzero_web.py
 # Browser opens automatically at http://127.0.0.1:7182
 ```
 
@@ -113,7 +113,7 @@ python vcfr_web.py
 5. Navigate to the project and launch:
    ```cmd
    cd C:\Users\YourName\Documents\Distribution-Redfish-Scraper
-   python vcfr_web.py
+   python groundzero_web.py
    ```
 
 </details>
@@ -134,7 +134,7 @@ python vcfr_web.py
 5. Navigate to the project and launch:
    ```bash
    cd ~/Documents/Distribution-Redfish-Scraper
-   python3 vcfr_web.py
+   python3 groundzero_web.py
    ```
 
 > **No external dependencies needed.** The web UI runs in your browser using only Python standard library.
@@ -160,7 +160,7 @@ python3 --version
 Then launch the tool:
 ```bash
 cd ~/Documents/Distribution-Redfish-Scraper
-python3 vcfr_web.py
+python3 groundzero_web.py
 ```
 
 **Headless / SSH server?** Forward port 7182 to your local machine and open the browser there:
@@ -169,7 +169,7 @@ python3 vcfr_web.py
 ssh -L 7182:127.0.0.1:7182 user@server
 
 # Then on the server, start the tool:
-python3 vcfr_web.py
+python3 groundzero_web.py
 
 # Open http://127.0.0.1:7182 in your local browser
 ```
@@ -204,7 +204,7 @@ Unknown vendors still scan; OEM-only fields (wear, SmartStorage, CIMC manager pa
 
 | Feature | Details |
 |---------|---------|
-| **Browser UI (new)** | Full HTML5 interface — no Tkinter, works on any OS with a browser. `python vcfr_web.py` |
+| **Browser UI (new)** | Full HTML5 interface — no Tkinter, works on any OS with a browser. `python groundzero_web.py` |
 | **Dark Mode** | Reports respect your OS dark/light preference; toggle persists across sessions |
 | **Real-Time Progress** | Server-Sent Events stream scan progress live to the browser |
 | **Zero External Dependencies** | Runs on any Python 3.9+ installation. No `pip install` needed. Works on locked-down SE laptops. |
@@ -219,12 +219,12 @@ Unknown vendors still scan; OEM-only fields (wear, SmartStorage, CIMC manager pa
 | **Dynamic BCG Deep-Links** | Single-click Broadcom Compatibility Guide URLs for Servers, CPUs, SSDs, NICs/HBAs, GPUs. |
 | **Multi-host Fleet Summary** | Scan a subnet and get one `fleet_summary.html` plus per-host detail reports. |
 | **Fleet Hub & Multi-Scan Library** | Browser UI and CLI generate a single `fleet_combined.html` Fleet Hub. Small scans (&le;64 hosts) embed reports inline; larger scans (&gt;64 hosts up to 3,000+ hosts) produce a sidecar pack with lazy on-demand frames, searchable host picker, and paginated inventory without the 256-host cliff. Pointing at a multi-scan library directory assembles consolidated fleet deliverables. |
-| **Live HCL Cross-Reference** | Auto-fetches `all.json` from Broadcom vSAN HCL (30-day cache in `~/.vcf-readiness/hcl/`). Fallback to local dark-site bundle or CSV. |
+| **Live HCL Cross-Reference** | Auto-fetches `all.json` from Broadcom vSAN HCL (30-day cache in `~/.groundzero/hcl/`). Fallback to local dark-site bundle or CSV. |
 | **Saved Profiles** | Named host+credential presets. Passwords go to macOS Keychain / Windows DPAPI / libsecret — never plaintext on disk. |
 | **Encrypted Credential Vault (optional)** | Off by default. Per-host / per-subnet / default BMC passwords in a passphrase-encrypted local file, CSV import, CLI + Web UI. See [Credential Vault Guide](docs/CREDENTIAL_VAULT.md). |
 | **VCF Operations Integration** | *(In Incubation)* Containerized VMware Integration SDK Management Pack for VCF Operations 9.x and Aria Operations is in developer incubation and will be released in an upcoming update. |
 | **Enterprise Security & TLS** | Configurable BMC TLS verification with custom CA bundles, FCrDNS validation, RFC1918 private-target restrictions, and HttpOnly session cookie auth. |
-| **Debug Mode** | `--debug` flag writes detailed HTTP traces to `vcf_assess_debug.log`. |
+| **Debug Mode** | `--debug` flag writes detailed HTTP traces to `groundzero_debug.log`. |
 | **PyInstaller Compatible** | Bundle into a double-click `.exe` or macOS binary for field use. |
 
 ---
@@ -233,24 +233,24 @@ Unknown vendors still scan; OEM-only fields (wear, SmartStorage, CIMC manager pa
 
 ### Option A — Browser UI (recommended)
 
-The web interface (`vcfr_web.py`) runs a lightweight local server and opens your default browser automatically. No Tkinter, no desktop GUI framework — works anywhere Python runs.
+The web interface (`groundzero_web.py`) runs a lightweight local server and opens your default browser automatically. No Tkinter, no desktop GUI framework — works anywhere Python runs.
 
 **From source:**
 ```bash
-python vcfr_web.py
+python groundzero_web.py
 # Opens http://127.0.0.1:7182 automatically
 ```
 
 **As a double-click binary:**
 ```bash
 # macOS
-./build-web.sh      # → dist/VCF-Readiness-Web-v9.7.2-mac (.zip)
+./build-web.sh      # → dist/GroundZero-Web-v9.7.2-mac (.zip)
 
 # Linux
-./build-web.sh      # → dist/VCF-Readiness-Web-v9.7.2-linux (.zip)
+./build-web.sh      # → dist/GroundZero-Web-v9.7.2-linux (.zip)
 
 # Windows
-build-web.bat       # → dist\VCF-Readiness-Web-v9.7.2-win.exe (.zip)
+build-web.bat       # → dist\GroundZero-Web-v9.7.2-win.exe (.zip)
 ```
 
 **Features exclusive to the browser UI:**
@@ -274,27 +274,27 @@ build-web.bat       # → dist\VCF-Readiness-Web-v9.7.2-win.exe (.zip)
 #### Scan a Single Host
 
 ```bash
-python vcfr_collector.py --targets 10.0.0.1
+python groundzero_collector.py --targets 10.0.0.1
 ```
 
 #### Scan a Range or Subnet
 
 ```bash
-python vcfr_collector.py --targets "10.0.0.1-20"
-python vcfr_collector.py --targets "192.168.1.0/24" --threads 8
+python groundzero_collector.py --targets "10.0.0.1-20"
+python groundzero_collector.py --targets "192.168.1.0/24" --threads 8
 ```
 
 #### Force Refresh Broadcom HCL
 
 ```bash
-python vcfr_collector.py --targets 10.0.0.1 --refresh-hcl
+python groundzero_collector.py --targets 10.0.0.1 --refresh-hcl
 ```
 
 #### Debug Mode & Summary JSON Export
 
 ```bash
-python vcfr_collector.py --targets 10.0.0.1 --debug --save-json
-# Writes vcf_assess_debug.log, vcf_summary_<IP>.json, and fleet_summary.json
+python groundzero_collector.py --targets 10.0.0.1 --debug --save-json
+# Writes groundzero_debug.log, vcf_summary_<IP>.json, and fleet_summary.json
 # with full HTTP traces and maximized raw Redfish data capture
 ```
 
@@ -302,16 +302,16 @@ python vcfr_collector.py --targets 10.0.0.1 --debug --save-json
 
 ```bash
 # Single-Artifact Summary Import
-python vcfr_collector.py --from-summary fleet_summary.json
+python groundzero_collector.py --from-summary fleet_summary.json
 # Instantly renders HTML reports from saved summary JSON without live BMC access
 
 # Multi-Scan Fleet Library Assemble
-python vcfr_collector.py --from-summary ~/Desktop/VCF-Scans
+python groundzero_collector.py --from-summary ~/Desktop/VCF-Scans
 # Discovers all dropped scan directories and zip archives in library folder,
 # deduplicates hosts by UUID/serial/IP, and assembles consolidated fleet deliverables
 
 # Assemble-Only (Skip re-rendering individual host reports)
-python vcfr_collector.py --from-summary ~/Desktop/VCF-Scans --assemble-only
+python groundzero_collector.py --from-summary ~/Desktop/VCF-Scans --assemble-only
 ```
 
 ---
@@ -349,12 +349,12 @@ The assessment tool provides three scan modes to balance scan speed vs data dept
 - **Principle of Least Privilege:** Requires only read-only OOB BMC accounts over HTTPS (port 443). Zero write, reboot, or firmware flashing capabilities; zero in-band host/OS credentials.
 - **Zero Third-Party Dependencies:** 100% Python 3.9+ standard library (`urllib.request`, `ssl`, `json`, `hashlib`). No unvetted `pip` packages.
 - **Zero "Phone-Home" / No Egress:** No analytics, telemetry beacons, or external reporting pings.
-- **Auditable & Non-Opaque:** Run purely as standard Python source code (`python3 vcfr_web.py`) without pre-compiled binaries.
+- **Auditable & Non-Opaque:** Run purely as standard Python source code (`python3 groundzero_web.py`) without pre-compiled binaries.
 - **Permissive License for Security Reviews:** Explicit rights under `LICENSE.md` to ingest and audit source code using enterprise SAST or LLM security platforms (e.g. Mythos, Fable, CodeQL).
 
 ### Security & TLS Enforcement
 
-The VCF Readiness Assessment Tool includes enterprise security controls for BMC connectivity, credential isolation, and web interface protection:
+The GroundZero includes enterprise security controls for BMC connectivity, credential isolation, and web interface protection:
 
 - **BMC TLS Verification (`--verify-ssl`)**: By default, the tool operates in `CERT_NONE` mode to handle unmanaged/self-signed enterprise BMC certificates without crashing. Passing `--verify-ssl` enforces strict TLS certificate validation against the OS trust store.
 - **Custom Enterprise CA Bundles (`--ca-bundle <path>`)**: For enterprise environments using internal PKI (e.g. Microsoft CA, HashiCorp Vault, Active Directory Certificate Services), point `--ca-bundle` to your root/intermediate CA bundle (`.pem` or `.crt`).
@@ -366,7 +366,7 @@ The VCF Readiness Assessment Tool includes enterprise security controls for BMC 
   - Mandatory `--allow-remote` flag required when binding to non-loopback addresses (`0.0.0.0`).
   - Windows DPAPI credential files hardened with restrictive `icacls` user ACLs (or macOS Keychain / Linux Secret Service).
   - Strict 32 MB payload caps and Zip Slip path traversal defenses on all file imports.
-- **Optional Encrypted Credential Vault (off by default)**: For fleets with different BMC passwords per rack or generation, `python -m vcf_hci.vault` manages a passphrase-encrypted local file (`~/.vcf-readiness/credentials.vault`) of exact-host / CIDR / default entries. Stdlib-only PBKDF2-HMAC-SHA256 (600k iterations) + HMAC-SHA256 Encrypt-then-MAC — not AES, since the Python standard library has none. Passwords are never printed, never sent to the browser, and the Web UI vault is disabled under `--allow-remote`. Enable per scan with `--vault` or the *Use encrypted credential vault* checkbox. See the [Credential Vault Guide](docs/CREDENTIAL_VAULT.md).
+- **Optional Encrypted Credential Vault (off by default)**: For fleets with different BMC passwords per rack or generation, `python -m groundzero.vault` manages a passphrase-encrypted local file (`~/.groundzero/credentials.vault`) of exact-host / CIDR / default entries. Stdlib-only PBKDF2-HMAC-SHA256 (600k iterations) + HMAC-SHA256 Encrypt-then-MAC — not AES, since the Python standard library has none. Passwords are never printed, never sent to the browser, and the Web UI vault is disabled under `--allow-remote`. Enable per scan with `--vault` or the *Use encrypted credential vault* checkbox. See the [Credential Vault Guide](docs/CREDENTIAL_VAULT.md).
 
 ### BMC Hardware Security Audit (84 Controls & CISA/NSA Alignment)
 
@@ -394,7 +394,7 @@ For the exhaustive control catalog, evidence schemas, and remediation procedures
 | `--username`, `-u` | Prompted | BMC username |
 | `--password-env` | `None` | Environment variable name containing the BMC password |
 | `--no-input` | `False` | Disable interactive prompts for non-interactive scripting |
-| `--vault [PATH]` | off | **Opt-in.** Resolve per-host credentials from the encrypted local vault (default `~/.vcf-readiness/credentials.vault`). Manage with `python -m vcf_hci.vault`. |
+| `--vault [PATH]` | off | **Opt-in.** Resolve per-host credentials from the encrypted local vault (default `~/.groundzero/credentials.vault`). Manage with `python -m groundzero.vault`. |
 | `--vault-passphrase-env` | `None` | Environment variable holding the vault passphrase (required with `--vault --no-input`) |
 | `--from-summary` | `None` | Path to summary JSON/zip, scan directory, or parent library directory to assemble |
 | `--site` | `""` | Assign site/datacenter tag to scan (recorded in MANIFEST.json and provenance) |
@@ -445,24 +445,24 @@ For the exhaustive control catalog, evidence schemas, and remediation procedures
 | `MANIFEST.json` | Scan execution metadata manifest (`tool_version`, `scanned_at`, `host_count`, `collector_id`, `site`, `scan_profile`, `obfuscated`) for library discovery and remote drop ingestion |
 | `fleet_summary.html` | One-page fleet overview dashboard |
 | `fleet_combined.html` / `00_fleet_combined.html` | Fleet Hub HTML dashboard embedding all host reports (single inline file for &le; 64 hosts, sidecar pack with lazy on-demand frames for &gt; 64 hosts up to 3,000+ hosts without 256-host cliff) |
-| `vcf_readiness_<timestamp>.xlsx` | Multi-sheet Excel export (Summary, Storage, NICs, GPUs, Security, Failed Hosts) |
+| `groundzero_<timestamp>.xlsx` | Multi-sheet Excel export (Summary, Storage, NICs, GPUs, Security, Failed Hosts) |
 | `00_fleet_summary.csv` | Standardized tabular fleet summary with 40+ Schema v2.0 domain fields |
 | `00_drives_inventory.csv` | Physical storage drive inventory across all assessed hosts |
 | `00_nics_inventory.csv` | Network interface adapter, port, and ToR switch neighbor inventory |
 | `00_gpus_inventory.csv` | Hardware accelerator and GPU inventory across all hosts |
 | `00_failed_hosts.csv` | Preflight and connection failure diagnostics for unreachable hosts |
 | `00_OBFUSCATED_*` | Obfuscated mirrors of HTML, Excel (`.xlsx`), and CSV deliverables (with `--obfuscate`) |
-| `vcf_assess_debug.log` | HTTP-level debug trace (with `--debug` flag) |
+| `groundzero_debug.log` | HTTP-level debug trace (with `--debug` flag) |
 
 State kept in your home directory:
 
 | File / Directory | Description |
 |------------------|-------------|
-| `~/.vcf-readiness/hcl/` | HCL dataset cache (`all.json`) and auto-built dark-site bundles (`vcf_hcl_bundle_*.zip`) |
-| `~/.vcf-readiness-session.json` | Last-used range, username, output folder, mode |
-| `~/.vcf-readiness-profiles.json` | Saved profiles — **no passwords** |
-| `~/.vcf-readiness-secrets.json` | Windows only: DPAPI-encrypted passwords |
-| `~/.vcf-readiness/credentials.vault` | **Only if you opt in.** Passphrase-encrypted per-host/subnet/default BMC credentials (`0600`), see [Credential Vault Guide](docs/CREDENTIAL_VAULT.md) |
+| `~/.groundzero/hcl/` | HCL dataset cache (`all.json`) and auto-built dark-site bundles (`vcf_hcl_bundle_*.zip`) |
+| `~/.groundzero-session.json` | Last-used range, username, output folder, mode |
+| `~/.groundzero-profiles.json` | Saved profiles — **no passwords** |
+| `~/.groundzero-secrets.json` | Windows only: DPAPI-encrypted passwords |
+| `~/.groundzero/credentials.vault` | **Only if you opt in.** Passphrase-encrypted per-host/subnet/default BMC credentials (`0600`), see [Credential Vault Guide](docs/CREDENTIAL_VAULT.md) |
 
 ---
 
@@ -485,7 +485,7 @@ Each per-host HTML report includes:
 
 ## Data Obfuscation & PII Anonymization
 
-The VCF Readiness Assessment Tool includes built-in, server-side data obfuscation capabilities to allow VMware Sales Engineers, Solution Architects, and customer IT teams to share hardware readiness reports externally (e.g., with Broadcom engineering or hardware OEMs) without exposing sensitive infrastructure metadata or personally identifiable information (PII).
+The GroundZero includes built-in, server-side data obfuscation capabilities to allow VMware Sales Engineers, Solution Architects, and customer IT teams to share hardware readiness reports externally (e.g., with Broadcom engineering or hardware OEMs) without exposing sensitive infrastructure metadata or personally identifiable information (PII).
 
 ### Obfuscation Coverage Catalog
 
@@ -517,7 +517,7 @@ Obfuscation **only** sanitizes sensitive identifiers. All technical hardware spe
 1. **Web UI:** Check the **"Generate obfuscated copies"** checkbox on the assessment form before running a scan. The tool generates standard reports alongside dedicated `OBFUSCATED_*.html` reports in the `VCF-Scans` directory.
 2. **Command-Line Interface:** Pass the `--obfuscate` flag during scan execution:
    ```bash
-   python vcfr_collector.py --targets 10.0.0.1-10 --obfuscate
+   python groundzero_collector.py --targets 10.0.0.1-10 --obfuscate
    ```
 3. **Interactive Client-Side Toggle:** On standard (un-obfuscated) HTML reports, viewers can check the **"Obfuscate report"** checkbox in the top header to mask sensitive fields dynamically in the browser and download a standalone obfuscated HTML file. Pre-obfuscated reports display a static **🔒 Obfuscated Report** badge.
 
@@ -534,13 +534,13 @@ Obfuscation **only** sanitizes sensitive identifiers. All technical hardware spe
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │        Post-Collection Enrichment Pipeline             │
-│   vcf_hci/enrichment.py — enrich_host_result()         │
+│   groundzero/enrichment.py — enrich_host_result()         │
 └──────────────────────────┬─────────────────────────────┘
                            │ Enriched Hardware Payload
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │          Layer B: VCF 9.1 Compatibility Engine         │
-│   vcf_hci/compat/ + VCF9CompatibilityEngine facade     │
+│   groundzero/compat/ + VCF9CompatibilityEngine facade     │
 └──────────────────────────┬─────────────────────────────┘
                            │ Status Verdicts & Badges
                            ▼
@@ -552,7 +552,7 @@ Obfuscation **only** sanitizes sensitive identifiers. All technical hardware spe
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │    Layer D: Aggregator + Reports + UI                  │
-│   HTML Reports · Browser UI (vcf_hci/web/)             │
+│   HTML Reports · Browser UI (groundzero/web/)             │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -566,13 +566,13 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full engineering specification.
 
 ```bash
 # macOS
-./build-web.sh      # → dist/VCF-Readiness-Web-v9.7.2-mac (.zip)
+./build-web.sh      # → dist/GroundZero-Web-v9.7.2-mac (.zip)
 
 # Linux
-./build-web.sh      # → dist/VCF-Readiness-Web-v9.7.2-linux (.zip)
+./build-web.sh      # → dist/GroundZero-Web-v9.7.2-linux (.zip)
 
 # Windows
-build-web.bat       # → dist\VCF-Readiness-Web-v9.7.2-win.exe (.zip)
+build-web.bat       # → dist\GroundZero-Web-v9.7.2-win.exe (.zip)
 ```
 
 The build scripts handle PyInstaller installation automatically. The web UI build is portable and works on macOS, Linux, and Windows (including headless systems).
@@ -625,7 +625,7 @@ To make hardware visualization, chassis drive bay diagrams, and compatibility as
 - **Chassis Diagrams & Front Panel Vector Graphics**: Provide SVG layouts or chassis maps to enhance standalone HTML report visualizations.
 - **Redfish Telemetry & Mockup Payloads**: Provide sanitized Redfish JSON dumps (using `tools/crawl_oem_host.py`) to help test storage controller enumeration, NVMe drive slot detection, and health reporting without requiring physical hardware in test labs.
 
-Please open a [GitHub Issue](https://github.com/johnnicholson-vmw/vcf-readiness/issues/new?template=oem_support_request.md) or submit a Pull Request. See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/OEM_REFERENCE.md](docs/OEM_REFERENCE.md) for details.
+Please open a [GitHub Issue](https://github.com/djsincla/GroundZero/issues/new?template=oem_support_request.md) or submit a Pull Request. See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/OEM_REFERENCE.md](docs/OEM_REFERENCE.md) for details.
 
 ---
 
@@ -638,7 +638,7 @@ Use the bundled pure-standard-library Redfish crawler (zero external pip depende
 python tools/crawl_oem_host.py -r <BMC_IP> -u <USERNAME> -p <PASSWORD> -D samples/<vendor_prefix> --zip
 
 # Or run deep discovery via the assessment CLI:
-python vcfr_collector.py --targets <BMC_IP> --oem --crawl
+python groundzero_collector.py --targets <BMC_IP> --oem --crawl
 ```
 
 Place captures in `samples/<vendor>/` with a `SOURCE.md` note. Captured mockups can be anonymized for public contribution using `tools/anonymize_captured_mockups.py`.
@@ -673,7 +673,7 @@ Place captures in `samples/<vendor>/` with a `SOURCE.md` note. Captured mockups 
 
 ## Credits & Third-Party Software
 
-- Browser UI styled with [Clarity Design System](https://clarity.design/) tokens (VMware/Broadcom, Apache-2.0 license). CSS is pre-bundled in `vcf_hci/web/assets.py` — no internet required at runtime. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+- Browser UI styled with [Clarity Design System](https://clarity.design/) tokens (VMware/Broadcom, Apache-2.0 license). CSS is pre-bundled in `groundzero/web/assets.py` — no internet required at runtime. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 - Switch buffer intelligence, ASIC mapping, and VOQ classification derived from the open research of **Michael Buraglio** and **Jim Warner**.
 
 ---

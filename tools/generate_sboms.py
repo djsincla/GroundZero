@@ -8,7 +8,7 @@ Generates industry-standard Software Bill of Materials (SBOM) specifications:
   - Standalone Human-Readable Markdown Documents
 
 Covers three distinct architectural perimeters:
-  1. Customer Deliverables (offline package Distribution-VCF-Readiness.zip & binaries)
+  1. Customer Deliverables (offline package Distribution-GroundZero.zip & binaries)
   2. Internal Tooling & Redfish Telemetry Library (dev, build, test, and catalog assets)
   3. Lab Jump Host (installation-04 infrastructure, system packages, and runtime services)
 
@@ -40,7 +40,7 @@ INTERNAL_SBOM_DIR = REPO_ROOT / "internal" / "sbom"
 # Current project version
 try:
     sys.path.insert(0, str(REPO_ROOT))
-    from vcf_hci.constants import TOOL_VERSION
+    from groundzero.constants import TOOL_VERSION
 except Exception:
     TOOL_VERSION = "9.7.1"
 
@@ -67,39 +67,39 @@ def compute_file_sha256(filepath: Path) -> Optional[str]:
 # ==============================================================================
 
 CUSTOMER_METADATA = {
-    "name": "vcf-readiness",
+    "name": "groundzero",
     "version": TOOL_VERSION,
-    "description": "VCF / vSphere 9.1 HCI Readiness Assessment Tool — Redfish-based hardware compatibility scanner",
+    "description": "GroundZero — VCF / vSphere 9.1 HCI Readiness — Redfish-based hardware compatibility scanner",
     "vendor": "Broadcom / VMware",
     "license_spdx": "LicenseRef-CA-Inc",
     "license_name": "CA, Inc. Software License Agreement",
-    "homepage": "https://github.com/johnnicholson-vmw/vcf-readiness",
-    "purl": f"pkg:github/johnnicholson-vmw/vcf-readiness@{TOOL_VERSION}",
+    "homepage": "https://github.com/djsincla/GroundZero",
+    "purl": f"pkg:github/djsincla/GroundZero@{TOOL_VERSION}",
 }
 
 CUSTOMER_COMPONENTS = [
     {
-        "name": "vcf_hci",
+        "name": "groundzero",
         "version": TOOL_VERSION,
         "type": "application",
         "description": "Core Redfish collection, compatibility assessment, and standalone report generation engine. 100% Python 3.9+ standard library; zero third-party pip dependencies.",
-        "purl": f"pkg:pypi/vcf-readiness@{TOOL_VERSION}",
+        "purl": f"pkg:pypi/groundzero@{TOOL_VERSION}",
         "license_spdx": "LicenseRef-CA-Inc",
         "scope": "required",
         "supplier": "Broadcom / CA, Inc.",
-        "origin": "vcf_hci/",
+        "origin": "groundzero/",
         "distribution": "Source package & compiled binaries",
     },
     {
         "name": "@cds/core",
         "version": "5.7.0",
         "type": "library",
-        "description": "VMware Clarity Design System CSS stylesheet. Bundled offline as gzip-compressed base64 constant inside vcf_hci/web/assets.py. Zero external CDN calls or npm runtime requirements.",
+        "description": "VMware Clarity Design System CSS stylesheet. Bundled offline as gzip-compressed base64 constant inside groundzero/web/assets.py. Zero external CDN calls or npm runtime requirements.",
         "purl": "pkg:npm/%40cds/core@5.7.0",
         "license_spdx": "Apache-2.0",
         "scope": "required",
         "supplier": "VMware by Broadcom",
-        "origin": "Embedded in vcf_hci/web/assets.py via tools/bundle_assets.py",
+        "origin": "Embedded in groundzero/web/assets.py via tools/bundle_assets.py",
         "distribution": "In-memory CSS served by local Web UI (127.0.0.1:7182) and embedded in offline HTML reports",
     },
     {
@@ -111,19 +111,19 @@ CUSTOMER_COMPONENTS = [
         "license_spdx": "LicenseRef-Proprietary-Broadcom",
         "scope": "required",
         "supplier": "Broadcom",
-        "origin": "vcf_hci/io_nics.json and hcl/vcf_hcl_bundle_latest.zip",
+        "origin": "groundzero/io_nics.json and hcl/vcf_hcl_bundle_latest.zip",
         "distribution": "Embedded JSON file and offline bundle archive in hcl/",
     },
     {
         "name": "pyinstaller-bootloader",
         "version": "6.11.0",
         "type": "framework",
-        "description": "PyInstaller binary bootloader executable wrapper. Unpacks and runs the bundled CPython runtime and vcf_hci modules in memory. Shipped exclusively inside compiled binaries in bin/.",
+        "description": "PyInstaller binary bootloader executable wrapper. Unpacks and runs the bundled CPython runtime and groundzero modules in memory. Shipped exclusively inside compiled binaries in bin/.",
         "purl": "pkg:generic/pyinstaller/bootloader@6.11.0",
         "license_spdx": "GPL-2.0-only WITH Bootloader-exception",
         "scope": "optional",
         "supplier": "PyInstaller Development Team",
-        "origin": "Compiled single-file binaries (bin/VCF-Readiness-Web-*, bin/vcf-assess*)",
+        "origin": "Compiled single-file binaries (bin/GroundZero-Web-*, bin/groundzero*)",
         "distribution": "Embedded in standalone platform executables (Mac/Win/Linux). Not used when running via Python source.",
     },
     {
@@ -187,11 +187,11 @@ CUSTOMER_COMPONENTS = [
         "distribution": "Embedded inside compiled binaries in bin/",
     },
     {
-        "name": "vcf-readiness-adapter",
+        "name": "groundzero-adapter",
         "version": TOOL_VERSION,
         "type": "application",
         "description": "VMware Aria Operations / VCF Operations 9.1 Management Pack (.pak). Contains adapter.zip, describe.xml, manifest.txt, and resources for native VCF Operations inventory collection.",
-        "purl": f"pkg:generic/broadcom/vcf-readiness-adapter@{TOOL_VERSION}",
+        "purl": f"pkg:generic/broadcom/groundzero-adapter@{TOOL_VERSION}",
         "license_spdx": "MIT",
         "scope": "optional",
         "supplier": "Broadcom / VMware Community",
@@ -211,11 +211,11 @@ CUSTOMER_ZIP_MANIFEST = [
     {"path": "THIRD_PARTY_LICENSES.md", "purpose": "Notices and license texts for bundled third-party open-source components (Clarity Apache-2.0, OpenSSL, CPython, libffi, zlib)."},
     {"path": "CONTRIBUTING.md", "purpose": "Guidelines for testing, code formatting, and OEM extension development."},
     {"path": "pyproject.toml", "purpose": "Project metadata, PEP 517 build configuration, and zero-dependency declarations."},
-    {"path": "vcfr_web.py / redfish_web.py", "purpose": "Local Web Browser UI launcher (starts lightweight HTTP server on 127.0.0.1:7182)."},
-    {"path": "vcfr_collector.py / redfish_collector.py", "purpose": "Command-line interface entry points for multi-host batch assessments."},
+    {"path": "groundzero_web.py / redfish_web.py", "purpose": "Local Web Browser UI launcher (starts lightweight HTTP server on 127.0.0.1:7182)."},
+    {"path": "groundzero_collector.py / redfish_collector.py", "purpose": "Command-line interface entry points for multi-host batch assessments."},
     {"path": "build-web.sh / build-web.bat", "purpose": "Local platform binary compilation scripts for Mac/Linux and Windows."},
     {"path": "bin/", "purpose": "Staged single latest compiled standalone platform executables (no Python installation required)."},
-    {"path": "vcf_hci/", "purpose": "Core application Python package (100% standard library, zero external pip dependencies)."},
+    {"path": "groundzero/", "purpose": "Core application Python package (100% standard library, zero external pip dependencies)."},
     {"path": "docs/", "purpose": "Customer-facing documentation whitelist (guides, OEM reference, security architecture, SBOM)."},
     {"path": "scripts/", "purpose": "Customer-facing helper and execution wrapper scripts."},
     {"path": "tools/", "purpose": "Customer-facing build utilities (build_management_pack.py, clean_build_artifacts.py, etc.)."},
@@ -251,7 +251,7 @@ INTERNAL_TOOLS_COMPONENTS = [
     {"name": "lxml", "version": "6.1.3", "purl": "pkg:pypi/lxml@6.1.3", "license_spdx": "BSD-3-Clause", "category": "Document Generation", "scope": "dev", "description": "High-performance XML and HTML parser for documentation bundling."},
     # Redfish Telemetry Library
     {"name": "dmtf-redfish-schemas", "version": "DSP0266-v1.18.0", "purl": "pkg:generic/dmtf/redfish-schemas@1.18.0", "license_spdx": "LicenseRef-DMTF-Standard", "category": "Redfish Telemetry Library", "scope": "dev", "description": "Distributed Management Task Force (DMTF) official Redfish schema specifications (DSP0266 / DSP8010)."},
-    {"name": "redfish-telemetry-catalog-db", "version": "2.4.0", "purl": "pkg:generic/vcf-readiness/catalog-db@2.4.0", "license_spdx": "MIT", "category": "Redfish Telemetry Library", "scope": "dev", "description": "SQLite3 master registry indexing 50,000+ Redfish endpoints across hardware archetypes with offline DMTF replay fixtures."},
+    {"name": "redfish-telemetry-catalog-db", "version": "2.4.0", "purl": "pkg:generic/groundzero/catalog-db@2.4.0", "license_spdx": "MIT", "category": "Redfish Telemetry Library", "scope": "dev", "description": "SQLite3 master registry indexing 50,000+ Redfish endpoints across hardware archetypes with offline DMTF replay fixtures."},
 ]
 
 
@@ -266,7 +266,7 @@ JUMP_HOST_METADATA = {
     "kernel": "Linux 6.8.0-139-generic #139-Ubuntu SMP PREEMPT_DYNAMIC x86_64",
     "python_version": "3.12.3",
     "purpose": "Telemetry collection jump host, log inspection, scheduled artifact maintenance, and lab testing.",
-    "isolation_guarantee": "The ephemeral zipapp worker (vcfr_remote_worker.pyz) deployed to /tmp executes with Python stdlib only. It isolates its sys.path and does NOT import or link against any of the system pip packages installed on installation-04.",
+    "isolation_guarantee": "The ephemeral zipapp worker (gz_remote_worker.pyz) deployed to /tmp executes with Python stdlib only. It isolates its sys.path and does NOT import or link against any of the system pip packages installed on installation-04.",
 }
 
 JUMP_HOST_SYSTEM_PACKAGES = [
@@ -280,8 +280,8 @@ JUMP_HOST_SYSTEM_PACKAGES = [
 
 JUMP_HOST_PYTHON_PACKAGES = [
     {"name": "cryptography", "version": "41.0.7", "license_spdx": "Apache-2.0 OR BSD-3-Clause", "purl": "pkg:pypi/cryptography@41.0.7", "description": "Cryptographic recipes and primitives for Python (system package)."},
-    {"name": "requests", "version": "2.31.0", "license_spdx": "Apache-2.0", "purl": "pkg:pypi/requests@2.31.0", "description": "HTTP library for Python (system package, unused by vcf-readiness worker)."},
-    {"name": "urllib3", "version": "2.0.7", "license_spdx": "MIT", "purl": "pkg:pypi/urllib3@2.0.7", "description": "HTTP client for Python (system package, unused by vcf-readiness worker)."},
+    {"name": "requests", "version": "2.31.0", "license_spdx": "Apache-2.0", "purl": "pkg:pypi/requests@2.31.0", "description": "HTTP library for Python (system package, unused by groundzero worker)."},
+    {"name": "urllib3", "version": "2.0.7", "license_spdx": "MIT", "purl": "pkg:pypi/urllib3@2.0.7", "description": "HTTP client for Python (system package, unused by groundzero worker)."},
     {"name": "boto3", "version": "1.34.46", "license_spdx": "Apache-2.0", "purl": "pkg:pypi/boto3@1.34.46", "description": "AWS SDK for Python (system utility package)."},
     {"name": "botocore", "version": "1.34.46", "license_spdx": "Apache-2.0", "purl": "pkg:pypi/botocore@1.34.46", "description": "Low-level core functionality of Boto 3."},
     {"name": "Jinja2", "version": "3.1.2", "license_spdx": "BSD-3-Clause", "purl": "pkg:pypi/jinja2@3.1.2", "description": "Template engine for Python."},
@@ -296,8 +296,8 @@ JUMP_HOST_PYTHON_PACKAGES = [
 
 JUMP_HOST_SERVICES = [
     {
-        "service": "vcfr_remote_worker.pyz (Ephemeral)",
-        "path": "/tmp/vcfr_remote_<run_id>/worker.pyz",
+        "service": "gz_remote_worker.pyz (Ephemeral)",
+        "path": "/tmp/gz_remote_<run_id>/worker.pyz",
         "runtime": "Python 3.12.3 stdlib only",
         "description": "Ephemeral Redfish collector deployed on-demand by local operator or Web UI. Executed unprivileged, queries target BMCs over HTTPS, outputs summary JSON and HTML, and cleans itself up.",
     },
@@ -309,7 +309,7 @@ JUMP_HOST_SERVICES = [
     },
     {
         "service": "activity_logger.py / show_jump_activity.py",
-        "path": "/var/log/vcf-readiness/activity.jsonl",
+        "path": "/var/log/groundzero/activity.jsonl",
         "runtime": "Audit telemetry daemon",
         "description": "Records all SSH remote scan executions, client IPs, target count, and start/finish status for compliance tracing.",
     },
@@ -375,7 +375,7 @@ def generate_cyclonedx_json(
             "tools": [
                 {
                     "vendor": "Broadcom / VMware",
-                    "name": "vcf-readiness-sbom-generator",
+                    "name": "groundzero-sbom-generator",
                     "version": TOOL_VERSION,
                 }
             ],
@@ -475,7 +475,7 @@ def generate_spdx_json(
         "creationInfo": {
             "created": TIMESTAMP,
             "creators": [
-                f"Tool: vcf-readiness-sbom-generator-{TOOL_VERSION}",
+                f"Tool: groundzero-sbom-generator-{TOOL_VERSION}",
                 f"Organization: {supplier}",
             ],
             "licenseListVersion": "3.22",
@@ -495,7 +495,7 @@ def generate_customer_markdown_sbom() -> str:
     lines = [
         "# Software Bill of Materials (SBOM) — Customer Deliverables",
         "",
-        "> **Product:** VCF / vSphere 9.1 HCI Readiness Assessment Tool (`vcf-readiness`)  ",
+        "> **Product:** GroundZero — VCF / vSphere 9.1 HCI Readiness (`groundzero`)  ",
         f"> **Release Version:** v{TOOL_VERSION}  ",
         f"> **Generated Date:** {DATE_STR}  ",
         "> **Standards Compliance:** CycloneDX 1.5 JSON (`docs/sbom/cyclonedx-customer-v9.7.1.json`), SPDX 2.3 JSON (`docs/sbom/spdx-customer-v9.7.1.json`)  ",
@@ -505,11 +505,11 @@ def generate_customer_markdown_sbom() -> str:
         "",
         "## 1. Executive Summary & Zero-Dependency Architectural Guarantee",
         "",
-        "This document provides a comprehensive, transparent Software Bill of Materials (SBOM) for the standalone customer offline distribution (`Distribution-VCF-Readiness.zip`) and compiled multi-platform binaries.",
+        "This document provides a comprehensive, transparent Software Bill of Materials (SBOM) for the standalone customer offline distribution (`Distribution-GroundZero.zip`) and compiled multi-platform binaries.",
         "",
         "### Key Compliance Highlights:",
         "1. **Zero Runtime External Dependencies:**",
-        "   - The core Python application (`vcf_hci/`) imports **strictly from the Python standard library** (Python 3.9+).",
+        "   - The core Python application (`groundzero/`) imports **strictly from the Python standard library** (Python 3.9+).",
         "   - **Forbidden third-party runtime libraries:** Zero usage of `requests`, `urllib3`, `aiohttp`, `jinja2`, `pandas`, `beautifulsoup4`, or `lxml`.",
         "   - Customers can execute the tool directly using any stock Python 3.9–3.12 interpreter without installing external pip packages or connecting to public/private package indexes.",
         "2. **Zero External CDN / Web Dependencies:**",
@@ -542,7 +542,7 @@ def generate_customer_markdown_sbom() -> str:
         "",
         "## 3. Component Details & Licensing Analysis",
         "",
-        "### 3.1. Core Application Engine (`vcf_hci`)",
+        "### 3.1. Core Application Engine (`groundzero`)",
         "- **License:** CA, Inc. Software License Agreement (`LICENSE.md`)",
         "- **Purpose:** Enterprise BMC querying (Dell iDRAC, HPE iLO, Supermicro, Cisco IMC, Lenovo XCC, Intel BMC), hardware specification extraction, vSAN ESA readiness evaluation, and standalone HTML report generation.",
         "- **Dependencies:** Strictly standard library (`urllib.request`, `ssl`, `json`, `sqlite3`, `concurrent.futures`, `hashlib`, `hmac`).",
@@ -551,18 +551,18 @@ def generate_customer_markdown_sbom() -> str:
         "- **Version:** 5.7.0",
         "- **License:** Apache-2.0",
         "- **Purpose:** Professional enterprise UI design system for the local browser interface (127.0.0.1:7182) and generated interactive fleet reports.",
-        "- **Embedding Method:** Pre-bundled via `tools/bundle_assets.py` into `vcf_hci/web/assets.py` as a base64-encoded, gzip-compressed string constant. No Node.js or internet access is required.",
+        "- **Embedding Method:** Pre-bundled via `tools/bundle_assets.py` into `groundzero/web/assets.py` as a base64-encoded, gzip-compressed string constant. No Node.js or internet access is required.",
         "",
         "### 3.3. Broadcom vSAN Hardware Compatibility Dataset (`vsan-hcl-dataset`)",
         "- **Version:** 9.1.0",
         "- **License:** Broadcom Community / Proprietary Dataset",
         "- **Purpose:** Maps PCI Vendor ID, Device ID, Sub-Vendor ID, and Sub-Device ID to VMware Compatibility Guide (VCG / BCG) records for network interfaces, NVMe drives, and storage controllers.",
-        "- **Delivery:** Packaged offline inside `vcf_hci/io_nics.json` and `hcl/vcf_hcl_bundle_latest.zip`.",
+        "- **Delivery:** Packaged offline inside `groundzero/io_nics.json` and `hcl/vcf_hcl_bundle_latest.zip`.",
         "",
         "### 3.4. PyInstaller Bootloader & Bundled Binaries (`bin/`)",
         "- **License:** GPL-2.0-only WITH Bootloader-exception",
         "- **Exception Clause:** The PyInstaller Bootloader exception explicitly permits the creation and distribution of standalone executables containing proprietary, commercial, or non-GPL software without triggering copyleft requirements on the packaged application code.",
-        "- **Purpose:** Optional convenience executables (`VCF-Readiness-Web-mac`, `VCF-Readiness-Web.exe`, `vcf-assess`) for operators without a local Python runtime.",
+        "- **Purpose:** Optional convenience executables (`GroundZero-Web-mac`, `GroundZero-Web.exe`, `groundzero`) for operators without a local Python runtime.",
         "- **Contained Runtimes:** Statically bundles CPython 3.11+, OpenSSL 3.0+ (Apache-2.0), SQLite3 (Public Domain), zlib (Zlib), and libffi (MIT).",
         "",
         "### 3.5. VMware VCF Operations Management Pack (`integrations/vcf-ops/`)",
@@ -572,7 +572,7 @@ def generate_customer_markdown_sbom() -> str:
         "",
         "---",
         "",
-        "## 4. Master Offline Distribution Zip Contents (`Distribution-VCF-Readiness.zip`)",
+        "## 4. Master Offline Distribution Zip Contents (`Distribution-GroundZero.zip`)",
         "",
         "When built using `./build_offline_package.sh`, the master distribution package contains strictly the following vetted assets:",
         "",
@@ -606,7 +606,7 @@ def generate_internal_markdown_sbom() -> str:
     lines = [
         "# Software Bill of Materials (SBOM) — Internal Tools & Redfish Library",
         "",
-        "> **Repository:** VCF Readiness Tool Workspace  ",
+        "> **Repository:** GroundZero Workspace  ",
         f"> **Generated Date:** {DATE_STR}  ",
         "> **Standards Compliance:** CycloneDX 1.5 JSON (`internal/sbom/cyclonedx-internal-tools.json`), SPDX 2.3 JSON (`internal/sbom/spdx-internal-tools.json`)  ",
         "",
@@ -684,7 +684,7 @@ def generate_jump_host_markdown_sbom() -> str:
         "The jump host `installation-04` provides read-only network access to isolated lab datacenter BMC subnets. It hosts diagnostic querying, Redfish telemetry collection, and weekly automated maintenance.",
         "",
         "### Strict Isolation & Dependency Decoupling:",
-        "- **Zero Host Pip Dependency:** Remote scans deploy an unprivileged, ephemeral zipapp (`vcfr_remote_worker.pyz`) to `/tmp`. This worker uses **strictly the Python 3.12 standard library** and isolates its `sys.path`. It **does not import** any of the system pip packages installed on `installation-04`.",
+        "- **Zero Host Pip Dependency:** Remote scans deploy an unprivileged, ephemeral zipapp (`gz_remote_worker.pyz`) to `/tmp`. This worker uses **strictly the Python 3.12 standard library** and isolates its `sys.path`. It **does not import** any of the system pip packages installed on `installation-04`.",
         "- **Read-Only Telemetry:** As enforced by operational policy, all scripts executed through `installation-04` remain strictly read-only diagnostics. No power operations, firmware flashes, or configuration mutations are permitted.",
         "",
         "---",
@@ -717,7 +717,7 @@ def generate_jump_host_markdown_sbom() -> str:
         "",
         "---",
         "",
-        "## 4. Deployed VCF Readiness Workloads & Maintenance Services",
+        "## 4. Deployed GroundZero Workloads & Maintenance Services",
         "",
         "| Service / Workload | Location / Path | Execution Model | Purpose |",
         "|---|---|---|---|",
@@ -737,8 +737,8 @@ def generate_jump_host_markdown_sbom() -> str:
         "  - Keeps a minimum of 3 latest scan runs.",
         "  - Prunes standard scan runs older than 7 days (unless `.keep` file exists).",
         "  - Prunes heavy crawls (>2 GB) older than 3 days (unless `.keep` file exists).",
-        "  - Prunes orphaned `/tmp/vcfr_remote_*` working directories older than 24 hours.",
-        "- **Audit Logging:** Scan runs and maintenance results log to `/var/log/vcf-readiness/weekly-summary.log` and `/var/log/vcf-readiness/activity.jsonl`.",
+        "  - Prunes orphaned `/tmp/gz_remote_*` working directories older than 24 hours.",
+        "- **Audit Logging:** Scan runs and maintenance results log to `/var/log/groundzero/weekly-summary.log` and `/var/log/groundzero/activity.jsonl`.",
         "",
         "---",
         "",
@@ -761,7 +761,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     INTERNAL_SBOM_DIR.mkdir(parents=True, exist_ok=True)
 
     print("=========================================================================")
-    print(" VCF Readiness Assessment Tool — Master SBOM Generator")
+    print(" GroundZero — Master SBOM Generator")
     print(f" Tool Version    : v{TOOL_VERSION}")
     print(f" Timestamp       : {TIMESTAMP}")
     print(f" Selected Scope  : {args.scope}")
@@ -776,7 +776,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"    [✓] Markdown : {customer_md_path.relative_to(REPO_ROOT)}")
 
         customer_cdx = generate_cyclonedx_json(
-            bom_name="vcf-readiness",
+            bom_name="groundzero",
             bom_version=TOOL_VERSION,
             components=CUSTOMER_COMPONENTS,
             metadata_desc=CUSTOMER_METADATA["description"],
@@ -789,7 +789,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"    [✓] CycloneDX: {customer_cdx_path.relative_to(REPO_ROOT)}")
 
         customer_spdx = generate_spdx_json(
-            spdx_name="vcf-readiness-customer",
+            spdx_name="groundzero-customer",
             spdx_version=TOOL_VERSION,
             components=CUSTOMER_COMPONENTS,
             supplier=CUSTOMER_METADATA["vendor"],
@@ -808,7 +808,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"    [✓] Markdown : {internal_md_path.relative_to(REPO_ROOT)}")
 
         internal_cdx = generate_cyclonedx_json(
-            bom_name="vcf-readiness-internal-tools",
+            bom_name="groundzero-internal-tools",
             bom_version=TOOL_VERSION,
             components=INTERNAL_TOOLS_COMPONENTS,
             metadata_desc="Internal engineering, testing, build, and Redfish Telemetry Library assets.",
@@ -819,7 +819,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"    [✓] CycloneDX: {internal_cdx_path.relative_to(REPO_ROOT)}")
 
         internal_spdx = generate_spdx_json(
-            spdx_name="vcf-readiness-internal-tools",
+            spdx_name="groundzero-internal-tools",
             spdx_version=TOOL_VERSION,
             components=INTERNAL_TOOLS_COMPONENTS,
             supplier="Broadcom / VMware Internal Engineering",

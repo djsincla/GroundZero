@@ -21,7 +21,7 @@ Precedence: **exact → longest CIDR → default**. IPv4 ranges such as `198.51.
 ## 2. Security summary
 
 - Encrypted with a passphrase you choose (12+ characters). Key derivation is PBKDF2-HMAC-SHA256 with 600,000 iterations; the payload is protected by an HMAC-SHA256 Encrypt-then-MAC construction. The Python standard library has no AES, and this tool deliberately does not ship a home-grown AES — see the [Security Architecture whitepaper, §3.3](SECURITY_ARCHITECTURE.md#33-optional-encrypted-local-credential-vault-opt-in-off-by-default) for the exact construction and threat model.
-- Stored at `~/.vcf-readiness/credentials.vault` with owner-only permissions (`0600`; Windows ACL restricted to your account).
+- Stored at `~/.groundzero/credentials.vault` with owner-only permissions (`0600`; Windows ACL restricted to your account).
 - **There is no passphrase recovery.** If you lose it, delete the file and create a new vault.
 - Passwords are **never displayed**, never returned by the Web API, and never accepted on the command line.
 - The Web UI vault features are **disabled when the server runs with `--allow-remote`**.
@@ -43,7 +43,7 @@ default,root,CHANGE_ME,fallback for everything else
 - Quote values that contain commas or quotes per normal CSV rules (`"pa,ss""word"`).
 - If the same target appears twice, the **last row wins** (a warning is shown).
 - Import is **all-or-nothing** by default: one bad row aborts the whole import so you can fix it. Use `--skip-invalid` (CLI) or *Skip invalid rows* (Web UI) to import the good rows anyway.
-- Get a starter file with `python -m vcf_hci.vault template > credentials.csv` or the *Download template* button in the Web UI.
+- Get a starter file with `python -m groundzero.vault template > credentials.csv` or the *Download template* button in the Web UI.
 - **Delete the CSV after importing.** The whole point is to not leave plaintext on disk.
 
 ## 4. Command line
@@ -52,30 +52,30 @@ default,root,CHANGE_ME,fallback for everything else
 
 ```bash
 # Create (prompts twice for a new passphrase)
-python -m vcf_hci.vault init
+python -m groundzero.vault init
 
 # Bulk import, then delete the plaintext file
-python -m vcf_hci.vault import-csv credentials.csv
+python -m groundzero.vault import-csv credentials.csv
 rm credentials.csv            # del credentials.csv on Windows
 
 # Add / replace a single entry (password is prompted, or read from an env var)
-python -m vcf_hci.vault add --target 192.0.2.0/24 --username admin
-BMC_PW='...' python -m vcf_hci.vault add --target default --username root --password-env BMC_PW
+python -m groundzero.vault add --target 192.0.2.0/24 --username admin
+BMC_PW='...' python -m groundzero.vault add --target default --username root --password-env BMC_PW
 
 # Inspect (no passwords are ever printed)
-python -m vcf_hci.vault list
-python -m vcf_hci.vault resolve 192.0.2.10 192.0.2.77 203.0.113.5
+python -m groundzero.vault list
+python -m groundzero.vault resolve 192.0.2.10 192.0.2.77 203.0.113.5
 
 # Housekeeping
-python -m vcf_hci.vault remove --target 192.0.2.10
-python -m vcf_hci.vault change-passphrase
+python -m groundzero.vault remove --target 192.0.2.10
+python -m groundzero.vault change-passphrase
 ```
 
 Global options for every subcommand:
 
 | Option | Meaning |
 |---|---|
-| `--vault PATH` | Use a vault file other than `~/.vcf-readiness/credentials.vault` |
+| `--vault PATH` | Use a vault file other than `~/.groundzero/credentials.vault` |
 | `--passphrase-env VAR` | Read the vault passphrase from environment variable `VAR` instead of prompting (required when there is no TTY) |
 
 Exit codes: `0` success, `1` vault problem (missing, wrong passphrase, corrupt), `2` usage problem (bad CSV rows, no TTY without `--passphrase-env`).
@@ -84,14 +84,14 @@ Exit codes: `0` success, `1` vault problem (missing, wrong passphrase, corrupt),
 
 ```bash
 # Interactive: you are prompted for the vault passphrase
-python vcfr_collector.py --targets 192.0.2.0/24 --vault
+python groundzero_collector.py --targets 192.0.2.0/24 --vault
 
 # Non-interactive / scheduled
 export VCF_VAULT_PASSPHRASE='...'
-python vcfr_collector.py --targets 192.0.2.0/24 --vault --vault-passphrase-env VCF_VAULT_PASSPHRASE --no-input
+python groundzero_collector.py --targets 192.0.2.0/24 --vault --vault-passphrase-env VCF_VAULT_PASSPHRASE --no-input
 
 # Custom vault path
-python vcfr_collector.py --targets "192.0.2.10,192.0.2.11" --vault /secure/lab.vault --vault-passphrase-env VCF_VAULT_PASSPHRASE
+python groundzero_collector.py --targets "192.0.2.10,192.0.2.11" --vault /secure/lab.vault --vault-passphrase-env VCF_VAULT_PASSPHRASE
 ```
 
 What happens:
@@ -117,7 +117,7 @@ Without `--vault` the CLI behaves exactly as before.
 | Symptom | Cause / fix |
 |---|---|
 | `Vault passphrase incorrect (or vault file tampered with)` | Wrong passphrase, or the file was modified/corrupted. Both look identical by design. |
-| `No credential vault at …` | Run `python -m vcf_hci.vault init` or pass the right `--vault PATH`. |
+| `No credential vault at …` | Run `python -m groundzero.vault init` or pass the right `--vault PATH`. |
 | `--vault requires --vault-passphrase-env <VAR> in non-interactive mode` | There is no TTY (cron, CI, `--no-input`). Put the passphrase in an environment variable and name it. |
 | Web UI badge says `disabled` | The server was started with `--allow-remote`. The vault is local-workstation only. |
 | Hosts reported as `No Credentials Provided` | They had no vault match and no fallback password. Add a `default` entry or type a fallback password. |
@@ -127,12 +127,12 @@ Without `--vault` the CLI behaves exactly as before.
 
 | Path | Purpose |
 |---|---|
-| `~/.vcf-readiness/credentials.vault` | The encrypted vault (JSON envelope, base64 fields, no plaintext) |
-| `vcf_hci/vault/crypto.py` | PBKDF2 + HMAC-SHA256 Encrypt-then-MAC primitives (no I/O) |
-| `vcf_hci/vault/store.py` | File format, atomic `0600` writes, entries, resolver |
-| `vcf_hci/vault/csv_import.py` | CSV parser |
-| `vcf_hci/vault/__main__.py` | `python -m vcf_hci.vault` management commands |
-| `vcf_hci/web/vault_session.py` | Single in-memory unlocked vault for the Web UI, idle auto-lock |
+| `~/.groundzero/credentials.vault` | The encrypted vault (JSON envelope, base64 fields, no plaintext) |
+| `groundzero/vault/crypto.py` | PBKDF2 + HMAC-SHA256 Encrypt-then-MAC primitives (no I/O) |
+| `groundzero/vault/store.py` | File format, atomic `0600` writes, entries, resolver |
+| `groundzero/vault/csv_import.py` | CSV parser |
+| `groundzero/vault/__main__.py` | `python -m groundzero.vault` management commands |
+| `groundzero/web/vault_session.py` | Single in-memory unlocked vault for the Web UI, idle auto-lock |
 | `tests/test_vault_*.py`, `tests/test_web_vault_api.py` | Test coverage |
 
 ## 8. Jump hosts (Experimental)
@@ -143,29 +143,29 @@ Jump-host SSH profiles live in the same vault file as BMC credentials, under a `
 
 ```bash
 # Add a jump host with one or more subnets
-python -m vcf_hci.vault jump-host add --id dal-jump-01 --host 192.0.2.10 --user ubuntu --key ~/.ssh/id_ed25519 --subnets "192.0.2.0/24, 192.0.3.0/24"
+python -m groundzero.vault jump-host add --id dal-jump-01 --host 192.0.2.10 --user ubuntu --key ~/.ssh/id_ed25519 --subnets "192.0.2.0/24, 192.0.3.0/24"
 
 # Add more subnets to an existing jump host without recreating it
-python -m vcf_hci.vault jump-host add-subnet --id dal-jump-01 198.51.100.0/24 203.0.113.0/24
+python -m groundzero.vault jump-host add-subnet --id dal-jump-01 198.51.100.0/24 203.0.113.0/24
 
 # Replace all attached subnets
-python -m vcf_hci.vault jump-host set-subnets --id dal-jump-01 192.0.2.0/24 192.0.3.0/24
+python -m groundzero.vault jump-host set-subnets --id dal-jump-01 192.0.2.0/24 192.0.3.0/24
 
 # Remove specific subnets
-python -m vcf_hci.vault jump-host remove-subnet --id dal-jump-01 203.0.113.0/24
+python -m groundzero.vault jump-host remove-subnet --id dal-jump-01 203.0.113.0/24
 
 # Edit jump host properties (subnets, note, host, etc.) keeping secrets intact
-python -m vcf_hci.vault jump-host edit --id dal-jump-01 --note "Updated Dallas lab" --add-subnets 10.0.0.0/16
+python -m groundzero.vault jump-host edit --id dal-jump-01 --note "Updated Dallas lab" --add-subnets 10.0.0.0/16
 
 # List jump hosts
-python -m vcf_hci.vault jump-host list
+python -m groundzero.vault jump-host list
 
 # Remove a jump host
-python -m vcf_hci.vault jump-host remove --id dal-jump-01
+python -m groundzero.vault jump-host remove --id dal-jump-01
 
 # CSV export template & import
-python -m vcf_hci.vault jump-host template > jump_hosts.csv
-python -m vcf_hci.vault jump-host import-csv jump_hosts.csv
+python -m groundzero.vault jump-host template > jump_hosts.csv
+python -m groundzero.vault jump-host import-csv jump_hosts.csv
 ```
 
 CSV columns: `id,host,port,username,key_path,subnets,note,is_default`. Subnets in one cell are separated by semicolons. The cell `default` marks the fallback host. Do not put passwords or private keys in the CSV. `list` prints ids, hosts, usernames, and subnet maps only.

@@ -20,13 +20,13 @@ logger = logging.getLogger("mp_builder")
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MP_DIR = os.path.join(REPO_ROOT, "management_pack")
-VCF_HCI_DIR = os.path.join(REPO_ROOT, "vcf_hci")
+VCF_HCI_DIR = os.path.join(REPO_ROOT, "groundzero")
 
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 try:
-    from vcf_hci.constants import TOOL_VERSION
+    from groundzero.constants import TOOL_VERSION
 except ImportError:
     TOOL_VERSION = "9.0.0"
 
@@ -153,7 +153,7 @@ def add_zip_entry(
 
 def build_pak(
     mp_dir: str,
-    vcf_hci_dir: str,
+    groundzero_dir: str,
     output_path: Optional[str] = None,
     create_alias: bool = False,
     sync_to_integrations: bool = True,

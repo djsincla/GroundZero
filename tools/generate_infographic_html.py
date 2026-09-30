@@ -18,14 +18,14 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(THIS_DIR, ".."))
 sys.path.insert(0, PROJECT_ROOT)
 
-from vcf_hci.constants import TOOL_VERSION
+from groundzero.constants import TOOL_VERSION
 
 HTML_OUT = os.path.join(PROJECT_ROOT, "docs", "infographic.html")
 MD_OUT = os.path.join(PROJECT_ROOT, "docs", "INFOGRAPHIC.md")
 
 
 def generate_markdown() -> str:
-    return f"""# VCF 9.1 HCI Readiness Assessment Tool — Presentation & Infographic Kit
+    return f"""# GroundZero — Presentation & Infographic Kit
 
 > **Release:** v{TOOL_VERSION} • **Target Platform:** VMware Cloud Foundation 9.1 / vSphere 9.1 / vSAN ESA
 > **Interactive Standalone HTML Version:** [`docs/infographic.html`](./infographic.html) (100% self-contained offline single-file app)
@@ -34,7 +34,7 @@ def generate_markdown() -> str:
 
 ## Executive Summary & Soundbite
 
-> *"The VCF HCI Readiness Assessment Tool bridges the gap between raw bare-metal server infrastructure and VMware Cloud Foundation 9.1 planning — automating days of manual HCL validation into a 30-second Redfish scan that preserves existing server CapEx."*
+> *"The GroundZero bridges the gap between raw bare-metal server infrastructure and VMware Cloud Foundation 9.1 planning — automating days of manual HCL validation into a 30-second Redfish scan that preserves existing server CapEx."*
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -183,7 +183,7 @@ def generate_markdown() -> str:
 
 ---
 
-*VCF / vSphere 9.1 HCI Readiness Assessment Tool • Open source VMware SE utility.*
+*GroundZero — VCF / vSphere 9.1 HCI Readiness • Open source VMware SE utility.*
 """
 
 
@@ -616,7 +616,7 @@ def generate_html() -> str:
     <!-- Footer Area -->
     <div class="divider"></div>
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--text-dim);">
-      <span>VCF / vSphere 9.1 HCI Readiness Assessment Tool • Presentation & Infographic Kit v{TOOL_VERSION}</span>
+      <span>GroundZero — VCF / vSphere 9.1 HCI Readiness • Presentation & Infographic Kit v{TOOL_VERSION}</span>
       <span>100% Free-Standing & Offline Capable • Zero External Dependencies</span>
     </div>
   </div>

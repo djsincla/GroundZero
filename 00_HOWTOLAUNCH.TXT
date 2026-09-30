@@ -1,5 +1,5 @@
 ================================================================================
-          VCF / vSphere 9.1 HCI Readiness Assessment Tool
+          GroundZero — VCF / vSphere 9.1 HCI Readiness
                    How to Launch Guide (Scripts & Binaries)
 ================================================================================
 
@@ -18,16 +18,16 @@ The Web UI provides an interactive interface for single or multi-host scanning,
 subnet discovery, credential management, and report generation.
 
 Option A — From the root unzipped directory:
-  macOS / Linux:   python3 scripts/vcfr_web.py
-  Windows:         python scripts\vcfr_web.py
+  macOS / Linux:   python3 scripts/groundzero_web.py
+  Windows:         python scripts\groundzero_web.py
 
 Option B — From the scripts/ directory:
-  macOS / Linux:   cd scripts && ./vcfr_web.py
-  Windows:         cd scripts && python vcfr_web.py
+  macOS / Linux:   cd scripts && ./groundzero_web.py
+  Windows:         cd scripts && python groundzero_web.py
 
 Option C — As a Python module from root:
-  macOS / Linux:   python3 -m vcf_hci.web
-  Windows:         python -m vcf_hci.web
+  macOS / Linux:   python3 -m groundzero.web
+  Windows:         python -m groundzero.web
 
 * Note: The Web UI automatically opens http://127.0.0.1:7182 in your browser.
   To exit, press Ctrl-C in the terminal or click 'Quit' in the browser header.
@@ -39,26 +39,26 @@ Option C — As a Python module from root:
 The CLI is ideal for headless environments, automated batch runs, or SSH sessions.
 
 Option A — From the root unzipped directory:
-  macOS / Linux:   python3 scripts/vcfr_collector.py --help
-  Windows:         python scripts\vcfr_collector.py --help
+  macOS / Linux:   python3 scripts/groundzero_collector.py --help
+  Windows:         python scripts\groundzero_collector.py --help
 
 Option B — From the scripts/ directory:
-  macOS / Linux:   cd scripts && ./vcfr_collector.py --help
-  Windows:         cd scripts && python vcfr_collector.py --help
+  macOS / Linux:   cd scripts && ./groundzero_collector.py --help
+  Windows:         cd scripts && python groundzero_collector.py --help
 
 Option C — As a Python module from root:
-  macOS / Linux:   python3 -m vcf_hci --help
-  Windows:         python -m vcf_hci --help
+  macOS / Linux:   python3 -m groundzero --help
+  Windows:         python -m groundzero --help
 
 Example Scan Command:
   export REDFISH_PASSWORD='MySecretPass!'
-  python3 vcfr_collector.py --targets 192.0.2.50 -u root --password-env REDFISH_PASSWORD --output-dir VCF-Scans/
+  python3 groundzero_collector.py --targets 192.0.2.50 -u root --password-env REDFISH_PASSWORD --output-dir VCF-Scans/
   (Passwords are never accepted on the command line. Legacy redfish_collector.py shim is also supported.)
 
 Optional — different BMC passwords per rack/subnet (encrypted local vault, OFF by default):
-  python3 -m vcf_hci.vault init                      # create, choose a passphrase (no recovery!)
-  python3 -m vcf_hci.vault import-csv credentials.csv  # target,username,password[,note]; then delete the CSV
-  python3 vcfr_collector.py --targets 192.0.2.0/24 --vault
+  python3 -m groundzero.vault init                      # create, choose a passphrase (no recovery!)
+  python3 -m groundzero.vault import-csv credentials.csv  # target,username,password[,note]; then delete the CSV
+  python3 groundzero_collector.py --targets 192.0.2.0/24 --vault
   See docs/CREDENTIAL_VAULT.md for details.
 
 
@@ -67,11 +67,11 @@ Optional — different BMC passwords per rack/subnet (encrypted local vault, OFF
 If Python is not installed on your system, standalone compiled executables and
 launchers are located in the bin/ directory (or pre-packaged in dist/):
 
-  macOS Web UI Launcher: ./bin/Launch-VCF-Readiness-Web.command (or double-click)
-  macOS Web UI Binary:   ./bin/VCF-Readiness-Web-mac
-  Windows Web UI:        .\bin\VCF-Readiness-Web.exe
-  macOS CLI:             ./bin/vcf-assess
-  Windows CLI:           .\bin\vcf-assess.exe
+  macOS Web UI Launcher: ./bin/Launch-GroundZero-Web.command (or double-click)
+  macOS Web UI Binary:   ./bin/GroundZero-Web-mac
+  Windows Web UI:        .\bin\GroundZero-Web.exe
+  macOS CLI:             ./bin/groundzero
+  Windows CLI:           .\bin\groundzero.exe
   macOS Launch Guide:    ./bin/HOW_TO_OPEN_ON_MAC.txt
 
 

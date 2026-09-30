@@ -1,6 +1,6 @@
-# OEM Reference Guide — VCF Readiness Assessment Tool
+# OEM Reference Guide — GroundZero
 
-This document catalogues every OEM-keyed data structure in `vcf_hci/` (and `vcfr_collector.py`)
+This document catalogues every OEM-keyed data structure in `groundzero/` (and `groundzero_collector.py`)
 and provides a step-by-step checklist for onboarding a new OEM.
 
 ---
@@ -88,7 +88,7 @@ chassis description.
 
 ### Encouraging OEM Contributions for Chassis Maps and Front Panel Layouts
 
-We actively invite server OEMs and hardware vendors to provide official chassis mapping specifications, front-panel SVG diagrams, and SKU databases to make hardware assessment in VCF Readiness reports as robust as possible.
+We actively invite server OEMs and hardware vendors to provide official chassis mapping specifications, front-panel SVG diagrams, and SKU databases to make hardware assessment in GroundZero reports as robust as possible.
 
 **How OEMs Can Contribute:**
 1. **Order SKU & Model Database Additions**: Supply table entries for `DELL_SKU_CHASSIS_DB`, `HPE_SKU_CHASSIS_DB`, `DELL_MODEL_CHASSIS_DB`, or new vendor-specific tables mapping order numbers/SKUs to max front drive bays and exact chassis descriptions.
@@ -102,7 +102,7 @@ We actively invite server OEMs and hardware vendors to provide official chassis 
 
 ### Location
 
-`vcf_hci/constants.py` (after license constants).
+`groundzero/constants.py` (after license constants).
 
 ### Key Format
 
@@ -273,7 +273,7 @@ For Supermicro and other unconfigured BMCs where the release date is not exposed
 
 ### Location
 
-`vcf_hci/constants.py`.
+`groundzero/constants.py`.
 
 ### Key Format
 
@@ -292,7 +292,7 @@ comments for each entry.
 
 ### NVMe SMART Telemetry & OEM Extensions
 
-Drive health details are parsed in `_parse_drive_details()` in `vcf_hci/collector/collect_storage.py` and extracted from standard Redfish properties, `Metrics` sub-objects, and OEM-specific structures:
+Drive health details are parsed in `_parse_drive_details()` in `groundzero/collector/collect_storage.py` and extracted from standard Redfish properties, `Metrics` sub-objects, and OEM-specific structures:
 
 | OEM Vendor | Primary OEM Key | Extracted SMART Fields |
 |---|---|---|
@@ -310,7 +310,7 @@ Drive health details are parsed in `_parse_drive_details()` in `vcf_hci/collecto
 
 ### Location
 
-Class defined in `vcf_hci/bcg_links.py`.
+Class defined in `groundzero/bcg_links.py`.
 
 ### Per-OEM URL Construction
 
@@ -440,7 +440,7 @@ Follow these steps in order when adding support for a new OEM (or a new model ge
 
 ## 11. Multi-Vendor SEL / IML Deep-Linking Engine
 
-The deep-linking engine in `vcf_hci/report/sel_links.py` decodes vendor-proprietary System Event Log (SEL), Integrated Management Log (IML), and fault codes directly into verified official vendor documentation chapters:
+The deep-linking engine in `groundzero/report/sel_links.py` decodes vendor-proprietary System Event Log (SEL), Integrated Management Log (IML), and fault codes directly into verified official vendor documentation chapters:
 
 ### Dell PowerEdge EEMS Architecture
 - **Canonical Architecture:** Uses canonical multi-generation reference URLs (`https://www.dell.com/support/manuals/en-us/poweredge-r740xd/error_event_message_guide_c/`) bound to verified DITA chapter GUIDs for 20+ hardware categories (`SEC`, `PSU`, `RDU`, `PDR`, `HWC`, `MEM`, `PST`, `BOOT`, `CTL`, `PCI`, `TMP`, `TMPS`, `VLT`, `OSE`, `CUMP`, `FLDC`, `NINT`, `NNOD`, `NVCH`, `SEL`, `SRV`, `TST`).

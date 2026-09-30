@@ -1,6 +1,6 @@
 # Architecture Summary & Engineering Handoff
 
-**Project:** VCF / vSphere 9.1 Readiness Assessment Tool  
+**Project:** GroundZero — VCF / vSphere 9.1 HCI Readiness  
 **Version:** 9.7.2  
 **Primary Users:** VMware Sales Engineers (SEs), Solution Architects, IT Administrators  
 **Target Platform:** VMware Cloud Foundation 9.1 / vSphere 9.1 / vSAN ESA & OSA
@@ -35,12 +35,12 @@
 
 ## 1. System Overview
 
-The VCF Readiness Assessment Tool is a zero-dependency, multi-threaded Python utility that queries enterprise Out-of-Band Management Controllers (Dell iDRAC, HPE iLO, Supermicro BMC, Cisco IMC, Lenovo XCC, Intel BMC) via Redfish APIs to assess whether existing server infrastructure can be repurposed for VCF 9.1.
+The GroundZero is a zero-dependency, multi-threaded Python utility that queries enterprise Out-of-Band Management Controllers (Dell iDRAC, HPE iLO, Supermicro BMC, Cisco IMC, Lenovo XCC, Intel BMC) via Redfish APIs to assess whether existing server infrastructure can be repurposed for VCF 9.1.
 
 ### Support depth
 - Dell / HPE / Supermicro are production-hardened with dump fixtures (`tests/fixtures/*` plus `samples/` replay dumps).
 - Cisco and Lenovo have adapter unit tests, summary fixtures (`test_cisco_c220_fixture.py`, `test_lenovo_sr630_fixture.py`), and replay dumps (`samples/cisco-c220-m5`, `samples/lenovo-sr630v2`). Treat missing optional dumps as skip, not as "fixtures do not exist".
-- Intel BMC is registered so Manufacturer `Intel` does not fall through to the wrong OEM. `IntelBMCCollector` is still a `GenericCollector` subclass with only `oem_manager_paths()` filled (`vcf_hci/collector/oem/intel.py`). No successful dump yet; recapture with `tools/redfishMockupCreate.py` is a separate OEM plan.
+- Intel BMC is registered so Manufacturer `Intel` does not fall through to the wrong OEM. `IntelBMCCollector` is still a `GenericCollector` subclass with only `oem_manager_paths()` filled (`groundzero/collector/oem/intel.py`). No successful dump yet; recapture with `tools/redfishMockupCreate.py` is a separate OEM plan.
 
 The primary deliverable is a standalone HTML report per host — no server, no database, no Excel — just a double-click report that an SE can hand to a customer.
 
@@ -50,11 +50,11 @@ The primary deliverable is a standalone HTML report per host — no server, no d
 
 When generating, refactoring, or extending any code in this project:
 
-- **Zero External Runtime Dependencies** — Use ONLY Python 3.9+ standard library for all `vcf_hci/` package code: `urllib`, `ssl`, `json`, `re`, `csv`, `argparse`, `concurrent.futures`, `logging`, `gc`, `ipaddress`. **Never import `requests`, `urllib3`, `pandas`, `jinja2`, or any third-party package.**
+- **Zero External Runtime Dependencies** — Use ONLY Python 3.9+ standard library for all `groundzero/` package code: `urllib`, `ssl`, `json`, `re`, `csv`, `argparse`, `concurrent.futures`, `logging`, `gc`, `ipaddress`. **Never import `requests`, `urllib3`, `pandas`, `jinja2`, or any third-party package.**
 - **Dev dependencies** (pytest only) are allowed in `tests/` and are listed in `pyproject.toml` extras.
 - **SSL Resilience** — All HTTPS connections must use `ssl.CERT_NONE` to handle self-signed BMC certificates.
 - **Defensive JSON Parsing** — All `_get()` calls must trap `json.JSONDecodeError` to handle HTML 404 pages returned by Supermicro embedded web servers (Lighttpd).
-- **PyInstaller Compatible** — `pyproject.toml` documents the build commands. Use `--collect-all vcf_hci` in build scripts.
+- **PyInstaller Compatible** — `pyproject.toml` documents the build commands. Use `--collect-all groundzero` in build scripts.
 - **Windows Filename Safety** — All filenames derived from hostnames or IPs must be sanitized through `sanitize_filename()` to strip `:*?"<>|/\` characters.
 - **Memory Management** — Call `gc.collect()` after each host scan in multi-host runs to prevent memory creep across large subnet scans.
 - **Python 3.9 compatibility** — Use `Optional[X]` / `Union[X, Y]` in type hints, not `X | Y`.
@@ -66,7 +66,7 @@ When generating, refactoring, or extending any code in this project:
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │               Layer A: OEM Redfish Adapter                     │
-│  vcf_hci/collector/                                            │
+│  groundzero/collector/                                            │
 │  ├── base.py          — BaseRedfishCollector ABC               │
 │  │   · _get(endpoint) — HTTP Basic Auth, SSL bypass, JSON trap │
 │  │   · _discover_roots() — dynamic /Systems, /Chassis, /Managers│
@@ -79,7 +79,7 @@ When generating, refactoring, or extending any code in this project:
                                ▼
 ┌────────────────────────────────────────────────────────────────┐
 │           Post-Collection Enrichment Pipeline                  │
-│  vcf_hci/enrichment.py — enrich_host_result()                  │
+│  groundzero/enrichment.py — enrich_host_result()                  │
 │  · Coordinates Layer B compat, Layer C BCG, & Security Audit   │
 │  · Evaluates CPU, BIOS, BMC FW, Boot Mode, Topology, Budgets   │
 │  · Applies BCG URLs & Drive FW validations in single pass      │
@@ -89,9 +89,9 @@ When generating, refactoring, or extending any code in this project:
                ▼                       ▼
 ┌─────────────────────────────┐ ┌────────────────────────────────┐
 │   Layer B: Compatibility    │ │   BMC Hardware Security Audit  │
-│   & Layer C: BCG Links      │ │   vcf_hci/security/            │
-│  vcf_hci/compat/ (rules)    │ │   · 84 canonical controls      │
-│  vcf_hci/bcg_links.py (BCG) │ │   · Dell/HPE evaluators        │
+│   & Layer C: BCG Links      │ │   groundzero/security/            │
+│  groundzero/compat/ (rules)    │ │   · 84 canonical controls      │
+│  groundzero/bcg_links.py (BCG) │ │   · Dell/HPE evaluators        │
 │  · VCF9CompatibilityEngine  │ │   · Posture scoring & rollup   │
 └──────────────┬──────────────┘ └──────────────┬─────────────────┘
                │                               │
@@ -100,16 +100,16 @@ When generating, refactoring, or extending any code in this project:
                                ▼
 ┌────────────────────────────────────────────────────────────────┐
 │         Layer D: Aggregator, Report, and UI                    │
-│  vcf_hci/report/host_report.py  → per-host standalone HTML     │
-│  vcf_hci/report/fleet/          → fleet_summary & combined.html│
-│  vcf_hci/report/sel_links.py    → vendor SEL deep-link engine  │
-│  vcf_hci/report/schema_registry.py → Schema v2.0 domain model  │
-│  vcf_hci/report/excel_export.py → 10-tab Excel workbook        │
-│  vcf_hci/report/csv_export.py   → standardized domain CSVs     │
-│  vcf_hci/summary_io.py          → gzip / v2 manifest / zip I/O │
-│  vcf_hci/cli.py                 → argparse + ThreadPoolExecutor│
-│  vcf_hci/web/server.py          → browser UI HTTP server (SSE) │
-│  vcf_hci/web/app_html.py        → single-page Clarity app      │
+│  groundzero/report/host_report.py  → per-host standalone HTML     │
+│  groundzero/report/fleet/          → fleet_summary & combined.html│
+│  groundzero/report/sel_links.py    → vendor SEL deep-link engine  │
+│  groundzero/report/schema_registry.py → Schema v2.0 domain model  │
+│  groundzero/report/excel_export.py → 10-tab Excel workbook        │
+│  groundzero/report/csv_export.py   → standardized domain CSVs     │
+│  groundzero/summary_io.py          → gzip / v2 manifest / zip I/O │
+│  groundzero/cli.py                 → argparse + ThreadPoolExecutor│
+│  groundzero/web/server.py          → browser UI HTTP server (SSE) │
+│  groundzero/web/app_html.py        → single-page Clarity app      │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -118,12 +118,12 @@ When generating, refactoring, or extending any code in this project:
 ## 4. Package Layout & Documentation Map
 
 * **[`AGENTS.md`](AGENTS.md)** — Universal AI agent guardrails and project constraints
-* **[`vcf_hci/README.md`](vcf_hci/README.md)** — High-level package entry points and module map
+* **[`groundzero/README.md`](groundzero/README.md)** — High-level package entry points and module map
 
 ```
-vcf_hci/
+groundzero/
 ├── __init__.py           # re-exports every name gui/CLI currently imports
-├── __main__.py           # enables `python -m vcf_hci`
+├── __main__.py           # enables `python -m groundzero`
 ├── constants.py          # ESXI_BUILD_TABLE, URL constants, TOOL_VERSION, lookup tables
 ├── logging_utils.py      # configure_logging, sanitize_filename, parse_ip_targets
 ├── enrichment.py         # enrich_host_result: post-collection Layer B/C enrichment
@@ -152,7 +152,7 @@ vcf_hci/
 ├── protocol.py           # detect_management_protocol, TCP/WS-Man probes
 ├── wsman.py              # WsManCollector (AMT/DASH)
 ├── obfuscation.py        # obfuscate_host_data, PII redaction helpers
-├── hcl/                  # See vcf_hci/hcl/README.md
+├── hcl/                  # See groundzero/hcl/README.md
 │   ├── __init__.py
 │   ├── bundle_manager.py # HCLBundleManager, create/import_hcl_bundle
 │   ├── loader.py         # load_vsan_hcl_json, load_optional_vsan_csv
@@ -163,7 +163,7 @@ vcf_hci/
 │   ├── ras_modes.py      # _detect_memory_ras_modes
 │   ├── power_modes.py    # _detect_cpu_power_mode
 │   └── security.py       # _detect_side_channel_settings
-├── collector/            # See vcf_hci/collector/README.md
+├── collector/            # See groundzero/collector/README.md
 │   ├── __init__.py       # factory function + re-exports
 │   ├── base.py           # BaseRedfishCollector ABC: _get, run_assessment, rescan
 │   ├── crawler.py        # RedfishCrawler: hypermedia tree discovery & mockup export
@@ -201,7 +201,7 @@ vcf_hci/
 │   ├── metadata.py       # Canonical control catalog, groups, titles, confidence
 │   ├── redaction.py      # Recursive secret redaction & PII sanitization
 │   └── scoring.py        # Host & fleet posture scoring, asset classification
-├── report/               # See vcf_hci/report/README.md
+├── report/               # See groundzero/report/README.md
 │   ├── __init__.py
 │   ├── styles.py         # HOST_REPORT_CSS, FLEET_EXTRA_CSS constants
 │   ├── components.py     # Reusable HTML building blocks (badge, card, table helpers)
@@ -221,7 +221,7 @@ vcf_hci/
 │   ├── csv_io.py         # Credential CSV parser & export template
 │   ├── cli.py            # Vault CLI implementation
 │   ├── session.py        # Vault session management
-│   └── __main__.py       # `python -m vcf_hci.vault` init/add/import-csv/list/remove/resolve
+│   └── __main__.py       # `python -m groundzero.vault` init/add/import-csv/list/remove/resolve
 ├── web/
 │   ├── __init__.py       # package marker
 │   ├── server.py         # HTTP engine, routing & public server factory (facade)
@@ -246,8 +246,8 @@ vcf_hci/
 │   └── docs_js.py        # Documentation viewer search & navigation logic
 └── cli.py                # argparse + scan orchestration — main()
 
-vcfr_collector.py         # Primary CLI entry point
-vcfr_web.py               # Primary Browser UI entry point — starts vcf_hci.web.server
+groundzero_collector.py         # Primary CLI entry point
+groundzero_web.py               # Primary Browser UI entry point — starts groundzero.web.server
 redfish_collector.py      # Backward-compatibility CLI shim
 redfish_web.py            # Backward-compatibility Browser UI shim
 
@@ -261,18 +261,18 @@ Other Repository Documentation & Directories:
 
 | File | Interface | Notes |
 |------|-----------|-------|
-| `vcfr_web.py` | Browser UI (recommended) | Opens `http://127.0.0.1:7182`; standard library + browser |
-| `vcfr_collector.py` | CLI | `--targets`, `--threads`, `--debug`, etc. |
-| `python -m vcf_hci` | CLI (package form) | Same as `vcfr_collector.py` |
-| `redfish_web.py` | Browser UI (legacy shim) | Backward-compat shim delegating to `vcfr_web.py` |
-| `redfish_collector.py` | CLI (legacy shim) | Backward-compat shim delegating to `vcfr_collector.py` |
+| `groundzero_web.py` | Browser UI (recommended) | Opens `http://127.0.0.1:7182`; standard library + browser |
+| `groundzero_collector.py` | CLI | `--targets`, `--threads`, `--debug`, etc. |
+| `python -m groundzero` | CLI (package form) | Same as `groundzero_collector.py` |
+| `redfish_web.py` | Browser UI (legacy shim) | Backward-compat shim delegating to `groundzero_web.py` |
+| `redfish_collector.py` | CLI (legacy shim) | Backward-compat shim delegating to `groundzero_collector.py` |
 
 **Developer tools (not part of the runtime package):**
 
 | Path | Purpose |
 |------|---------|
-| `tools/bundle_assets.py` | Fetches latest Clarity CSS and regenerates `vcf_hci/web/assets.py` — requires internet; run once per Clarity upgrade |
-| `tools/bundle_docs.py` | Bundles markdown documentation into `vcf_hci/web/docs_data.py` |
+| `tools/bundle_assets.py` | Fetches latest Clarity CSS and regenerates `groundzero/web/assets.py` — requires internet; run once per Clarity upgrade |
+| `tools/bundle_docs.py` | Bundles markdown documentation into `groundzero/web/docs_data.py` |
 | `build-web.sh` / `build-web.bat` | PyInstaller build for the browser UI binary |
 | `build.sh` / `build.bat` | Wrapper shims delegating to `build-web.sh` / `build-web.bat` |
 
@@ -344,7 +344,7 @@ The collector queries these Redfish endpoints per host:
 
 See [`docs/adding-oem-support.md`](docs/adding-oem-support.md) for the full hook API reference. See README BMC coverage table for fixture status.
 
-**Quick summary:** Create one file in `vcf_hci/collector/oem/`, subclass `GenericCollector`, override only the hooks that differ, and add a `VENDOR_MATCH` tuple. Register the class in `_REGISTRY` in `vcf_hci/collector/oem/__init__.py`. No other files need to change.
+**Quick summary:** Create one file in `groundzero/collector/oem/`, subclass `GenericCollector`, override only the hooks that differ, and add a `VENDOR_MATCH` tuple. Register the class in `_REGISTRY` in `groundzero/collector/oem/__init__.py`. No other files need to change.
 
 **OEM Hook Methods Reference:**
 - `oem_bios_date(sys_data)` → `str` (BIOS release date)
@@ -369,14 +369,14 @@ When using Cursor to add features, scope prompts to individual layers:
 
 | Task | Prompt Scope |
 |------|-------------|
-| Add a new hardware check for all vendors | `collect_*` mixin in `vcf_hci/collector/` |
-| Add OEM-specific behavior | `oem/` subclass in `vcf_hci/collector/oem/` |
-| Change VCF compatibility rules | `VCF9CompatibilityEngine` in `vcf_hci/compat_engine.py` |
-| Add a new BCG category | `BCGLinkGenerator` in `vcf_hci/bcg_links.py` |
-| Change HTML report layout | `generate_host_html_report()` in `vcf_hci/report/host_report.py` |
-| Change fleet summary | `generate_summary_html()` in `vcf_hci/report/fleet_report.py` |
-| Add CLI argument | `main()` in `vcf_hci/cli.py` |
-| Add a constant or lookup table | `vcf_hci/constants.py` |
+| Add a new hardware check for all vendors | `collect_*` mixin in `groundzero/collector/` |
+| Add OEM-specific behavior | `oem/` subclass in `groundzero/collector/oem/` |
+| Change VCF compatibility rules | `VCF9CompatibilityEngine` in `groundzero/compat_engine.py` |
+| Add a new BCG category | `BCGLinkGenerator` in `groundzero/bcg_links.py` |
+| Change HTML report layout | `generate_host_html_report()` in `groundzero/report/host_report.py` |
+| Change fleet summary | `generate_summary_html()` in `groundzero/report/fleet_report.py` |
+| Add CLI argument | `main()` in `groundzero/cli.py` |
+| Add a constant or lookup table | `groundzero/constants.py` |
 
 ---
 
@@ -440,13 +440,13 @@ The summary report pipeline supports large fleet scaling (e.g. `/24` subnets wit
   - **Sidecar Mode** (&gt; 64 hosts up to 3,000+ hosts): Automatically transitions to sidecar mode. Sibling reports are loaded from `reports/` via dynamic `data-src` iframes with an LRU cache capping concurrent active iframes to 3. Host navigation replaces static tab buttons with a searchable, filterable host picker dropdown. Sibling `.xlsx` file links replace Base64 embedding.
   - **Capped Static DOM Rows**: For fleets &gt; 500 hosts, initial HTML rendering caps Summary and Detailed Inventory sub-tables to 500 rows, guaranteeing sub-second browser paint, while the full fleet dataset is preserved in the compact `#fleet-inv-data` JSON island.
   - **Scale Benchmark Proof**: 3,000-host synthetic benchmark generates a consolidated Fleet Hub HTML report in ~1.3 seconds at 6.10 MB, well under the 8.0 MB budget.
-- **Multi-Scan Fleet Library & Universal Drop Ingest (`vcf_hci/fleet_library.py`)**:
+- **Multi-Scan Fleet Library & Universal Drop Ingest (`groundzero/fleet_library.py`)**:
   - Decoupled Collection: Remote edge collectors or worker nodes execute scans locally and drop standardized output folders or zip archives with `MANIFEST.json` into a shared library path (default `~/Desktop/VCF-Scans`) or push via `POST /api/fleet/ingest` (with `/api/v1/fleet/ingest` alias).
   - Discovery (`discover_scans()`): Shallow-smart scan crawler detects timestamped scan folders and zip archives containing `data/fleet_summary.json` or `MANIFEST.json`.
   - Deduplication & Provenance (`assemble_fleet()`): Multi-scan merge resolves host identities using a deterministic fallback hierarchy: Redfish System UUID &rarr; Serial + Model &rarr; BMC IP &rarr; Hostname. The newest `scanned_at` timestamp wins, tracking `previous_scan_ids` provenance.
   - Memory-Managed Working Set: At &gt; 500 hosts, `_state["results"]` is trimmed in memory to prevent RAM exhaustion; `_state["fleet_index"]` maintains a compact ~3–8 MB index in RAM, streaming full payloads from disk on demand.
   - Lazy Host HTML Rendering: Central assemble does not pre-render 3,000 host HTML files; `_serve_report` lazily renders single-host reports on first open and caches them to disk. An optional `/api/fleet/prerender` endpoint allows pre-baking on demand.
-- **Summary I/O (`vcf_hci/summary_io.py`)**: Automatic version 2 summary payload handling:
+- **Summary I/O (`groundzero/summary_io.py`)**: Automatic version 2 summary payload handling:
   - Compressed `.json.gz` output when uncompressed size exceeds 1 MiB.
   - Chunked multi-file parts (`prefix_part01.json.gz`) when host count exceeds 100 or uncompressed size exceeds 8 MiB.
   - `load_summary()` transparently loads plain `.json`, `.json.gz`, v2 manifests, directories of summary JSONs, or `.zip` archives.
@@ -457,16 +457,16 @@ The summary report pipeline supports large fleet scaling (e.g. `/24` subnets wit
 
 ## 13. Unified Repository & Workspace Topology
 
-The VCF Readiness tool repository serves as the single source of truth for development, full test suites, hardware sample captures, multi-platform PyInstaller compilation, and offline distribution packaging.
+The GroundZero tool repository serves as the single source of truth for development, full test suites, hardware sample captures, multi-platform PyInstaller compilation, and offline distribution packaging.
 
 ```mermaid
 flowchart TD
     subgraph unifiedWorkspace [Unified Workspace: Distribution-Redfish-Scraper]
-        webEntry["vcfr_web.py (Primary Browser UI Entry)"]
-        cliEntry["vcfr_collector.py (Primary CLI Entry)"]
+        webEntry["groundzero_web.py (Primary Browser UI Entry)"]
+        cliEntry["groundzero_collector.py (Primary CLI Entry)"]
         shimWeb["redfish_web.py (Legacy Browser UI Shim)"]
         shimCli["redfish_collector.py (Legacy CLI Shim)"]
-        pkgCore["vcf_hci/ (Core Package Engine)"]
+        pkgCore["groundzero/ (Core Package Engine)"]
         buildMac["build-web.sh / build.sh (Mac Build)"]
         buildWin["build-web.bat / build.bat (Win Build)"]
         devTools["tools/ (bundle_docs, bundle_assets, clean_build_artifacts)"]
@@ -474,7 +474,7 @@ flowchart TD
         docFiles["docs/ & ARCHITECTURE.md"]
         packScript["build_offline_package.sh (Master Release & Packager)"]
         binDir["bin/ (Compiled Executables: .app, .exe, CLI)"]
-        distZip["Distribution-VCF-Readiness.zip (Offline Bundle)"]
+        distZip["Distribution-GroundZero.zip (Offline Bundle)"]
         vestigialDir["vestigial/ (Archived Legacy Tools, Obsolete Specs, Logs)"]
     end
 
@@ -504,110 +504,110 @@ flowchart TD
 
 ### B. File-by-File Catalog
 
-#### 1. Entry Points & Core Orchestration (`vcf_hci/`)
+#### 1. Entry Points & Core Orchestration (`groundzero/`)
 | File Path | Status | What It Does | Connected Scripts / Callers |
 | :--- | :--- | :--- | :--- |
-| `vcfr_web.py` | Active Runtime | Primary Browser UI launcher; starts `vcf_hci.web.server` on `127.0.0.1:7182` and opens default browser. | Used by `build-web.sh`, `build-web.bat`, end users. |
-| `vcfr_collector.py` | Active Runtime | Primary CLI interface delegating to `vcf_hci.cli.main()`. | Used by CLI users, PyInstaller CLI build (`vcf-assess.spec`). |
-| `redfish_web.py` | Active Runtime | Backward-compatibility Browser UI shim delegating to `vcfr_web.py`. | Legacy entry point callers. |
-| `redfish_collector.py` | Active Runtime | Backward-compatibility CLI shim delegating to `vcfr_collector.py`. | Legacy entry point callers. |
-| `vcf_hci/__main__.py` | Active Runtime | Package entry point enabling `python -m vcf_hci`. | Delegates to `vcf_hci.cli.main()`. |
-| `vcf_hci/__init__.py` | Active Runtime | Package re-exports for backward compatibility. | Imported by entry points, `server.py`, tests. |
-| `vcf_hci/constants.py` | Active Runtime | Lookup tables, ESXi build tables, tool version, and URL constants. | Read by all modules; updated by `bump_version.sh`. |
-| `vcf_hci/logging_utils.py` | Active Runtime | Logging configuration, `sanitize_filename()`, and `parse_ip_targets()`. | Used across collectors, reports, web server. |
-| `vcf_hci/protocol.py` | Active Runtime | Multi-protocol BMC probe (HTTPS Redfish, WS-Man, AMT/DASH). | Called by `vcf_hci/scan.py` before collector instantiation. |
-| `vcf_hci/wsman.py` | Active Runtime | WS-Man / AMT collector for legacy management protocols. | Invoked by `scan.py` if WS-Man protocol is detected. |
-| `vcf_hci/scan.py` | Active Runtime | Unified multi-threaded scanning loop (`scan_hosts()`). | Called by `vcf_hci/web/server.py` and `vcf_hci/cli.py`. |
-| `vcf_hci/enrichment.py` | Active Runtime | `enrich_host_result()`: Post-collection pipeline applying Layer B compatibility verdicts, memory topology, lane budgets, and Layer C BCG deep links. | Invoked by `scan.py` on collected host payloads. |
-| `vcf_hci/compat_engine.py` | Active Runtime | Backward-compatibility facade re-exporting VCF 9.1 rules engine from `vcf_hci/compat/`. | Invoked by `scan.py`, `enrichment.py`, and report renderers. |
-| `vcf_hci/compat/` | Active Runtime | Domain modules: CPU support (KB 428874), vSAN ESA/OSA, memory interleaving, TPM, VMD, BIOS/BMC firmware baselines, PCI HCL correlation. | Invoked via `vcf_hci.compat` or `vcf_hci.compat_engine` facade. |
-| `vcf_hci/bcg_links.py` | Active Runtime | Generates deep links for Broadcom Compatibility Guide (Servers, CPUs, SSDs, IO, GPUs). | Used by report generators and compatibility engine. |
-| `vcf_hci/obfuscation.py` | Active Runtime | SHA-256 salted PII obfuscation for IPs, MACs, S/Ns, and SEL logs. | Invoked by `scan.py` and Web server when obfuscation requested. |
-| `vcf_hci/summary_io.py` | Active Runtime | Multi-format summary JSON/gzip reader and writer (`load_summary()`, `write_fleet_summary()`). | Used by CLI `--from-summary` and Web server import endpoints. |
-| `vcf_hci/fleet_library.py` | Active Runtime | Multi-scan library crawler, ingest manifest writer, and fleet assembler (`discover_scans()`, `assemble_fleet()`, `write_scan_manifest()`, `read_scan_manifest()`). Deduplicates hosts across multiple scans (newest `scanned_at` wins) with provenance tracking. | Used by CLI (`--from-summary <dir>`, `--site`, `--assemble-only`) and Web UI Fleet API. |
-| `vcf_hci/cli.py` | Active Runtime | Argparse CLI handler with ThreadPoolExecutor scan runner. | Called by `vcfr_collector.py`, `redfish_collector.py`, and `python -m vcf_hci`. |
+| `groundzero_web.py` | Active Runtime | Primary Browser UI launcher; starts `groundzero.web.server` on `127.0.0.1:7182` and opens default browser. | Used by `build-web.sh`, `build-web.bat`, end users. |
+| `groundzero_collector.py` | Active Runtime | Primary CLI interface delegating to `groundzero.cli.main()`. | Used by CLI users, PyInstaller CLI build (`groundzero.spec`). |
+| `redfish_web.py` | Active Runtime | Backward-compatibility Browser UI shim delegating to `groundzero_web.py`. | Legacy entry point callers. |
+| `redfish_collector.py` | Active Runtime | Backward-compatibility CLI shim delegating to `groundzero_collector.py`. | Legacy entry point callers. |
+| `groundzero/__main__.py` | Active Runtime | Package entry point enabling `python -m groundzero`. | Delegates to `groundzero.cli.main()`. |
+| `groundzero/__init__.py` | Active Runtime | Package re-exports for backward compatibility. | Imported by entry points, `server.py`, tests. |
+| `groundzero/constants.py` | Active Runtime | Lookup tables, ESXi build tables, tool version, and URL constants. | Read by all modules; updated by `bump_version.sh`. |
+| `groundzero/logging_utils.py` | Active Runtime | Logging configuration, `sanitize_filename()`, and `parse_ip_targets()`. | Used across collectors, reports, web server. |
+| `groundzero/protocol.py` | Active Runtime | Multi-protocol BMC probe (HTTPS Redfish, WS-Man, AMT/DASH). | Called by `groundzero/scan.py` before collector instantiation. |
+| `groundzero/wsman.py` | Active Runtime | WS-Man / AMT collector for legacy management protocols. | Invoked by `scan.py` if WS-Man protocol is detected. |
+| `groundzero/scan.py` | Active Runtime | Unified multi-threaded scanning loop (`scan_hosts()`). | Called by `groundzero/web/server.py` and `groundzero/cli.py`. |
+| `groundzero/enrichment.py` | Active Runtime | `enrich_host_result()`: Post-collection pipeline applying Layer B compatibility verdicts, memory topology, lane budgets, and Layer C BCG deep links. | Invoked by `scan.py` on collected host payloads. |
+| `groundzero/compat_engine.py` | Active Runtime | Backward-compatibility facade re-exporting VCF 9.1 rules engine from `groundzero/compat/`. | Invoked by `scan.py`, `enrichment.py`, and report renderers. |
+| `groundzero/compat/` | Active Runtime | Domain modules: CPU support (KB 428874), vSAN ESA/OSA, memory interleaving, TPM, VMD, BIOS/BMC firmware baselines, PCI HCL correlation. | Invoked via `groundzero.compat` or `groundzero.compat_engine` facade. |
+| `groundzero/bcg_links.py` | Active Runtime | Generates deep links for Broadcom Compatibility Guide (Servers, CPUs, SSDs, IO, GPUs). | Used by report generators and compatibility engine. |
+| `groundzero/obfuscation.py` | Active Runtime | SHA-256 salted PII obfuscation for IPs, MACs, S/Ns, and SEL logs. | Invoked by `scan.py` and Web server when obfuscation requested. |
+| `groundzero/summary_io.py` | Active Runtime | Multi-format summary JSON/gzip reader and writer (`load_summary()`, `write_fleet_summary()`). | Used by CLI `--from-summary` and Web server import endpoints. |
+| `groundzero/fleet_library.py` | Active Runtime | Multi-scan library crawler, ingest manifest writer, and fleet assembler (`discover_scans()`, `assemble_fleet()`, `write_scan_manifest()`, `read_scan_manifest()`). Deduplicates hosts across multiple scans (newest `scanned_at` wins) with provenance tracking. | Used by CLI (`--from-summary <dir>`, `--site`, `--assemble-only`) and Web UI Fleet API. |
+| `groundzero/cli.py` | Active Runtime | Argparse CLI handler with ThreadPoolExecutor scan runner. | Called by `groundzero_collector.py`, `redfish_collector.py`, and `python -m groundzero`. |
 
-#### 2. Hardware Collectors & OEM Subsystem (`vcf_hci/collector/`)
+#### 2. Hardware Collectors & OEM Subsystem (`groundzero/collector/`)
 | File Path | Status | What It Does | Connected Scripts / Callers |
 | :--- | :--- | :--- | :--- |
-| `vcf_hci/collector/base.py` | Active Runtime | `BaseRedfishCollector` ABC: HTTP Basic Auth, SSL bypass, JSON trap, `run_assessment`, `rescan_partial_sections`. | Base class for `GenericCollector` and OEM subclasses. |
-| `vcf_hci/collector/crawler.py` | Active Runtime | `RedfishCrawler`: Read-only hypermedia tree crawler with cycle detection, mutation action filter, collection capping, and DMTF mockup zip export. | Standalone diagnostic tool & offline dataset generator. |
-| `vcf_hci/collector/http_session.py` | Active Runtime | `RedfishSessionManager`: Session lifecycle management and teardown. | Used by `base.py` and scan loops. |
-| `vcf_hci/collector/discovery.py` | Active Runtime | `DiscoveryMixin`: Dynamic URI root discovery, modular chassis detection, product name resolution. | Mixed into `BaseRedfishCollector`. |
-| `vcf_hci/collector/os_eval.py` | Active Runtime | `_evaluate_os_info`: OS build numbers, lifecycle/EOL status, and ESXi update badges. | Used by `base.py` assessment and rescan. |
-| `vcf_hci/collector/async_helpers.py` | Active Runtime | Asynchronous execution helpers (`_safe_result`, `_timed`, `_h`, `_SECTION_DEFAULTS`). | Used across `base.py` and collector modules. |
-| `vcf_hci/collector/collect_system.py` | Active Runtime | `_SystemMixin`: CPU model, core count, memory topology, BIOS version. | Mixed into `BaseRedfishCollector`. |
-| `vcf_hci/collector/collect_storage.py` | Active Runtime | `_StorageMixin`: RAID/HBA controllers, physical drives, SMART telemetry parsing. | Mixed into `BaseRedfishCollector`. |
-| `vcf_hci/collector/collect_network.py` | Active Runtime | `_NetworkMixin`: NIC adapters, link speeds, Fibre Channel HBAs, and multi-vendor LLDP & Cisco CDP switch neighbor extraction. | Mixed into `BaseRedfishCollector`. |
-| `vcf_hci/collector/collect_power.py` | Active Runtime | `_PowerMixin`: Power supplies, wattage, redundancy, thermal sensors. | Mixed into `BaseRedfishCollector`. |
-| `vcf_hci/collector/collect_logs.py` | Active Runtime | `_LogsMixin`: System Event Log (SEL) and Integrated Management Log (IML) extraction. | Mixed into `BaseRedfishCollector`. |
-| `vcf_hci/collector/collect_telemetry.py` | Active Runtime | `_TelemetryMixin`: CPU utilization and memory bus metric reports. | Mixed into `BaseRedfishCollector`. |
-| `vcf_hci/collector/collect_gpu.py` | Active Runtime | `_GPUMixin`: NVIDIA/AMD accelerator and PCIe device discovery. | Mixed into `BaseRedfishCollector`. |
-| `vcf_hci/collector/pci_utils.py` | Active Runtime | PCI vendor/device ID extraction and database lookups. | Used by storage, network, and GPU mixins. |
-| `vcf_hci/collector/oem/__init__.py` | Active Runtime | `create_collector()` auto-detect factory and `_REGISTRY`. | Called by `scan.py` to instantiate appropriate OEM collector. |
-| `vcf_hci/collector/oem/generic.py` | Active Runtime | `GenericCollector` DMTF Redfish standard fallback implementation. | Inherited by vendor OEM subclasses. |
-| `vcf_hci/collector/oem/dell.py` | Active Runtime | `DellCollector`: iDRAC OEM endpoints, BOSS controller, drive endurance. | Registered in `oem/__init__.py`. |
-| `vcf_hci/collector/oem/hpe.py` | Active Runtime | `HPECollector`: SmartStorage, iLO `ResourceNotReadyRetry`, system usage. | Registered in `oem/__init__.py`. |
-| `vcf_hci/collector/oem/supermicro.py` | Active Runtime | `SupermicroCollector`: SimpleStorage fallback, DCMS license gate detection. | Registered in `oem/__init__.py`. |
-| `vcf_hci/collector/oem/cisco.py` | Active Runtime | `CiscoCollector`: CIMC manager path (`/Managers/CIMC`), chassis SEL. | Registered in `oem/__init__.py`. |
-| `vcf_hci/collector/oem/lenovo.py` | Active Runtime | `LenovoCollector`: ThinkSystem XCC drive metrics and license tiers. | Registered in `oem/__init__.py`. |
-| `vcf_hci/collector/oem/intel.py` | Active Runtime | `IntelBMCCollector`: Intel server BMC path quirks. | Registered in `oem/__init__.py`. |
+| `groundzero/collector/base.py` | Active Runtime | `BaseRedfishCollector` ABC: HTTP Basic Auth, SSL bypass, JSON trap, `run_assessment`, `rescan_partial_sections`. | Base class for `GenericCollector` and OEM subclasses. |
+| `groundzero/collector/crawler.py` | Active Runtime | `RedfishCrawler`: Read-only hypermedia tree crawler with cycle detection, mutation action filter, collection capping, and DMTF mockup zip export. | Standalone diagnostic tool & offline dataset generator. |
+| `groundzero/collector/http_session.py` | Active Runtime | `RedfishSessionManager`: Session lifecycle management and teardown. | Used by `base.py` and scan loops. |
+| `groundzero/collector/discovery.py` | Active Runtime | `DiscoveryMixin`: Dynamic URI root discovery, modular chassis detection, product name resolution. | Mixed into `BaseRedfishCollector`. |
+| `groundzero/collector/os_eval.py` | Active Runtime | `_evaluate_os_info`: OS build numbers, lifecycle/EOL status, and ESXi update badges. | Used by `base.py` assessment and rescan. |
+| `groundzero/collector/async_helpers.py` | Active Runtime | Asynchronous execution helpers (`_safe_result`, `_timed`, `_h`, `_SECTION_DEFAULTS`). | Used across `base.py` and collector modules. |
+| `groundzero/collector/collect_system.py` | Active Runtime | `_SystemMixin`: CPU model, core count, memory topology, BIOS version. | Mixed into `BaseRedfishCollector`. |
+| `groundzero/collector/collect_storage.py` | Active Runtime | `_StorageMixin`: RAID/HBA controllers, physical drives, SMART telemetry parsing. | Mixed into `BaseRedfishCollector`. |
+| `groundzero/collector/collect_network.py` | Active Runtime | `_NetworkMixin`: NIC adapters, link speeds, Fibre Channel HBAs, and multi-vendor LLDP & Cisco CDP switch neighbor extraction. | Mixed into `BaseRedfishCollector`. |
+| `groundzero/collector/collect_power.py` | Active Runtime | `_PowerMixin`: Power supplies, wattage, redundancy, thermal sensors. | Mixed into `BaseRedfishCollector`. |
+| `groundzero/collector/collect_logs.py` | Active Runtime | `_LogsMixin`: System Event Log (SEL) and Integrated Management Log (IML) extraction. | Mixed into `BaseRedfishCollector`. |
+| `groundzero/collector/collect_telemetry.py` | Active Runtime | `_TelemetryMixin`: CPU utilization and memory bus metric reports. | Mixed into `BaseRedfishCollector`. |
+| `groundzero/collector/collect_gpu.py` | Active Runtime | `_GPUMixin`: NVIDIA/AMD accelerator and PCIe device discovery. | Mixed into `BaseRedfishCollector`. |
+| `groundzero/collector/pci_utils.py` | Active Runtime | PCI vendor/device ID extraction and database lookups. | Used by storage, network, and GPU mixins. |
+| `groundzero/collector/oem/__init__.py` | Active Runtime | `create_collector()` auto-detect factory and `_REGISTRY`. | Called by `scan.py` to instantiate appropriate OEM collector. |
+| `groundzero/collector/oem/generic.py` | Active Runtime | `GenericCollector` DMTF Redfish standard fallback implementation. | Inherited by vendor OEM subclasses. |
+| `groundzero/collector/oem/dell.py` | Active Runtime | `DellCollector`: iDRAC OEM endpoints, BOSS controller, drive endurance. | Registered in `oem/__init__.py`. |
+| `groundzero/collector/oem/hpe.py` | Active Runtime | `HPECollector`: SmartStorage, iLO `ResourceNotReadyRetry`, system usage. | Registered in `oem/__init__.py`. |
+| `groundzero/collector/oem/supermicro.py` | Active Runtime | `SupermicroCollector`: SimpleStorage fallback, DCMS license gate detection. | Registered in `oem/__init__.py`. |
+| `groundzero/collector/oem/cisco.py` | Active Runtime | `CiscoCollector`: CIMC manager path (`/Managers/CIMC`), chassis SEL. | Registered in `oem/__init__.py`. |
+| `groundzero/collector/oem/lenovo.py` | Active Runtime | `LenovoCollector`: ThinkSystem XCC drive metrics and license tiers. | Registered in `oem/__init__.py`. |
+| `groundzero/collector/oem/intel.py` | Active Runtime | `IntelBMCCollector`: Intel server BMC path quirks. | Registered in `oem/__init__.py`. |
 
-#### 3. BMC Hardware Security Audit Subsystem (`vcf_hci/security/`)
+#### 3. BMC Hardware Security Audit Subsystem (`groundzero/security/`)
 | File Path | Status | What It Does | Connected Scripts / Callers |
 | :--- | :--- | :--- | :--- |
-| `vcf_hci/security/contract.py` | Active Runtime | Neutral finding contract, 84 canonical control IDs, schema validation, reason codes, and evidence helpers. | Used across security evaluators, enrichment, and collectors. |
-| `vcf_hci/security/evaluation.py` | Active Runtime | Standard DMTF Redfish security evaluators (SSH, IPMI over LAN, Telnet, SNMP, Session Auth/Timeout, Directory/Lockout, Secure Boot) & vendor dispatcher. | Called by `enrichment.py` during post-collection pipeline. |
-| `vcf_hci/security/dell.py` | Active Runtime | Comprehensive Dell iDRAC9 OEM configuration evaluators (cipher suites, user accounts, RACADM, NTP, syslog). | Dispatched by `evaluation.py` for Dell hardware. |
-| `vcf_hci/security/hpe.py` | Active Runtime | Comprehensive HPE iLO5/6 OEM configuration evaluators (encryption standards, production security state, SNMP, audit logs). | Dispatched by `evaluation.py` for HPE hardware. |
-| `vcf_hci/security/metadata.py` | Active Runtime | Canonical control catalog, control groups (Baseline, Assurance, Operational, Conditional), titles, and confidence levels. | Used by report builders, Web UI, and Excel exporter. |
-| `vcf_hci/security/redaction.py` | Active Runtime | Recursive secret redaction, credential sanitization (passwords, tokens, private keys), and PII obfuscation. | Called by `enrichment.py`, `obfuscation.py`, and summary export. |
-| `vcf_hci/security/scoring.py` | Active Runtime | Host and fleet security posture scoring (`Baseline Met`, `Action Required`, `Partially Assessed`), asset classification, and fleet rollups. | Used by fleet report tiles, inventory panels, and Web API. |
+| `groundzero/security/contract.py` | Active Runtime | Neutral finding contract, 84 canonical control IDs, schema validation, reason codes, and evidence helpers. | Used across security evaluators, enrichment, and collectors. |
+| `groundzero/security/evaluation.py` | Active Runtime | Standard DMTF Redfish security evaluators (SSH, IPMI over LAN, Telnet, SNMP, Session Auth/Timeout, Directory/Lockout, Secure Boot) & vendor dispatcher. | Called by `enrichment.py` during post-collection pipeline. |
+| `groundzero/security/dell.py` | Active Runtime | Comprehensive Dell iDRAC9 OEM configuration evaluators (cipher suites, user accounts, RACADM, NTP, syslog). | Dispatched by `evaluation.py` for Dell hardware. |
+| `groundzero/security/hpe.py` | Active Runtime | Comprehensive HPE iLO5/6 OEM configuration evaluators (encryption standards, production security state, SNMP, audit logs). | Dispatched by `evaluation.py` for HPE hardware. |
+| `groundzero/security/metadata.py` | Active Runtime | Canonical control catalog, control groups (Baseline, Assurance, Operational, Conditional), titles, and confidence levels. | Used by report builders, Web UI, and Excel exporter. |
+| `groundzero/security/redaction.py` | Active Runtime | Recursive secret redaction, credential sanitization (passwords, tokens, private keys), and PII obfuscation. | Called by `enrichment.py`, `obfuscation.py`, and summary export. |
+| `groundzero/security/scoring.py` | Active Runtime | Host and fleet security posture scoring (`Baseline Met`, `Action Required`, `Partially Assessed`), asset classification, and fleet rollups. | Used by fleet report tiles, inventory panels, and Web API. |
 
-#### 4. Report Generation Subsystem (`vcf_hci/report/`)
+#### 4. Report Generation Subsystem (`groundzero/report/`)
 | File Path | Status | What It Does | Connected Scripts / Callers |
 | :--- | :--- | :--- | :--- |
-| `vcf_hci/report/host_report.py` | Active Runtime | `generate_host_html_report()`: Generates standalone per-host HTML assessment report. | Called by `scan.py` and `server.py`. |
-| `vcf_hci/report/fleet_report.py` | Active Runtime | Backward-compatibility facade re-exporting fleet generators from `vcf_hci/report/fleet/`. | Called by `scan.py` and `server.py`. |
-| `vcf_hci/report/fleet/` | Active Runtime | Fleet report modular domain generators: `summary.py` (executive dashboard), `tiles.py` (analytics tiles), `switch_matrix.py` (ToR fabric matrix), `combined.py` (tabbed report), `inventory_panel.py` (SE matrix), `vendor.py`, `escape.py`. | Assembled by `fleet_report.py` facade and `scan.py`. |
-| `vcf_hci/report/sel_links.py` | Active Runtime | Multi-vendor SEL / IML Guide Links & Event Resolvers (`VENDOR_SEL_GUIDES`, `get_sel_link`, `format_sel_badge`) covering Dell EEMS, HPE IML, Cisco UCS, Lenovo XCC, and Supermicro IPMI. | Used by `health.py` and fleet combined report. |
-| `vcf_hci/report/schema_registry.py` | Active Runtime | Extensible Schema Registry (Schema v2.0) defining 40+ typed hardware fields across 11 export domains and verdict color rules. | Used by `excel_export.py` and `csv_export.py`. |
-| `vcf_hci/report/inventory_tables.py` | Active Runtime | `build_host_decision_rows()` and `build_inventory_sheets()` producing dense SE decision records and component inventory rows. | Used by `inventory_panel.py` and `excel_export.py`. |
-| `vcf_hci/report/excel_export.py` | Active Runtime | Pure standard-library `.xlsx` spreadsheet generator (ZIP+XML) with 10 structured domain tabs. | Called by `scan.py` and `server.py` (`/api/export-excel`). |
-| `vcf_hci/report/csv_export.py` | Active Runtime | `export_all_csvs()` and `generate_fleet_summary_csv()` producing standardized multi-domain tabular CSV exports. | Called by `scan.py` and `server.py` (`/api/export-csv`). |
-| `vcf_hci/report/components.py` | Active Runtime | Reusable HTML component builders (cards, badges, tables, details). | Used by `host_report.py` and sections. |
-| `vcf_hci/report/styles.py` | Active Runtime | CSS design tokens, dark mode variables, and report stylesheets. | Embedded into all generated HTML reports. |
-| `vcf_hci/report/helpers.py` | Active Runtime | Formatting helpers, string sanitizers, and status badge helpers. | Used across all report renderers. |
-| `vcf_hci/report/sections/*.py` | Active Runtime | Section renderers: `overview.py`, `cpu.py`, `memory.py`, `storage.py`, `network.py`, `pcie_gpu.py`, `bios_security.py`, `health.py`, `firmware_os.py`. | Assembled by `host_report.py`. |
+| `groundzero/report/host_report.py` | Active Runtime | `generate_host_html_report()`: Generates standalone per-host HTML assessment report. | Called by `scan.py` and `server.py`. |
+| `groundzero/report/fleet_report.py` | Active Runtime | Backward-compatibility facade re-exporting fleet generators from `groundzero/report/fleet/`. | Called by `scan.py` and `server.py`. |
+| `groundzero/report/fleet/` | Active Runtime | Fleet report modular domain generators: `summary.py` (executive dashboard), `tiles.py` (analytics tiles), `switch_matrix.py` (ToR fabric matrix), `combined.py` (tabbed report), `inventory_panel.py` (SE matrix), `vendor.py`, `escape.py`. | Assembled by `fleet_report.py` facade and `scan.py`. |
+| `groundzero/report/sel_links.py` | Active Runtime | Multi-vendor SEL / IML Guide Links & Event Resolvers (`VENDOR_SEL_GUIDES`, `get_sel_link`, `format_sel_badge`) covering Dell EEMS, HPE IML, Cisco UCS, Lenovo XCC, and Supermicro IPMI. | Used by `health.py` and fleet combined report. |
+| `groundzero/report/schema_registry.py` | Active Runtime | Extensible Schema Registry (Schema v2.0) defining 40+ typed hardware fields across 11 export domains and verdict color rules. | Used by `excel_export.py` and `csv_export.py`. |
+| `groundzero/report/inventory_tables.py` | Active Runtime | `build_host_decision_rows()` and `build_inventory_sheets()` producing dense SE decision records and component inventory rows. | Used by `inventory_panel.py` and `excel_export.py`. |
+| `groundzero/report/excel_export.py` | Active Runtime | Pure standard-library `.xlsx` spreadsheet generator (ZIP+XML) with 10 structured domain tabs. | Called by `scan.py` and `server.py` (`/api/export-excel`). |
+| `groundzero/report/csv_export.py` | Active Runtime | `export_all_csvs()` and `generate_fleet_summary_csv()` producing standardized multi-domain tabular CSV exports. | Called by `scan.py` and `server.py` (`/api/export-csv`). |
+| `groundzero/report/components.py` | Active Runtime | Reusable HTML component builders (cards, badges, tables, details). | Used by `host_report.py` and sections. |
+| `groundzero/report/styles.py` | Active Runtime | CSS design tokens, dark mode variables, and report stylesheets. | Embedded into all generated HTML reports. |
+| `groundzero/report/helpers.py` | Active Runtime | Formatting helpers, string sanitizers, and status badge helpers. | Used across all report renderers. |
+| `groundzero/report/sections/*.py` | Active Runtime | Section renderers: `overview.py`, `cpu.py`, `memory.py`, `storage.py`, `network.py`, `pcie_gpu.py`, `bios_security.py`, `health.py`, `firmware_os.py`. | Assembled by `host_report.py`. |
 
-#### 5. Web UI Subsystem (`vcf_hci/web/`)
+#### 5. Web UI Subsystem (`groundzero/web/`)
 | File Path | Status | What It Does | Connected Scripts / Callers |
 | :--- | :--- | :--- | :--- |
-| `vcf_hci/web/server.py` | Active Runtime | `ThreadingHTTPServer`: Core HTTP engine, routing & public server factory (facade). | Started by `redfish_web.py` / `python -m vcf_hci.web`. |
-| `vcf_hci/web/session_store.py` | Active Runtime | Secrets persistence (Keychain, DPAPI, secret-tool), profiles & session file I/O. | Imported by `server.py`, `api_mixin.py`. |
-| `vcf_hci/web/vault_session.py` | Active Runtime (opt-in) | Holds at most one unlocked `CredentialVault` in server memory under a lock; 60-min idle auto-lock; locked on shutdown. | Imported by `server.py`, `api_mixin.py` (`/api/vault/*`, `use_vault` in `/api/scan`). |
-| `vcf_hci/vault/crypto.py` | Active Runtime (opt-in) | Stdlib-only authenticated encryption: PBKDF2-HMAC-SHA256 (600k) key derivation, HMAC-SHA256 counter-mode keystream, HMAC-SHA256 Encrypt-then-MAC with header as AAD. No I/O. | Imported by `vault/store.py`. |
-| `vcf_hci/vault/store.py` | Active Runtime (opt-in) | `CredentialVault`: JSON envelope format, atomic `0600` writes (+ Windows `icacls`), exact → longest-CIDR → default resolution, `resolve_for_targets()` producing the `scan_hosts(creds=...)` dict. Never imports `vcf_hci.web`. | Imported by `cli.py` (`--vault`), `vault/__main__.py`, `web/vault_session.py`. |
-| `vcf_hci/vault/csv_import.py` | Active Runtime (opt-in) | `parse_credentials_csv()` — header aliases, BOM, comments, per-line errors, duplicate warnings. | Imported by `vault/__main__.py`, `web/api_mixin.py`. |
-| `vcf_hci/vault/__main__.py` | CLI Entry Point | `python -m vcf_hci.vault` management commands (`init`, `add`, `import-csv`, `list`, `remove`, `resolve`, `change-passphrase`, `template`). | Invoked by operators. |
-| `vcf_hci/web/desktop.py` | Active Runtime | Native desktop folder chooser dialog and desktop file launcher. | Imported by `server.py`, `api_mixin.py`. |
-| `vcf_hci/web/scan_worker.py` | Active Runtime | Background multi-threaded scan worker, SSE broadcast & fleet artifact regeneration. | Imported by `server.py`, `api_mixin.py`. |
-| `vcf_hci/web/fleet_api.py` | Active Runtime | Fleet library API mixin (`FleetApiMixin`): `/api/fleet/discover`, `/api/fleet/assemble`, paginated `/api/fleet/index`, `/api/fleet/ingest`, `/api/fleet/prerender`. | Mixed into `ApiMixin` / `server.py`. |
-| `vcf_hci/web/api_mixin.py` | Active Runtime | `ApiMixin` containing JSON and SSE HTTP API handlers mixed into `AppHandler`. | Mixed into `AppHandler` in `server.py`. |
-| `vcf_hci/web/app_html.py` | Active Runtime | Single-page Clarity HTML application layout and client-side JavaScript. | Served by `server.py` at `GET /`. |
-| `vcf_hci/web/assets.py` | Auto-Generated | Bundled Clarity CSS stylesheet (gzip+base64). Never edit manually. | Generated by `tools/bundle_assets.py`; served by `server.py`. |
-| `vcf_hci/web/docs_data.py` | Auto-Generated | Bundled Markdown docs as HTML dictionary. Never edit manually. | Generated by `tools/bundle_docs.py`; served by `docs_html.py`. |
-| `vcf_hci/web/docs_html.py` | Active Runtime | Clarity-styled interactive documentation viewer. | Served by `server.py` at `GET /docs`. |
+| `groundzero/web/server.py` | Active Runtime | `ThreadingHTTPServer`: Core HTTP engine, routing & public server factory (facade). | Started by `redfish_web.py` / `python -m groundzero.web`. |
+| `groundzero/web/session_store.py` | Active Runtime | Secrets persistence (Keychain, DPAPI, secret-tool), profiles & session file I/O. | Imported by `server.py`, `api_mixin.py`. |
+| `groundzero/web/vault_session.py` | Active Runtime (opt-in) | Holds at most one unlocked `CredentialVault` in server memory under a lock; 60-min idle auto-lock; locked on shutdown. | Imported by `server.py`, `api_mixin.py` (`/api/vault/*`, `use_vault` in `/api/scan`). |
+| `groundzero/vault/crypto.py` | Active Runtime (opt-in) | Stdlib-only authenticated encryption: PBKDF2-HMAC-SHA256 (600k) key derivation, HMAC-SHA256 counter-mode keystream, HMAC-SHA256 Encrypt-then-MAC with header as AAD. No I/O. | Imported by `vault/store.py`. |
+| `groundzero/vault/store.py` | Active Runtime (opt-in) | `CredentialVault`: JSON envelope format, atomic `0600` writes (+ Windows `icacls`), exact → longest-CIDR → default resolution, `resolve_for_targets()` producing the `scan_hosts(creds=...)` dict. Never imports `groundzero.web`. | Imported by `cli.py` (`--vault`), `vault/__main__.py`, `web/vault_session.py`. |
+| `groundzero/vault/csv_import.py` | Active Runtime (opt-in) | `parse_credentials_csv()` — header aliases, BOM, comments, per-line errors, duplicate warnings. | Imported by `vault/__main__.py`, `web/api_mixin.py`. |
+| `groundzero/vault/__main__.py` | CLI Entry Point | `python -m groundzero.vault` management commands (`init`, `add`, `import-csv`, `list`, `remove`, `resolve`, `change-passphrase`, `template`). | Invoked by operators. |
+| `groundzero/web/desktop.py` | Active Runtime | Native desktop folder chooser dialog and desktop file launcher. | Imported by `server.py`, `api_mixin.py`. |
+| `groundzero/web/scan_worker.py` | Active Runtime | Background multi-threaded scan worker, SSE broadcast & fleet artifact regeneration. | Imported by `server.py`, `api_mixin.py`. |
+| `groundzero/web/fleet_api.py` | Active Runtime | Fleet library API mixin (`FleetApiMixin`): `/api/fleet/discover`, `/api/fleet/assemble`, paginated `/api/fleet/index`, `/api/fleet/ingest`, `/api/fleet/prerender`. | Mixed into `ApiMixin` / `server.py`. |
+| `groundzero/web/api_mixin.py` | Active Runtime | `ApiMixin` containing JSON and SSE HTTP API handlers mixed into `AppHandler`. | Mixed into `AppHandler` in `server.py`. |
+| `groundzero/web/app_html.py` | Active Runtime | Single-page Clarity HTML application layout and client-side JavaScript. | Served by `server.py` at `GET /`. |
+| `groundzero/web/assets.py` | Auto-Generated | Bundled Clarity CSS stylesheet (gzip+base64). Never edit manually. | Generated by `tools/bundle_assets.py`; served by `server.py`. |
+| `groundzero/web/docs_data.py` | Auto-Generated | Bundled Markdown docs as HTML dictionary. Never edit manually. | Generated by `tools/bundle_docs.py`; served by `docs_html.py`. |
+| `groundzero/web/docs_html.py` | Active Runtime | Clarity-styled interactive documentation viewer. | Served by `server.py` at `GET /docs`. |
 
-#### 6. Sub-Packages (`vcf_hci/bios/`, `vcf_hci/hcl/`, `vcf_hci/servicetag/`)
+#### 6. Sub-Packages (`groundzero/bios/`, `groundzero/hcl/`, `groundzero/servicetag/`)
 | File Path | Status | What It Does | Connected Scripts / Callers |
 | :--- | :--- | :--- | :--- |
-| `vcf_hci/bios/*.py` | Active Runtime | Evaluates memory RAS modes (`ras_modes.py`), CPU power profiles (`power_modes.py`), and side-channel security (`security.py`). | Called by `BaseRedfishCollector` during scan. |
-| `vcf_hci/hcl/loader.py` | Active Runtime | Loads online/cached `all.json` or offline Broadcom vSAN HCL CSVs. | Called by `scan.py` during initialization. |
-| `vcf_hci/hcl/bundle_manager.py` | Active Runtime | Manages dark-site offline HCL bundles (`vcf_hcl_bundle_*.zip`). | Called by CLI `--bundle-hcl` / `--import-hcl`. |
-| `vcf_hci/hcl/cross_reference.py`| Active Runtime | Matches NVMe/SAS/SATA drive models and PCI IDs against Broadcom vSAN HCL. | Used across storage evaluation, enrichment, and report rendering. |
-| `vcf_hci/servicetag/dell_api.py` | Active Runtime | Dell TechDirect OAuth2 API client for warranty & factory specs lookup. | Called by `scan.py` when credentials provided. |
-| `vcf_hci/servicetag/esa_evaluator.py` | Active Runtime | Evaluates ESA readiness from factory component manifest. | Used with `dell_api.py`. |
+| `groundzero/bios/*.py` | Active Runtime | Evaluates memory RAS modes (`ras_modes.py`), CPU power profiles (`power_modes.py`), and side-channel security (`security.py`). | Called by `BaseRedfishCollector` during scan. |
+| `groundzero/hcl/loader.py` | Active Runtime | Loads online/cached `all.json` or offline Broadcom vSAN HCL CSVs. | Called by `scan.py` during initialization. |
+| `groundzero/hcl/bundle_manager.py` | Active Runtime | Manages dark-site offline HCL bundles (`vcf_hcl_bundle_*.zip`). | Called by CLI `--bundle-hcl` / `--import-hcl`. |
+| `groundzero/hcl/cross_reference.py`| Active Runtime | Matches NVMe/SAS/SATA drive models and PCI IDs against Broadcom vSAN HCL. | Used across storage evaluation, enrichment, and report rendering. |
+| `groundzero/servicetag/dell_api.py` | Active Runtime | Dell TechDirect OAuth2 API client for warranty & factory specs lookup. | Called by `scan.py` when credentials provided. |
+| `groundzero/servicetag/esa_evaluator.py` | Active Runtime | Evaluates ESA readiness from factory component manifest. | Used with `dell_api.py`. |
 
 #### 7. Documentation & Technical Specs (`docs/` & Root)
 | File Path | Status | What It Does | Connected Scripts / Callers |
@@ -623,11 +623,11 @@ flowchart TD
 #### 8. Developer Tools (`tools/`)
 | File Path | Status | What It Does | Connected Scripts / Callers |
 | :--- | :--- | :--- | :--- |
-| `tools/bundle_docs.py` | Active Dev Utility | Converts project markdown docs to HTML and writes `vcf_hci/web/docs_data.py`. | Called by `build-web.sh`, `build-web.bat`. |
-| `tools/bundle_assets.py` | Active Dev Utility | Downloads Clarity CSS from CDN, compresses with gzip, and writes `vcf_hci/web/assets.py`. | Run manually when updating Clarity tokens. |
+| `tools/bundle_docs.py` | Active Dev Utility | Converts project markdown docs to HTML and writes `groundzero/web/docs_data.py`. | Called by `build-web.sh`, `build-web.bat`. |
+| `tools/bundle_assets.py` | Active Dev Utility | Downloads Clarity CSS from CDN, compresses with gzip, and writes `groundzero/web/assets.py`. | Run manually when updating Clarity tokens. |
 | `tools/clean_build_artifacts.py` | Active Dev Utility | Retention cleanup utility for compiled binaries in `bin/` and `dist/`. | Called by `build_offline_package.sh`. |
 | `tools/redfishMockupCreate.py` | Active Dev Utility | DMTF crawler to generate mock server directories. | Upstream tool for Redfish mockups. |
-| `tools/sync_io_hcl.py` | Active Dev Utility | Queries Broadcom BCG compguide API for ESXi 9.1/9.0 certified I/O adapters, driver recommendations, and firmware baselines; generates `vcf_hci/hcl/io_nics.json`. | Standalone offline catalog updater. |
+| `tools/sync_io_hcl.py` | Active Dev Utility | Queries Broadcom BCG compguide API for ESXi 9.1/9.0 certified I/O adapters, driver recommendations, and firmware baselines; generates `groundzero/hcl/io_nics.json`. | Standalone offline catalog updater. |
 | `tools/build_management_pack.py` | Active Dev Utility | Compiles and packages VMware Aria Operations / VCF Operations 9.1 management pack into experimental `.pak` distribution. | Packaging pipeline for `integrations/vcf-ops/`. |
 | `tools/check_data_hygiene.py` | Active Dev Utility | Mechanical pre-commit / CI gate verifying zero corporate/lab internal hostname and IP leakage; validates fictitious `rainpole.io`/`rainpole.net` domains. | CI check and pre-release gate. |
 | `tools/build_fleet_optimization_comparison_report.py` | Active Dev Utility | Generates comparative benchmark HTML reports evaluating scan speeds across concurrency/caching optimization levels. | Performance regression analysis. |
@@ -649,15 +649,15 @@ flowchart TD
 | `build-web.bat` | Active Build Script | Windows PyInstaller build script; produces `.exe` and `.zip`. | Run on Windows build hosts (or via SSH). |
 | `build.sh` / `build.bat` | Active Build Shim | Wrapper shims delegating to `build-web.sh` and `build-web.bat`. | Convenience wrapper. |
 | `build_offline_package.sh` | Active Release Script | Master GitHub release publisher and offline distribution zip packager. | Release pipeline. |
-| `vcf-assess.spec` | Active Build Spec | PyInstaller spec for building standalone CLI binary `vcf-assess`. | Used when compiling CLI binary. |
-| `VCF-Readiness-Web-v*.spec`| Auto-Generated | Transient PyInstaller spec generated by `build-web.sh` / `build-web.bat`. | Generated during PyInstaller compilation. |
+| `groundzero.spec` | Active Build Spec | PyInstaller spec for building standalone CLI binary `groundzero`. | Used when compiling CLI binary. |
+| `GroundZero-Web-v*.spec`| Auto-Generated | Transient PyInstaller spec generated by `build-web.sh` / `build-web.bat`. | Generated during PyInstaller compilation. |
 
 #### 10. Data & Cache Assets
 | File Path | Location | Status | Purpose & Usage |
 | :--- | :--- | :--- | :--- |
 | `all.json` | Root of both repos | **Active Data Cache** | ~20.2 MB cached Broadcom vSAN HCL database used when offline. |
 | `vcf_hcl_bundle_latest.zip` | Root & `hcl/` | **Active Offline Bundle** | ~611 KB pre-packaged offline HCL dataset bundle. |
-| `vcf_hci/hcl/io_nics.json` | `vcf_hci/hcl/` | **Active Offline Catalog** | ~1.4 MB Broadcom BCG certified Network I/O adapter catalog matching PCI IDs to ESXi 9.1/9.0 drivers and firmware baselines. |
+| `groundzero/hcl/io_nics.json` | `groundzero/hcl/` | **Active Offline Catalog** | ~1.4 MB Broadcom BCG certified Network I/O adapter catalog matching PCI IDs to ESXi 9.1/9.0 drivers and firmware baselines. |
 | `hcl/vSAN SSD_*.csv` | `hcl/` | **Active Offline Fallback** | Fallback CSV of vSAN SSD compatibility. |
 | `hcl/CPU Series_*.csv` | `hcl/` | **Active Offline Fallback** | Fallback CSV of CPU generation support tiers. |
 
@@ -668,45 +668,45 @@ flowchart TD
 ### A. Runtime Execution Flow
 ```mermaid
 flowchart TD
-    User([User]) -->|"Double-click or python vcfr_web.py"| WebEntry["vcfr_web.py"]
-    User -->|"CLI: python vcfr_collector.py"| CliEntry["vcfr_collector.py"]
-    User -->|"Package CLI: python -m vcf_hci"| PkgCli["vcf_hci/__main__.py"]
+    User([User]) -->|"Double-click or python groundzero_web.py"| WebEntry["groundzero_web.py"]
+    User -->|"CLI: python groundzero_collector.py"| CliEntry["groundzero_collector.py"]
+    User -->|"Package CLI: python -m groundzero"| PkgCli["groundzero/__main__.py"]
     User -->|"Legacy Browser Shim: redfish_web.py"| ShimWeb["redfish_web.py"]
     User -->|"Legacy CLI Shim: redfish_collector.py"| ShimCli["redfish_collector.py"]
 
     ShimWeb -->|"Delegates to"| WebEntry
     ShimCli -->|"Delegates to"| CliEntry
 
-    WebEntry -->|"Starts HTTP server on 127.0.0.1:7182"| WebServer["vcf_hci/web/server.py"]
-    CliEntry -->|"Invokes CLI main()"| CliMain["vcf_hci/cli.py"]
+    WebEntry -->|"Starts HTTP server on 127.0.0.1:7182"| WebServer["groundzero/web/server.py"]
+    CliEntry -->|"Invokes CLI main()"| CliMain["groundzero/cli.py"]
     PkgCli -->|"Invokes CLI main()"| CliMain
 
-    WebServer -->|"POST /api/scan triggers"| ScanEngine["vcf_hci/scan.py (scan_hosts)"]
+    WebServer -->|"POST /api/scan triggers"| ScanEngine["groundzero/scan.py (scan_hosts)"]
     CliMain -->|"Executes"| ScanEngine
 
-    ScanEngine -->|"1. Protocol probe (HTTPS/WS-Man)"| Proto["vcf_hci/protocol.py"]
-    ScanEngine -->|"2. Hardware collection"| Collector["vcf_hci/collector/oem/ (create_collector)"]
-    ScanEngine -->|"3. Post-collection enrichment"| Enrichment["vcf_hci/enrichment.py (enrich_host_result)"]
-    Enrichment -->|"Broadcom vSAN HCL match"| HclLoader["vcf_hci/hcl/ (loader & bundle_manager)"]
-    Enrichment -->|"VCF 9.1 rule evaluation"| CompatEngine["vcf_hci/compat_engine.py"]
-    Enrichment -->|"Broadcom BCG link generation"| BcgLinks["vcf_hci/bcg_links.py"]
-    ScanEngine -->|"4. Report rendering"| Reports["vcf_hci/report/ (host_report, fleet_report, excel)"]
-    ScanEngine -->|"5. Obfuscation (optional)"| Obfuscate["vcf_hci/obfuscation.py"]
-    ScanEngine -->|"6. Summary serialization"| SummaryIO["vcf_hci/summary_io.py"]
+    ScanEngine -->|"1. Protocol probe (HTTPS/WS-Man)"| Proto["groundzero/protocol.py"]
+    ScanEngine -->|"2. Hardware collection"| Collector["groundzero/collector/oem/ (create_collector)"]
+    ScanEngine -->|"3. Post-collection enrichment"| Enrichment["groundzero/enrichment.py (enrich_host_result)"]
+    Enrichment -->|"Broadcom vSAN HCL match"| HclLoader["groundzero/hcl/ (loader & bundle_manager)"]
+    Enrichment -->|"VCF 9.1 rule evaluation"| CompatEngine["groundzero/compat_engine.py"]
+    Enrichment -->|"Broadcom BCG link generation"| BcgLinks["groundzero/bcg_links.py"]
+    ScanEngine -->|"4. Report rendering"| Reports["groundzero/report/ (host_report, fleet_report, excel)"]
+    ScanEngine -->|"5. Obfuscation (optional)"| Obfuscate["groundzero/obfuscation.py"]
+    ScanEngine -->|"6. Summary serialization"| SummaryIO["groundzero/summary_io.py"]
 ```
 
 ### B. Build & Release Pipeline
 ```mermaid
 flowchart LR
     Step1["1. build-web.sh (Mac) / build-web.bat (Win)"] -->|"Produces compiled binaries in dist/"| Step2["2. build_offline_package.sh"]
-    Step2 -->|"Uploads GitHub Release & packs Distribution-VCF-Readiness.zip"| Step3["Done"]
+    Step2 -->|"Uploads GitHub Release & packs Distribution-GroundZero.zip"| Step3["Done"]
 ```
 
 ---
 
 ## 16. Legacy Architecture Notes
 
-The project has transitioned from legacy single-script and desktop GUI approaches to a modular, zero-dependency architecture with a web browser UI (`vcfr_web.py`) and standard CLI (`vcfr_collector.py`). All legacy shims (`redfish_collector.py`, `redfish_web.py`) remain fully backward-compatible.
+The project has transitioned from legacy single-script and desktop GUI approaches to a modular, zero-dependency architecture with a web browser UI (`groundzero_web.py`) and standard CLI (`groundzero_collector.py`). All legacy shims (`redfish_collector.py`, `redfish_web.py`) remain fully backward-compatible.
 
 ---
 
@@ -721,12 +721,12 @@ The project has transitioned from legacy single-script and desktop GUI approache
 
 ## 18. VMware Aria Operations Management Pack Architecture (Experimental)
 
-The `management_pack/` subsystem packages the VCF Readiness engine as an experimental enterprise integration for **VMware Cloud Foundation Operations 9.x** and **VMware Aria Operations 8.10+** (`VcfReadinessAdapter`, shortname **VCF-R**).
+The `management_pack/` subsystem packages the GroundZero engine as an experimental enterprise integration for **VMware Cloud Foundation Operations 9.x** and **VMware Aria Operations 8.10+** (`VcfReadinessAdapter`, shortname **VCF-R**).
 
 ### A. Architecture & Resource Hierarchy
 ```mermaid
 flowchart TD
-    AdapterInstance["VCF Readiness Adapter Instance (Cloud Proxy)"] -->|"Discovers & polls"| PhysServer["PhysicalServer (Chassis / BMC)"]
+    AdapterInstance["GroundZero Adapter Instance (Cloud Proxy)"] -->|"Discovers & polls"| PhysServer["PhysicalServer (Chassis / BMC)"]
     PhysServer -->|"Children"| StorageCtrl["StorageController"]
     PhysServer -->|"Children"| PhysDrive["PhysicalDrive (NVMe / SSD)"]
     PhysServer -->|"Children"| NetAdapter["NetworkAdapter (NICs / HBAs)"]

@@ -1,4 +1,4 @@
-# Installing & Running the VCF Readiness Tool
+# Installing & Running the GroundZero
 
 This guide covers every way to run the tool, from the simplest (download a binary, double-click) to the most flexible (run from Python source on any platform).
 
@@ -16,9 +16,9 @@ No Python installation required. The binary bundles everything.
 
 ### Windows
 
-1. Go to the [**Latest Release page**](https://github.com/johnnicholson-vmw/vcf-readiness/releases/latest) and download **`VCF-Readiness-Web.exe`**.
+1. Go to the [**Latest Release page**](https://github.com/djsincla/GroundZero/releases/latest) and download **`GroundZero-Web.exe`**.
 2. Move it anywhere convenient — your Desktop is fine.
-3. Double-click `VCF-Readiness-Web.exe`.
+3. Double-click `GroundZero-Web.exe`.
 4. **First launch only:** Windows SmartScreen may show "Windows protected your PC."
    - Click **More info**
    - Click **Run anyway**
@@ -29,15 +29,15 @@ No Python installation required. The binary bundles everything.
 
 ### macOS
 
-1. Go to the [**Latest Release page**](https://github.com/johnnicholson-vmw/vcf-readiness/releases/latest) and download **`VCF-Readiness-Web-v<version>-mac.zip`**.
+1. Go to the [**Latest Release page**](https://github.com/djsincla/GroundZero/releases/latest) and download **`GroundZero-Web-v<version>-mac.zip`**.
 2. Double-click the `.zip` archive to extract it. Inside the unzipped folder you will find:
-   - **`Launch-VCF-Readiness-Web.command`** (Double-click launcher script)
-   - **`VCF-Readiness-Web-v<version>-mac`** (Standalone binary)
+   - **`Launch-GroundZero-Web.command`** (Double-click launcher script)
+   - **`GroundZero-Web-v<version>-mac`** (Standalone binary)
    - **`HOW_TO_OPEN_ON_MAC.txt`** (Quick start instructions)
-3. **Double-click `Launch-VCF-Readiness-Web.command`** to start the web server.
+3. **Double-click `Launch-GroundZero-Web.command`** to start the web server.
 4. **First launch only (macOS Gatekeeper bypass):**
    - If macOS shows *"cannot be opened because the developer cannot be verified"*:
-   - **Right-click** (or Control-click) `Launch-VCF-Readiness-Web.command` → choose **Open**
+   - **Right-click** (or Control-click) `Launch-GroundZero-Web.command` → choose **Open**
    - Click **Open** in the confirmation dialog.
    - After doing this once, double-clicking will work every time.
 5. Your browser opens automatically at `http://127.0.0.1:7182`.
@@ -116,11 +116,11 @@ Once Python is installed, download or clone the project, then:
 ```bash
 # macOS / Linux
 cd ~/Documents/Distribution-Redfish-Scraper
-python3 vcfr_web.py
+python3 groundzero_web.py
 
 # Windows (Command Prompt)
 cd C:\Users\YourName\Documents\Distribution-Redfish-Scraper
-python vcfr_web.py
+python groundzero_web.py
 ```
 
 Your browser opens at `http://127.0.0.1:7182` automatically. The tool runs until you click **Quit** in the browser or press `Ctrl-C` in the terminal.
@@ -138,7 +138,7 @@ The web UI still works if the tool runs on a machine you access via SSH (e.g., a
 ssh -L 7182:127.0.0.1:7182 user@server
 
 # Inside the SSH session, start the tool:
-python3 vcfr_web.py
+python3 groundzero_web.py
 
 # Now open http://127.0.0.1:7182 in your local browser
 ```
@@ -163,20 +163,20 @@ This produces a single double-click file that you can hand to colleagues with no
 cd ~/Documents/Distribution-Redfish-Scraper
 chmod +x build-web.sh    # one time only
 ./build-web.sh
-# → dist/VCF-Readiness-Web-v<version>-mac   (macOS, with .zip archive)
-# → dist/VCF-Readiness-Web-v<version>-linux (Linux, with .zip archive)
+# → dist/GroundZero-Web-v<version>-mac   (macOS, with .zip archive)
+# → dist/GroundZero-Web-v<version>-linux (Linux, with .zip archive)
 
 # Windows (Command Prompt)
 cd C:\Users\YourName\Documents\Distribution-Redfish-Scraper
 build-web.bat
-# → dist\VCF-Readiness-Web-v<version>-win.exe (with .zip archive)
+# → dist\GroundZero-Web-v<version>-win.exe (with .zip archive)
 # → logs\build-web.log
 ```
 
 The build scripts install PyInstaller automatically if it isn't already present. When the build finishes:
 
 ```
-==> Build complete:  dist/VCF-Readiness-Web-mac
+==> Build complete:  dist/GroundZero-Web-mac
 ```
 
 ### Corporate / Firewall-Restricted Environments (Internal PyPI Mirrors)
@@ -243,18 +243,18 @@ This produces the standalone Windows single-file executable and zip archive in `
 The tool only needs network access to your **BMC management IPs** — the iDRAC / iLO / BMC addresses on your lab or customer network. It does not phone home, and it does not require internet access to run a scan.
 
 An internet connection is used only for optional features:
-- **HCL refresh** (`--refresh-hcl`) — downloads the latest Broadcom vSAN drive certification list (`all.json` cached in `~/.vcf-readiness/hcl/` with 30-day max-age)
+- **HCL refresh** (`--refresh-hcl`) — downloads the latest Broadcom vSAN drive certification list (`all.json` cached in `~/.groundzero/hcl/` with 30-day max-age)
 
 ### Dark-Site Air-Gapped Environments
 
 For environments with no internet access:
-- **Auto dark-site bundle**: Automatically created and maintained under `~/.vcf-readiness/hcl/vcf_hcl_bundle_latest.zip` (30-day freshness).
+- **Auto dark-site bundle**: Automatically created and maintained under `~/.groundzero/hcl/vcf_hcl_bundle_latest.zip` (30-day freshness).
 - **Import existing bundle**: Use `--import-hcl <path/to/bundle.zip>` during CLI scans to import an air-gapped HCL bundle archive.
-- **Export bundle on internet-connected host**: Run `python vcfr_collector.py --bundle-hcl` to generate `vcf_hcl_bundle_YYYYMMDD.zip` for transfer to dark-site environments.
+- **Export bundle on internet-connected host**: Run `python groundzero_collector.py --bundle-hcl` to generate `vcf_hcl_bundle_YYYYMMDD.zip` for transfer to dark-site environments.
 
 ### About bundled Clarity CSS
 
-The browser UI is styled with [Clarity Design System](https://clarity.design/) tokens. The CSS is pre-bundled inside `vcf_hci/web/assets.py` as compressed, base64-encoded data — **no internet connection is needed at runtime**.
+The browser UI is styled with [Clarity Design System](https://clarity.design/) tokens. The CSS is pre-bundled inside `groundzero/web/assets.py` as compressed, base64-encoded data — **no internet connection is needed at runtime**.
 
 If you are a developer and want to refresh the bundled CSS to a newer Clarity release:
 ```bash
@@ -283,7 +283,7 @@ If your organization's Information Security or Cyber Risk team requires review a
 | Linux: port 7182 blocked by firewall | Tool is bound to `127.0.0.1` (loopback only) — no firewall rule needed for local use; for SSH forwarding see Option B |
 | Cannot reach BMC IPs | Confirm you're on the correct management VLAN / VPN |
 | Reports not generated | Check the output folder path has no special characters; try `~/Desktop` |
-| `ModuleNotFoundError: No module named 'vcf_hci'` | Run from the project root directory (where `vcfr_web.py` lives) |
+| `ModuleNotFoundError: No module named 'groundzero'` | Run from the project root directory (where `groundzero_web.py` lives) |
 | `pip install` fails with `Connection refused` or `HTTPSConnectionPool` | Corporate firewall blocks public PyPI. Configure `pip.conf` / `pip.ini` with internal Artifactory mirrors (see above). |
 
 ---
@@ -294,25 +294,25 @@ The tool also has a command-line interface for scripting and automation:
 
 ```bash
 # macOS / Linux (from source)
-python3 vcfr_collector.py --targets 10.0.0.1 --output-dir ~/Desktop/reports
+python3 groundzero_collector.py --targets 10.0.0.1 --output-dir ~/Desktop/reports
 
 # Scan a range with 8 parallel threads
-python3 vcfr_collector.py --targets "192.168.1.0/24" --threads 8
+python3 groundzero_collector.py --targets "192.168.1.0/24" --threads 8
 
 # Force-refresh the Broadcom HCL drive list
-python3 vcfr_collector.py --targets 10.0.0.1 --refresh-hcl
+python3 groundzero_collector.py --targets 10.0.0.1 --refresh-hcl
 
 # Verbose debug log (useful for troubleshooting BMC connectivity)
-python3 vcfr_collector.py --targets 10.0.0.1 --debug
+python3 groundzero_collector.py --targets 10.0.0.1 --debug
 
 # Optional: per-host / per-subnet passwords from the encrypted local vault (off unless --vault is given)
-python3 -m vcf_hci.vault init && python3 -m vcf_hci.vault import-csv credentials.csv
-python3 vcfr_collector.py --targets "192.168.1.0/24" --vault
+python3 -m groundzero.vault init && python3 -m groundzero.vault import-csv credentials.csv
+python3 groundzero_collector.py --targets "192.168.1.0/24" --vault
 ```
 
-If you installed the package via `pip install .`, the console script entry points `vcf-assess` (CLI) and `vcf-readiness-web` (Browser UI) are available:
+If you installed the package via `pip install .`, the console script entry points `groundzero` (CLI) and `groundzero-web` (Browser UI) are available:
 
 ```bash
-vcf-assess --targets 10.0.0.1
-vcf-readiness-web
+groundzero --targets 10.0.0.1
+groundzero-web
 ```

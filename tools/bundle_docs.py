@@ -3,7 +3,7 @@
 """
 Dev & build script: reads project documentation Markdown files (README.md,
 docs/*.md, ARCHITECTURE.md, CHANGELOG.md), converts them to clean HTML, and
-bundles them as a python dictionary in vcf_hci/web/docs_data.py.
+bundles them as a python dictionary in groundzero/web/docs_data.py.
 
 Run automatically during build (build-web.sh / build-web.bat) or manually:
     python tools/bundle_docs.py
@@ -32,7 +32,7 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(THIS_DIR, ".."))
-OUT_PATH = os.path.join(PROJECT_ROOT, "vcf_hci", "web", "docs_data.py")
+OUT_PATH = os.path.join(PROJECT_ROOT, "groundzero", "web", "docs_data.py")
 
 DOC_FILES = [
     {
@@ -439,7 +439,7 @@ def bundle_docs() -> None:
         except Exception as e:
             print(f"  [!] Note: generate_infographic_html.py encountered notice: {e}")
 
-    print("==> Bundling Documentation into vcf_hci/web/docs_data.py...")
+    print("==> Bundling Documentation into groundzero/web/docs_data.py...")
     docs_payload: Dict[str, dict] = {}
 
     for doc in DOC_FILES:

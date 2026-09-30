@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# build.sh — Wrapper shim for VCF Readiness Assessment Tool Build
+# build.sh — Wrapper shim for GroundZero Build
 # Delegating to build-web.sh for the recommended Browser UI binary.
 # ---------------------------------------------------------------------------
 echo "==> Delegating build to build-web.sh (Browser UI binary)..."

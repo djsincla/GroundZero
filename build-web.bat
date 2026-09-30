@@ -1,12 +1,12 @@
 @echo off
 REM ---------------------------------------------------------------------------
-REM build-web.bat — Windows build script for the VCF Readiness Browser UI
+REM build-web.bat — Windows build script for the GroundZero Browser UI
 REM
 REM Produces a single double-click executable that starts a local web server
 REM and opens your browser automatically. No Tkinter required.
 REM
-REM Output: dist\VCF-Readiness-Web-v<version>-win.exe
-REM         dist\VCF-Readiness-Web-v<version>-win.zip
+REM Output: dist\GroundZero-Web-v<version>-win.exe
+REM         dist\GroundZero-Web-v<version>-win.zip
 REM         logs\build-web.log
 REM
 REM Usage: double-click build-web.bat  (or run from Command Prompt)
@@ -17,7 +17,7 @@ REM   set SIGN_PFX_PASSWORD=yourpassword
 REM ---------------------------------------------------------------------------
 
 cd /d "%~dp0"
-if not exist "vcf_hci" if exist "..\vcf_hci" cd /d "%~dp0.."
+if not exist "groundzero" if exist "..\groundzero" cd /d "%~dp0.."
 
 REM ---------------------------------------------------------------------------
 REM Rotating Build Logs (keeps build-web.log, build-web.1.log, build-web.2.log)
@@ -37,7 +37,7 @@ if not "%_BUILD_LOGGED%"=="1" if not "%NONINTERACTIVE%"=="1" (
 
 setlocal enabledelayedexpansion
 
-set ENTRY=vcfr_web.py
+set ENTRY=groundzero_web.py
 set TIMESTAMP_URL=http://timestamp.digicert.com
 
 echo =^> Checking Python...
@@ -51,13 +51,13 @@ if %ERRORLEVEL% neq 0 (
 )
 
 REM Extract tool version dynamically from package
-for /f "tokens=*" %%v in ('python -c "import sys; sys.path.insert(0, '.'); from vcf_hci.constants import TOOL_VERSION; print(TOOL_VERSION)" 2^>nul') do set VERSION=%%v
+for /f "tokens=*" %%v in ('python -c "import sys; sys.path.insert(0, '.'); from groundzero.constants import TOOL_VERSION; print(TOOL_VERSION)" 2^>nul') do set VERSION=%%v
 if "%VERSION%"=="" (
-    for /f "tokens=*" %%v in ('python -c "from vcf_hci.constants import TOOL_VERSION; print(TOOL_VERSION)" 2^>nul') do set VERSION=%%v
+    for /f "tokens=*" %%v in ('python -c "from groundzero.constants import TOOL_VERSION; print(TOOL_VERSION)" 2^>nul') do set VERSION=%%v
 )
 if "%VERSION%"=="" set VERSION=7.2.0
 
-set NAME=VCF-Readiness-Web-v%VERSION%-win
+set NAME=GroundZero-Web-v%VERSION%-win
 
 echo =^> Checking / installing PyInstaller...
 set PYINSTALLER_CMD=
@@ -113,13 +113,13 @@ if not exist dist mkdir dist
 if exist "dist\%NAME%.exe" del "dist\%NAME%.exe"
 if exist "dist\%NAME%.zip" del "dist\%NAME%.zip"
 if exist "%NAME%.spec" del "%NAME%.spec"
-if exist "VCF-Readiness-Web*.spec" del "VCF-Readiness-Web*.spec"
+if exist "GroundZero-Web*.spec" del "GroundZero-Web*.spec"
 
 echo =^> Building %NAME%.exe...
 %PYINSTALLER_CMD% ^
     --onefile ^
     --name "%NAME%" ^
-    --collect-all vcf_hci ^
+    --collect-all groundzero ^
     "%ENTRY%"
 
 if not exist "dist\%NAME%.exe" (

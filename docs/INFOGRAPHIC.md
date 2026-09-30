@@ -1,4 +1,4 @@
-# VCF 9.1 HCI Readiness Assessment Tool — Presentation & Infographic Kit
+# GroundZero — Presentation & Infographic Kit
 
 > **Release:** v9.7.3 • **Target Platform:** VMware Cloud Foundation 9.1 / vSphere 9.1 / vSAN ESA
 > **Interactive Standalone HTML Version:** [`docs/infographic.html`](./infographic.html) (100% self-contained offline single-file app)
@@ -7,7 +7,7 @@
 
 ## Executive Summary & Soundbite
 
-> *"The VCF HCI Readiness Assessment Tool bridges the gap between raw bare-metal server infrastructure and VMware Cloud Foundation 9.1 planning — automating days of manual HCL validation into a 30-second Redfish scan that preserves existing server CapEx."*
+> *"The GroundZero bridges the gap between raw bare-metal server infrastructure and VMware Cloud Foundation 9.1 planning — automating days of manual HCL validation into a 30-second Redfish scan that preserves existing server CapEx."*
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -156,4 +156,4 @@
 
 ---
 
-*VCF / vSphere 9.1 HCI Readiness Assessment Tool • Open source VMware SE utility.*
+*GroundZero — VCF / vSphere 9.1 HCI Readiness • Open source VMware SE utility.*

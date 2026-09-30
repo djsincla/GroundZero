@@ -1,8 +1,8 @@
 # Third-Party Software Licenses & Attributions
 
-This document details the licenses and notices for third-party software components and assets included in or distributed alongside the VCF / vSphere 9.1 HCI Readiness Assessment Tool (`vcf-readiness`).
+This document details the licenses and notices for third-party software components and assets included in or distributed alongside the GroundZero — VCF / vSphere 9.1 HCI Readiness (`groundzero`).
 
-The core application (`vcf_hci`) is licensed under the **CA, Inc. Software License Agreement** (see `LICENSE.md` and `NOTICE`). The third-party components listed below are distributed under their respective open-source licenses.
+The core application (`groundzero`) is licensed under the **CA, Inc. Software License Agreement** (see `LICENSE.md` and `NOTICE`). The third-party components listed below are distributed under their respective open-source licenses.
 
 ---
 
@@ -24,7 +24,7 @@ The core application (`vcf_hci`) is licensed under the **CA, Inc. Software Licen
 - **Component:** `@cds/core` (v5.7.0)
 - **License:** Apache License, Version 2.0
 - **Copyright:** Copyright (c) 2016-2024 VMware, Inc. All Rights Reserved.
-- **Usage:** Pre-compiled and embedded as a compressed CSS data asset in `vcf_hci/web/assets.py` for offline styling of the local Web UI (127.0.0.1:7182) and standalone HTML reports.
+- **Usage:** Pre-compiled and embedded as a compressed CSS data asset in `groundzero/web/assets.py` for offline styling of the local Web UI (127.0.0.1:7182) and standalone HTML reports.
 
 ### Apache License, Version 2.0 Notice:
 

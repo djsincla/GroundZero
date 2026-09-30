@@ -1,5 +1,13 @@
 # Changelog
 
+## [GroundZero] – 2026-09-30
+
+### Changed
+- Forked from VCF Readiness Assessment Tool v9.7.3 and renamed to **GroundZero**.
+- Python package `vcf_hci` → `groundzero`; entry points `vcfr_web.py` / `vcfr_collector.py` → `groundzero_web.py` / `groundzero_collector.py`; CLI `vcf-assess` → `groundzero`.
+- Logger name, local state dir (`~/.groundzero`), temp/marker prefixes (`gz_`), and env vars (`GZ_*`) renamed accordingly.
+- Entries below this one are the upstream history and keep the original names.
+
 ## [9.7.3] – 2026-09-28
 
 ### Fixed

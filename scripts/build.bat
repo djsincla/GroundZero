@@ -1,6 +1,6 @@
 @echo off
 REM ---------------------------------------------------------------------------
-REM build.bat — Wrapper shim for VCF Readiness Assessment Tool Build
+REM build.bat — Wrapper shim for GroundZero Build
 REM Delegating to build-web.bat for the recommended Browser UI binary.
 REM ---------------------------------------------------------------------------
 echo ==^> Delegating build to build-web.bat (Browser UI binary)...

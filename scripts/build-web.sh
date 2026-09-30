@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# build-web.sh — macOS / Linux build script for the VCF Readiness Browser UI
+# build-web.sh — macOS / Linux build script for the GroundZero Browser UI
 #
 # Produces a single double-click binary that starts a local web server and
 # opens your browser automatically.  No Tkinter, no GUI framework required.
 #
-# Output: dist/VCF-Readiness-Web-v<version>-mac   (macOS)
-#         dist/VCF-Readiness-Web-v<version>-linux (Linux)
+# Output: dist/GroundZero-Web-v<version>-mac   (macOS)
+#         dist/GroundZero-Web-v<version>-linux (Linux)
 #
 # Optional code signing (macOS only):
 #   export SIGN_IDENTITY="Developer ID Application: Your Org (TEAMID)"
-#   export NOTARY_PROFILE="vcf-readiness"    # set up with xcrun notarytool
+#   export NOTARY_PROFILE="groundzero"    # set up with xcrun notarytool
 #   ./build-web.sh
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -d "$SCRIPT_DIR/vcf_hci" ]; then
+if [ -d "$SCRIPT_DIR/groundzero" ]; then
     PROJECT_ROOT="$SCRIPT_DIR"
-elif [ -d "$SCRIPT_DIR/../vcf_hci" ]; then
+elif [ -d "$SCRIPT_DIR/../groundzero" ]; then
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 else
     PROJECT_ROOT="$SCRIPT_DIR"
@@ -26,16 +26,16 @@ fi
 cd "$PROJECT_ROOT"
 
 # Extract tool version dynamically from package
-VERSION=$(python3 -c "from vcf_hci.constants import TOOL_VERSION; print(TOOL_VERSION)" 2>/dev/null || echo "7.2.0")
+VERSION=$(python3 -c "from groundzero.constants import TOOL_VERSION; print(TOOL_VERSION)" 2>/dev/null || echo "7.2.0")
 
 # Use platform-specific versioned name so downloads are unambiguous
 if [ "$(uname)" = "Darwin" ]; then
-    NAME="VCF-Readiness-Web-v${VERSION}-mac"
+    NAME="GroundZero-Web-v${VERSION}-mac"
 else
-    NAME="VCF-Readiness-Web-v${VERSION}-linux"
+    NAME="GroundZero-Web-v${VERSION}-linux"
 fi
-ENTRY="vcfr_web.py"
-BUNDLE_ID="com.broadcom.vcf-readiness-web"
+ENTRY="groundzero_web.py"
+BUNDLE_ID="com.broadcom.groundzero-web"
 
 SIGN_IDENTITY="${SIGN_IDENTITY:-}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
@@ -60,7 +60,7 @@ echo "==> Bundling documentation..."
 python3 tools/bundle_docs.py
 
 echo "==> Cleaning intermediate scratch files..."
-rm -rf build "${NAME}.spec" VCF-Readiness-Web*.spec
+rm -rf build "${NAME}.spec" GroundZero-Web*.spec
 mkdir -p dist
 rm -f "dist/${NAME}" "dist/${NAME}.zip" "dist/${NAME}-notarize.zip"
 
@@ -69,7 +69,7 @@ $PYINSTALLER_CMD \
     --onefile \
     --name "${NAME}" \
     --osx-bundle-identifier "${BUNDLE_ID}" \
-    --collect-all vcf_hci \
+    --collect-all groundzero \
     "${ENTRY}"
 
 echo ""
@@ -142,18 +142,18 @@ fi
 if [ "$(uname)" = "Darwin" ]; then
     echo ""
     echo "==> Generating macOS double-click launcher & instructions..."
-    cat <<'EOF' > "dist/Launch-VCF-Readiness-Web.command"
+    cat <<'EOF' > "dist/Launch-GroundZero-Web.command"
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Launch-VCF-Readiness-Web.command — macOS Double-Click Launcher
-# Starts the local VCF Readiness Web UI and opens your default browser.
+# Launch-GroundZero-Web.command — macOS Double-Click Launcher
+# Starts the local GroundZero Web UI and opens your default browser.
 # ---------------------------------------------------------------------------
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
 # Locate the binary in current directory or bin/
 BIN=""
-for candidate in "$DIR"/VCF-Readiness-Web-v*-mac "$DIR"/VCF-Readiness-Web-mac "$DIR"/bin/VCF-Readiness-Web-mac "$DIR"/bin/VCF-Readiness-Web-v*-mac; do
+for candidate in "$DIR"/GroundZero-Web-v*-mac "$DIR"/GroundZero-Web-mac "$DIR"/bin/GroundZero-Web-mac "$DIR"/bin/GroundZero-Web-v*-mac; do
     if [ -f "$candidate" ] && [ ! -d "$candidate" ]; then
         BIN="$candidate"
         break
@@ -162,9 +162,9 @@ done
 
 if [ -z "$BIN" ]; then
     echo "========================================================================"
-    echo " [ERROR] Could not find the VCF Readiness Web executable in:"
+    echo " [ERROR] Could not find the GroundZero Web executable in:"
     echo "         $DIR"
-    echo " Please make sure the VCF-Readiness-Web-*-mac binary is in this folder."
+    echo " Please make sure the GroundZero-Web-*-mac binary is in this folder."
     echo "========================================================================"
     echo "Press Enter to exit..."
     read -r
@@ -175,7 +175,7 @@ chmod +x "$BIN" 2>/dev/null || true
 xattr -d com.apple.quarantine "$BIN" 2>/dev/null || true
 
 echo "========================================================================"
-echo " VCF / vSphere 9.1 HCI Readiness Assessment Tool — Browser Web UI"
+echo " GroundZero — VCF / vSphere 9.1 HCI Readiness — Browser Web UI"
 echo "========================================================================"
 echo " Starting local server at http://127.0.0.1:7182 ..."
 echo " Your default browser will open automatically."
@@ -183,18 +183,18 @@ echo " To stop the server, press Ctrl+C in this window or click 'Quit' in UI."
 echo "========================================================================"
 exec "$BIN" "$@"
 EOF
-    chmod +x "dist/Launch-VCF-Readiness-Web.command"
+    chmod +x "dist/Launch-GroundZero-Web.command"
 
     cat <<EOF > "dist/HOW_TO_OPEN_ON_MAC.txt"
 ================================================================================
-          VCF / vSphere 9.1 HCI Readiness Assessment Tool (macOS)
+          GroundZero — VCF / vSphere 9.1 HCI Readiness (macOS)
                            Quick Start & Launch Guide
 ================================================================================
 
 HOW TO LAUNCH ON macOS:
 --------------------------------------------------------------------------------
 Option 1 (Simplest — Double Click Launcher):
-  Double-click 'Launch-VCF-Readiness-Web.command'.
+  Double-click 'Launch-GroundZero-Web.command'.
   This opens a Terminal window, starts the local web server, and automatically
   opens the Web UI in your default browser at:
   http://127.0.0.1:7182
@@ -205,24 +205,24 @@ Option 2 (Direct Executable):
 
 Option 3 (From Python Source):
   If you have Python 3.9+ installed:
-    python3 scripts/vcfr_web.py
+    python3 scripts/groundzero_web.py
 
 macOS GATEKEEPER / SECURITY NOTICE (FIRST LAUNCH ONLY):
 --------------------------------------------------------------------------------
 Because internal/field tools are not distributed through the Mac App Store,
 macOS Gatekeeper will show a verification prompt on first launch:
-  "Launch-VCF-Readiness-Web.command cannot be opened because the developer
+  "Launch-GroundZero-Web.command cannot be opened because the developer
    cannot be verified."
 
 To bypass this prompt (required only once on first launch):
-  1. Right-click (or Control-click) 'Launch-VCF-Readiness-Web.command' (or the binary).
+  1. Right-click (or Control-click) 'Launch-GroundZero-Web.command' (or the binary).
   2. Select 'Open' from the context menu.
   3. Click 'Open' in the confirmation dialog.
   4. After doing this once, normal double-clicking will work every time.
 
 Alternatively, via Terminal:
   xattr -cr .
-  ./Launch-VCF-Readiness-Web.command
+  ./Launch-GroundZero-Web.command
 
 FEATURES & USAGE:
 --------------------------------------------------------------------------------
@@ -241,8 +241,8 @@ if [ "$(uname)" = "Darwin" ]; then
     MAC_STAGE=$(mktemp -d)
     cp "dist/${NAME}" "$MAC_STAGE/${NAME}"
     chmod +x "$MAC_STAGE/${NAME}"
-    cp "dist/Launch-VCF-Readiness-Web.command" "$MAC_STAGE/Launch-VCF-Readiness-Web.command"
-    chmod +x "$MAC_STAGE/Launch-VCF-Readiness-Web.command"
+    cp "dist/Launch-GroundZero-Web.command" "$MAC_STAGE/Launch-GroundZero-Web.command"
+    chmod +x "$MAC_STAGE/Launch-GroundZero-Web.command"
     cp "dist/HOW_TO_OPEN_ON_MAC.txt" "$MAC_STAGE/HOW_TO_OPEN_ON_MAC.txt"
     ditto -c -k --norsrc "$MAC_STAGE" "dist/${NAME}.zip"
     rm -rf "$MAC_STAGE"
@@ -250,7 +250,7 @@ if [ "$(uname)" = "Darwin" ]; then
 else
     cat <<EOF > "dist/HOW_TO_RUN_LINUX.txt"
 ================================================================================
-          VCF / vSphere 9.1 HCI Readiness Assessment Tool (Linux)
+          GroundZero — VCF / vSphere 9.1 HCI Readiness (Linux)
                            Quick Start & Launch Guide
 ================================================================================
 
@@ -287,8 +287,8 @@ mkdir -p bin
 cp "dist/${NAME}" "bin/${NAME}"
 chmod +x "bin/${NAME}"
 if [ "$(uname)" = "Darwin" ]; then
-    cp "dist/Launch-VCF-Readiness-Web.command" "bin/Launch-VCF-Readiness-Web.command"
-    chmod +x "bin/Launch-VCF-Readiness-Web.command"
+    cp "dist/Launch-GroundZero-Web.command" "bin/Launch-GroundZero-Web.command"
+    chmod +x "bin/Launch-GroundZero-Web.command"
     cp "dist/HOW_TO_OPEN_ON_MAC.txt" "bin/HOW_TO_OPEN_ON_MAC.txt"
 fi
 
@@ -303,10 +303,10 @@ python3 tools/clean_build_artifacts.py --keep 3 --platform "${CLEAN_PLATFORM}"
 
 echo ""
 if [ "$(uname)" = "Darwin" ]; then
-    echo "    Double-click dist/Launch-VCF-Readiness-Web.command to launch."
+    echo "    Double-click dist/Launch-GroundZero-Web.command to launch."
     echo "    Or:  ./dist/${NAME}"
-    echo "    Or:  ./bin/VCF-Readiness-Web-mac"
+    echo "    Or:  ./bin/GroundZero-Web-mac"
 else
     echo "    Run:  ./dist/${NAME}"
-    echo "    Or:  ./bin/VCF-Readiness-Web-linux"
+    echo "    Or:  ./bin/GroundZero-Web-linux"
 fi
