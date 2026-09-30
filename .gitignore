@@ -12,9 +12,9 @@ dist/
 *.spec
 
 # Prebuilt binaries (not reproducible from source) — keep launcher/docs only
-bin/*
-!bin/*.command
-!bin/*.txt
+legacy/bin/*
+!legacy/bin/*.command
+!legacy/bin/*.txt
 
 # Scan output and local secrets
 VCF-Scans/
@@ -23,3 +23,9 @@ GroundZero-Scans/
 
 # OS
 .DS_Store
+
+# Local dev
+.env
+*.sqlite3
+.mypy_cache/
+.coverage

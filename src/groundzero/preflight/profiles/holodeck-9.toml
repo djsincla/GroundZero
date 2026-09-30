@@ -1,0 +1,91 @@
+# Holodeck 9.x physical host requirements.
+# Source: https://vmware.github.io/Holodeck/latest/ (Pre-requisites), retrieved 2026-09-30.
+# Re-check this page when Holodeck releases; values here are the single source of truth for preflight.
+
+id = "holodeck-9"
+title = "VMware Holodeck 9.x"
+source = "https://vmware.github.io/Holodeck/latest/"
+default_variant = "vcf-9.0-esa-single"
+
+# Holorouter appliance, deployed alongside the nested environment.
+[holorouter]
+cores = 6
+memory_gb = 12
+disk_gb = 75
+
+[host]
+supported_esxi = ["8.0u3", "9.0"]
+storage_media = "SSD/NVMe"
+min_nic_speed_mbps = 10000  # recommendation for the trunk uplink; slower links produce a warning
+
+[variants."vcf-5.2-single"]
+title = "VCF 5.2, single site"
+cores = 16
+memory_gb = 384
+disk_tb = 2.0
+
+[variants."vcf-5.2-dual"]
+title = "VCF 5.2, dual site"
+cores = 32
+memory_gb = 1024
+disk_tb = 4.0
+
+[variants."vcf-9.0-esa-single"]
+title = "VCF 9.0 (vSAN ESA), single site"
+cores = 32
+memory_gb = 325
+disk_tb = 1.1
+
+[variants."vcf-9.0-esa-dual"]
+title = "VCF 9.0 (vSAN ESA), dual site"
+cores = 64
+memory_gb = 768
+disk_tb = 2.5
+
+[variants."vcf-9.0-osa-single"]
+title = "VCF 9.0 (vSAN OSA), single site"
+cores = 24
+memory_gb = 325
+disk_tb = 1.1
+
+[variants."vcf-9.0-osa-dual"]
+title = "VCF 9.0 (vSAN OSA), dual site"
+cores = 48
+memory_gb = 768
+disk_tb = 2.5
+
+[variants."vvf-9.0-single"]
+title = "VVF 9.0, single site"
+cores = 12
+memory_gb = 256
+disk_tb = 1.0
+
+[variants."vvf-9.0-dual"]
+title = "VVF 9.0, dual site"
+cores = 24
+memory_gb = 512
+disk_tb = 2.0
+
+[variants."vcf-9.1-single"]
+title = "VCF 9.1, single site"
+cores = 48
+memory_gb = 650
+disk_tb = 2.2
+
+[variants."vcf-9.1-dual"]
+title = "VCF 9.1, dual site"
+cores = 96
+memory_gb = 1536
+disk_tb = 5.0
+
+[variants."vvf-9.1-single"]
+title = "VVF 9.1, single site"
+cores = 24
+memory_gb = 512
+disk_tb = 2.0
+
+[variants."vvf-9.1-dual"]
+title = "VVF 9.1, dual site"
+cores = 48
+memory_gb = 1024
+disk_tb = 4.0
