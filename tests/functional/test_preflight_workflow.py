@@ -32,6 +32,7 @@ def test_register_then_preflight_holodeck(simulated_r740xd: GroundZero) -> None:
     out = result.output
     assert "r740xd vs holodeck-9 / VCF 9.0 (vSAN ESA), single site: WARN" in out
     assert "Skylake-SP" in out
+    assert "[protocols n/a]" in out  # BMC data printed verbatim, not eaten as rich markup
     assert "12 passed, 1 warnings, 0 failed, 0 unknown" in out
 
     listing = gz.cli("hosts", "list").output

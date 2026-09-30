@@ -91,7 +91,7 @@
   "Id": "System.Embedded.1",
   "IndicatorLED": "Lit",
   "IndicatorLED@Redfish.Deprecated": "Please migrate to use LocationIndicatorActive property",
-  "LastResetTime": "2026-06-16T04:22:48-05:00",
+  "LastResetTime": "2026-06-16T04:22:40-05:00",
   "Links": {
     "Chassis": [
       {
@@ -233,7 +233,7 @@
         "CoolingRollupStatus": "OK",
         "CurrentRollupStatus": "OK",
         "EstimatedExhaustTemperatureCelsius": 37,
-        "EstimatedSystemAirflowCFM": 51,
+        "EstimatedSystemAirflowCFM": 52,
         "ExpressServiceCode": "REDACTED",
         "FanRollupStatus": "OK",
         "IDSDMRedundancyStatus": null,

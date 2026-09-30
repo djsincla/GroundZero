@@ -23,6 +23,7 @@ async def inventory() -> HostInventory:
 
 def test_hardware_facts(inventory: HostInventory) -> None:
     assert inventory.system.model == "PowerEdge R740xd"
+    assert inventory.bmc.firmware_version == "7.00.00.182"  # not mistaken for an IP by the sanitizer
     assert (inventory.total_cores, inventory.total_threads) == (48, 96)
     assert inventory.memory.total_gib == 512
     boot = [d for d in inventory.drives if d.is_boot_device]

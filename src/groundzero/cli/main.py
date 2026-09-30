@@ -14,7 +14,9 @@ from typing import Annotated, Any, NoReturn
 import httpx
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
+from rich.text import Text
 
 from groundzero.core.config import Settings
 
@@ -35,7 +37,7 @@ _STATUS_STYLE = {"pass": "green", "warn": "yellow", "fail": "red", "unknown": "m
 
 # ── API client ───────────────────────────────────────────────────────────
 def _fail(message: str) -> NoReturn:
-    console.print(f"[red]error:[/red] {message}")
+    console.print(f"[red]error:[/red] {escape(message)}")
     raise typer.Exit(1)
 
 
@@ -139,7 +141,7 @@ def hosts_add(
             "verify_tls": verify_tls,
         },
     )
-    console.print(f"Added host [bold]{host['name']}[/bold] ({host['id']})")
+    console.print(f"Added host [bold]{escape(host['name'])}[/bold] ({host['id']})")
 
 
 @hosts_app.command("list")
@@ -147,7 +149,8 @@ def hosts_list() -> None:
     """List registered hosts."""
     table = Table("ID", "Name", "BMC", "Vendor", "Model")
     for h in _call("GET", "/hosts"):
-        table.add_row(h["id"], h["name"], h["bmc_address"], h["vendor"] or "-", h["model"] or "-")
+        cells = (h["id"], h["name"], h["bmc_address"], h["vendor"] or "-", h["model"] or "-")
+        table.add_row(*(Text(v) for v in cells))
     console.print(table)
 
 
@@ -156,7 +159,7 @@ def hosts_rm(host: str) -> None:
     """Remove a host and its history."""
     h = _resolve_host(host)
     _call("DELETE", f"/hosts/{h['id']}")
-    console.print(f"Removed {h['name']}")
+    console.print(f"Removed {escape(h['name'])}")
 
 
 # ── inventory / preflight ────────────────────────────────────────────────
@@ -198,15 +201,16 @@ def preflight(
 def _print_report(report: dict[str, Any], host_name: str) -> None:
     style = _STATUS_STYLE[report["overall"]]
     console.print(
-        f"\n[bold]{host_name}[/bold] vs {report['profile']} / {report['variant_title']}: "
+        f"\n[bold]{escape(host_name)}[/bold] vs {escape(report['profile'])} / "
+        f"{escape(report['variant_title'])}: "
         f"[{style}]{report['overall'].upper()}[/{style}]"
     )
     table = Table("Status", "Check", "Observed", "Required", "Remediation", show_lines=False)
     for c in report["checks"]:
         s = _STATUS_STYLE[c["status"]]
-        table.add_row(
-            f"[{s}]{c['status']}[/{s}]", c["title"], c["observed"], c["required"], c["remediation"] or ""
-        )
+        # Data cells are Text, not markup: BMC strings like "[protocols n/a]" must print verbatim.
+        cells = (c["title"], c["observed"], c["required"], c["remediation"] or "")
+        table.add_row(f"[{s}]{c['status']}[/{s}]", *(Text(v) for v in cells))
     console.print(table)
     s = report["summary"]
     console.print(

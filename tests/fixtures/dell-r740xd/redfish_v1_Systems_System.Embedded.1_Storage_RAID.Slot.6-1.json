@@ -58,7 +58,7 @@
         "DeviceCardDataBusWidth": "8x or x8",
         "DeviceCardSlotLength": "LongLength",
         "DeviceCardSlotType": "PCI Express Gen3 x16",
-        "DriverVersion": "192.0.2.10",
+        "DriverVersion": "7.732.03.00",
         "EncryptionCapability": "LocalKeyManagementCapable",
         "EncryptionMode": "None",
         "Id": "RAID.Slot.6-1",
