@@ -1,0 +1,188 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Storage.Storage",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3",
+  "@odata.type": "#Storage.v1_14_0.Storage",
+  "Controllers": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Controllers"
+  },
+  "Description": "PCIe Extender in PCIe Slot 3",
+  "Drives": [
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.11:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.0:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.1:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.6:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.9:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.5:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.4:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.2:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.10:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.7:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.8:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    }
+  ],
+  "Drives@odata.count": 12,
+  "Id": "PCIeExtender.Slot.3",
+  "Identifiers": [
+    {
+      "DurableName": null,
+      "DurableNameFormat": null
+    }
+  ],
+  "Identifiers@odata.count": 1,
+  "Links": {
+    "Enclosures": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+      }
+    ],
+    "Enclosures@odata.count": 2,
+    "Oem": {
+      "Dell": {
+        "@odata.type": "#DellOem.v1_3_0.DellOemLinks",
+        "CPUAffinity": [],
+        "CPUAffinity@odata.count": 0
+      }
+    },
+    "SimpleStorage": {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/PCIeExtender.Slot.3"
+    }
+  },
+  "Name": "PCIe Extender 3",
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellOem.v1_3_0.DellOemResources",
+      "DellPCIeSSDExtender": {
+        "@odata.context": "/redfish/v1/$metadata#DellPCIeSSDExtender.DellPCIeSSDExtender",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Oem/Dell/DellPCIeSSDExtenders/PCIeExtender.Slot.3",
+        "@odata.type": "#DellPCIeSSDExtender.v1_0_0.DellPCIeSSDExtender",
+        "Description": "An instance of DellPCIeSSDExtender will have data specific to the PCIeSSD extender in the managed system.",
+        "DeviceDescription": "PCIe Extender in PCIe Slot 3",
+        "Id": "PCIeExtender.Slot.3",
+        "InstanceID": "PCIeExtender.Slot.3",
+        "Name": "DellPCIeSSDExtender",
+        "RollupStatus": "OK"
+      }
+    }
+  },
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "StorageControllers": [
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3#/StorageControllers/0",
+      "Assembly": {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Assembly"
+      },
+      "CacheSummary": {
+        "TotalCacheSizeMiB": 0
+      },
+      "ControllerRates": {
+        "ConsistencyCheckRatePercent": null,
+        "RebuildRatePercent": null
+      },
+      "FirmwareVersion": "Not Applicable",
+      "Identifiers": [
+        {
+          "DurableName": null,
+          "DurableNameFormat": null
+        }
+      ],
+      "Identifiers@odata.count": 1,
+      "Links": {
+        "PCIeFunctions": [
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/98-0/PCIeFunctions/98-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/106-0/PCIeFunctions/106-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/101-0/PCIeFunctions/101-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/100-0/PCIeFunctions/100-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/103-0/PCIeFunctions/103-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/108-0/PCIeFunctions/108-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/104-0/PCIeFunctions/104-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/105-0/PCIeFunctions/105-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/99-0/PCIeFunctions/99-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/107-0/PCIeFunctions/107-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/102-0/PCIeFunctions/102-0-0"
+          },
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/109-0/PCIeFunctions/109-0-0"
+          }
+        ],
+        "PCIeFunctions@odata.count": 12
+      },
+      "Manufacturer": "DELL",
+      "MemberId": "0",
+      "Model": "PCIe Extender 3",
+      "Name": "PCIe Extender 3",
+      "SpeedGbps": null,
+      "Status": {
+        "Health": "OK",
+        "HealthRollup": "OK",
+        "State": "Enabled"
+      },
+      "SupportedControllerProtocols": [
+        "PCIe"
+      ],
+      "SupportedControllerProtocols@odata.count": 1,
+      "SupportedDeviceProtocols": [
+        "PCIe"
+      ],
+      "SupportedDeviceProtocols@odata.count": 1,
+      "SupportedRAIDTypes": [],
+      "SupportedRAIDTypes@odata.count": 0
+    }
+  ],
+  "StorageControllers@Redfish.Deprecated": "Please migrate to use /redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Controllers",
+  "StorageControllers@odata.count": 1,
+  "Volumes": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes"
+  }
+}

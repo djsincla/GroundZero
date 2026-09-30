@@ -1,0 +1,169 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Storage.Storage",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1",
+  "@odata.type": "#Storage.v1_14_0.Storage",
+  "Controllers": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Controllers"
+  },
+  "Description": "RAID Controller in Slot 6",
+  "Drives": [],
+  "Drives@odata.count": 0,
+  "Id": "RAID.Slot.6-1",
+  "Identifiers": [
+    {
+      "DurableName": "54cd98f0a0c48d00",
+      "DurableNameFormat": "NAA"
+    }
+  ],
+  "Identifiers@odata.count": 1,
+  "Links": {
+    "Enclosures": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/Enclosure.Internal.0-1:RAID.Slot.6-1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+      }
+    ],
+    "Enclosures@odata.count": 2,
+    "Oem": {
+      "Dell": {
+        "@odata.type": "#DellOem.v1_3_0.DellOemLinks",
+        "CPUAffinity": [],
+        "CPUAffinity@odata.count": 0
+      }
+    },
+    "SimpleStorage": {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/SimpleStorage/RAID.Slot.6-1"
+    }
+  },
+  "Name": "PERC H730P Adapter",
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellOem.v1_3_0.DellOemResources",
+      "DellController": {
+        "@odata.context": "/redfish/v1/$metadata#DellController.DellController",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Oem/Dell/DellControllers/RAID.Slot.6-1",
+        "@odata.type": "#DellController.v1_4_1.DellController",
+        "AlarmState": "AlarmNotPresent",
+        "AutoConfigBehavior": "NotApplicable",
+        "BootVirtualDiskFQDD": null,
+        "CacheSizeInMB": 2048,
+        "CachecadeCapability": "NotSupported",
+        "ConnectorCount": 2,
+        "ControllerFirmwareVersion": "25.5.9.0001",
+        "CurrentControllerMode": "RAID",
+        "Description": "An instance of DellController will have RAID Controller specific data.",
+        "Device": "0",
+        "DeviceCardDataBusWidth": "8x or x8",
+        "DeviceCardSlotLength": "LongLength",
+        "DeviceCardSlotType": "PCI Express Gen3 x16",
+        "DriverVersion": "192.0.2.10",
+        "EncryptionCapability": "LocalKeyManagementCapable",
+        "EncryptionMode": "None",
+        "Id": "RAID.Slot.6-1",
+        "KeyID": null,
+        "LastSystemInventoryTime": "2026-06-16T09:14:51+00:00",
+        "LastUpdateTime": "2026-06-16T10:14:50+00:00",
+        "MaxAvailablePCILinkSpeed": "Generation 3",
+        "MaxPossiblePCILinkSpeed": "Generation 3",
+        "Name": "DellController",
+        "PCISlot": 6,
+        "PatrolReadState": "Stopped",
+        "PersistentHotspare": "Disabled",
+        "RealtimeCapability": "Capable",
+        "RollupStatus": "OK",
+        "SASAddress": "REDACTED",
+        "SecurityStatus": "EncryptionCapable",
+        "SharedSlotAssignmentAllowed": "NotApplicable",
+        "SlicedVDCapability": "Supported",
+        "SupportControllerBootMode": "Supported",
+        "SupportEnhancedAutoForeignImport": "Supported",
+        "SupportRAID10UnevenSpans": "Supported",
+        "SupportsLKMtoSEKMTransition": "No",
+        "T10PICapability": "NotSupported"
+      },
+      "DellControllerBattery": {
+        "@odata.context": "/redfish/v1/$metadata#DellControllerBattery.DellControllerBattery",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Oem/Dell/DellControllerBattery/Battery.Integrated.1:RAID.Slot.6-1",
+        "@odata.type": "#DellControllerBattery.v1_0_0.DellControllerBattery",
+        "Description": "An instance of DellController will have RAID Controller specific data.",
+        "FQDD": "Battery.Integrated.1:RAID.Slot.6-1",
+        "Id": "Battery.Integrated.1:RAID.Slot.6-1",
+        "Name": "Battery on RAID Controller in Slot 6",
+        "PrimaryStatus": "OK",
+        "RAIDState": "Ready"
+      }
+    }
+  },
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "StorageControllers": [
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1#/StorageControllers/0",
+      "Assembly": {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Assembly"
+      },
+      "CacheSummary": {
+        "TotalCacheSizeMiB": 2048
+      },
+      "ControllerRates": {
+        "ConsistencyCheckRatePercent": 30,
+        "RebuildRatePercent": 30
+      },
+      "FirmwareVersion": "25.5.9.0001",
+      "Identifiers": [
+        {
+          "DurableName": "54cd98f0a0c48d00",
+          "DurableNameFormat": "NAA"
+        }
+      ],
+      "Identifiers@odata.count": 1,
+      "Links": {
+        "PCIeFunctions": [
+          {
+            "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0/PCIeFunctions/24-0-0"
+          }
+        ],
+        "PCIeFunctions@odata.count": 1
+      },
+      "Manufacturer": "DELL",
+      "MemberId": "0",
+      "Model": "PERC H730P Adapter",
+      "Name": "PERC H730P Adapter",
+      "SpeedGbps": 12.0,
+      "Status": {
+        "Health": "OK",
+        "HealthRollup": "OK",
+        "State": "Enabled"
+      },
+      "SupportedControllerProtocols": [
+        "PCIe"
+      ],
+      "SupportedControllerProtocols@odata.count": 1,
+      "SupportedDeviceProtocols": [
+        "SAS",
+        "SATA"
+      ],
+      "SupportedDeviceProtocols@odata.count": 2,
+      "SupportedRAIDTypes": [
+        "RAID0",
+        "RAID1",
+        "RAID5",
+        "RAID6",
+        "RAID10",
+        "RAID50",
+        "RAID60"
+      ],
+      "SupportedRAIDTypes@odata.count": 7
+    }
+  ],
+  "StorageControllers@Redfish.Deprecated": "Please migrate to use /redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Controllers",
+  "StorageControllers@odata.count": 1,
+  "Volumes": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/RAID.Slot.6-1/Volumes"
+  }
+}

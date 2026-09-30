@@ -12,11 +12,12 @@ from typing import Any
 from groundzero.core.config import Settings
 from groundzero.core.credentials import CredentialCipher
 from groundzero.core.jobs import JobContext, JobRunner
-from groundzero.core.models import Host, HostCreate, Job, JobKind
+from groundzero.core.models import BmcAudit, Host, HostCreate, Job, JobKind
 from groundzero.core.store import Store
 from groundzero.inventory.collect import collect_inventory
 from groundzero.inventory.models import HostInventory
 from groundzero.preflight.evaluate import UnknownProfileError, evaluate, load_profile
+from groundzero.redfish.capture import load_recording, replay_transport
 from groundzero.redfish.client import RedfishClient
 
 logger = logging.getLogger(__name__)
@@ -102,8 +103,8 @@ class Services:
         host = self.get_host(host_id)
 
         async def run(ctx: JobContext) -> dict[str, Any]:
-            inventory = await self._collect(host, ctx)
-            return {"inventory": inventory.model_dump(mode="json")}
+            inventory, audit = await self._collect(host, ctx)
+            return {"inventory": inventory.model_dump(mode="json"), "audit": audit.model_dump()}
 
         return self.runner.submit(kind=JobKind.INVENTORY, host_id=host.id, params={}, func=run)
 
@@ -116,25 +117,29 @@ class Services:
         evaluate_args = {"profile": profile, "variant": variant}
 
         async def run(ctx: JobContext) -> dict[str, Any]:
-            inventory = await self._collect(host, ctx)
+            inventory, audit = await self._collect(host, ctx)
             ctx.progress(0.97, "Evaluating preflight checks")
             report = evaluate(inventory, profile, variant)
             data = report.model_dump(mode="json")
             self.store.save_result(
                 host_id=host.id, kind=JobKind.PREFLIGHT.value, job_id=ctx.job.id, data=data
             )
-            return {"preflight": data}
+            return {"preflight": data, "audit": audit.model_dump()}
 
         return self.runner.submit(kind=JobKind.PREFLIGHT, host_id=host.id, params=evaluate_args, func=run)
 
     # ── internals ────────────────────────────────────────────────────────
-    async def _collect(self, host: Host, ctx: JobContext) -> HostInventory:
+    async def _collect(self, host: Host, ctx: JobContext) -> tuple[HostInventory, BmcAudit]:
         password = self._cipher.decrypt(self._secret(host.id))
-        async with self._client_factory(host, password) as client:
+        client = self._client_factory(host, password)
+        async with client:
             identity, inventory = await collect_inventory(client, ctx.progress)
-            writes = [r for r in client.request_log if r.method != "GET" and "Sessions" not in r.path]
-            if writes:  # M1 is strictly read-only; make any violation loud
-                logger.error("Unexpected non-GET requests during inventory: %s", writes)
+        audit = BmcAudit(
+            requests=len(client.request_log),
+            non_get=[f"{r.method} {r.path}" for r in client.request_log if r.method != "GET"],
+        )
+        if any("Sessions" not in call for call in audit.non_get):  # inventory must be read-only
+            logger.error("Unexpected BMC writes during inventory of %s: %s", host.id, audit.non_get)
         self.store.update_host_identity(host.id, vendor=identity.vendor.value, model=identity.model)
         self.store.save_result(
             host_id=host.id,
@@ -142,7 +147,7 @@ class Services:
             job_id=ctx.job.id,
             data=inventory.model_dump(mode="json"),
         )
-        return inventory
+        return inventory, audit
 
     def _secret(self, host_id: str) -> bytes:
         secret = self.store.get_host_secret(host_id)
@@ -151,6 +156,9 @@ class Services:
         return secret
 
     def _default_client(self, host: Host, password: str) -> RedfishClient:
+        transport = None
+        if self.settings.simulate_bmc_dir is not None:
+            transport = replay_transport(load_recording(self.settings.simulate_bmc_dir))
         return RedfishClient(
             host.bmc_address,
             host.username,
@@ -158,4 +166,5 @@ class Services:
             verify_tls=host.verify_tls,
             timeout=self.settings.redfish_timeout,
             max_parallel=self.settings.redfish_max_parallel,
+            transport=transport,
         )

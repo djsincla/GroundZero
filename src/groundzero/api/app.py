@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -18,6 +19,7 @@ from groundzero.core.services import ClientFactory, Services
 from groundzero.core.store import Store
 
 API_PREFIX = "/api/v1"
+logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None, client_factory: ClientFactory | None = None) -> FastAPI:
@@ -26,6 +28,10 @@ def create_app(settings: Settings | None = None, client_factory: ClientFactory |
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.ensure_home()
+        if settings.simulate_bmc_dir is not None:
+            logger.warning(
+                "SIMULATION MODE: BMCs are served from %s, not the network", settings.simulate_bmc_dir
+            )
         store = Store(settings.db_path)
         store.mark_interrupted()
         runner = JobRunner(store, settings.max_concurrent_jobs)

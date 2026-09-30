@@ -65,6 +65,13 @@ class Job(BaseModel):
     finished_at: datetime | None = None
 
 
+class BmcAudit(BaseModel):
+    """Every request a job sent to the BMC, so callers can verify what was (not) changed."""
+
+    requests: int
+    non_get: list[str] = Field(default_factory=list, description='e.g. "POST /redfish/v1/..."')
+
+
 class JobEvent(BaseModel):
     job_id: str
     status: JobStatus

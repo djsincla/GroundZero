@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Literal
+
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from groundzero import __version__
@@ -15,6 +17,7 @@ router = APIRouter(tags=["meta"])
 class Health(BaseModel):
     status: str
     version: str
+    mode: Literal["live", "simulated"]
 
 
 class ProfileSummary(BaseModel):
@@ -26,8 +29,9 @@ class ProfileSummary(BaseModel):
 
 
 @health_router.get("/healthz", response_model=Health)
-def healthz() -> Health:
-    return Health(status="ok", version=__version__)
+def healthz(request: Request) -> Health:
+    simulated = request.app.state.services.settings.simulate_bmc_dir is not None
+    return Health(status="ok", version=__version__, mode="simulated" if simulated else "live")
 
 
 @router.get("/profiles", response_model=list[ProfileSummary])

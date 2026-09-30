@@ -1,0 +1,181 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Drive.Drive",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+  "@odata.type": "#Drive.v1_16_0.Drive",
+  "Actions": {
+    "#Drive.SecureErase": {
+      "@Redfish.OperationApplyTimeSupport": {
+        "@odata.type": "#Settings.v1_3_5.OperationApplyTimeSupport",
+        "SupportedValues": [
+          "Immediate",
+          "OnReset"
+        ]
+      },
+      "target": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3/Actions/Drive.SecureErase"
+    }
+  },
+  "Assembly": {
+    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Assembly"
+  },
+  "BlockSizeBytes": 0,
+  "CapableSpeedGbs": 7.876923076923077,
+  "CapacityBytes": 1000204886016,
+  "Description": "PCIe SSD in Slot 3 in Bay 2",
+  "EncryptionAbility": "None",
+  "EncryptionStatus": "Unencrypted",
+  "FailurePredicted": false,
+  "HotspareType": "None",
+  "Id": "Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+  "Identifiers": [
+    {
+      "DurableName": null,
+      "DurableNameFormat": null
+    }
+  ],
+  "Identifiers@odata.count": 1,
+  "Links": {
+    "Chassis": {
+      "@odata.id": "/redfish/v1/Chassis/Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    "Oem": {
+      "Dell": {
+        "@odata.type": "#DellOem.v1_3_0.DellOemLinks",
+        "CPUAffinity": [],
+        "CPUAffinity@odata.count": 0
+      }
+    },
+    "PCIeFunctions": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/98-0/PCIeFunctions/98-0-0"
+      }
+    ],
+    "PCIeFunctions@odata.count": 1,
+    "Storage": {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3"
+    },
+    "Volumes": [
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+      }
+    ],
+    "Volumes@odata.count": 1
+  },
+  "Location": [],
+  "LocationIndicatorActive": null,
+  "Manufacturer": "Intel Corporation ",
+  "MediaType": "SSD",
+  "Model": "Dell Express Flash NVMe P4510 1TB SFF",
+  "Name": "PCIe SSD in Slot 3 in Bay 2",
+  "NegotiatedSpeedGbs": 7.876923076923077,
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellDrive.v1_1_0.DellDrive",
+      "DellNVMeSMARTAttributes": {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3/Oem/Dell/DellNVMeSMARTAttributes"
+      },
+      "DellPCIeSSD": {
+        "@odata.context": "/redfish/v1/$metadata#DellPCIeSSD.DellPCIeSSD",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3/Oem/Dell/DellPCIeSSDs/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+        "@odata.type": "#DellPCIeSSD.v1_7_0.DellPCIeSSD",
+        "AvailableSparePercent": 100,
+        "Bus": "62",
+        "BusProtocol": "PCIE",
+        "CryptographicEraseCapable": "Capable",
+        "Description": "An instance of DellPCIeSSD will have PCIe Solid State Drive specific data.",
+        "Device": "0",
+        "DeviceProtocol": "NVMe 1.2",
+        "DeviceSidebandProtocol": "NVMe-MI1.0",
+        "DriveFormFactor": "2.5Inch",
+        "DriveState": "Ready",
+        "EncryptionProtocol": "None",
+        "ErrorDescription": null,
+        "ErrorRecoverable": "NotApplicable",
+        "FreeSizeInBytes": null,
+        "Function": "0",
+        "HotSpareStatus": null,
+        "Id": "Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+        "MediaType": "SolidStateDrive",
+        "Name": "DellPCIeSSD",
+        "PCIeCapableLinkWidth": "x4",
+        "PCIeNegotiatedLinkWidth": "x4",
+        "ProductID": "a54",
+        "RAIDType": "Unknown",
+        "RaidStatus": null,
+        "Slot": 3,
+        "SystemEraseCapability": "CryptographicErasePD",
+        "UsedSizeInBytes": 0,
+        "WWN": null
+      },
+      "DellPhysicalDisk": {
+        "@odata.context": "/redfish/v1/$metadata#DellPhysicalDisk.DellPhysicalDisk",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3/Oem/Dell/DellDrives/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+        "@odata.type": "#DellPhysicalDisk.v1_6_0.DellPhysicalDisk",
+        "AvailableSparePercent": 100,
+        "Certified": null,
+        "Connector": null,
+        "CryptographicEraseCapable": "Capable",
+        "Description": "An instance of DellPhysicalDisk will have Physical Disk specific data.",
+        "DeviceProtocol": "NVMe 1.2",
+        "DeviceSidebandProtocol": "NVMe-MI1.0",
+        "DriveFormFactor": "2.5Inch",
+        "EncryptionProtocol": "None",
+        "ErrorDescription": null,
+        "ErrorRecoverable": "NotApplicable",
+        "ForeignKeyIdentifier": null,
+        "FreeSizeInBytes": null,
+        "Id": "Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+        "LastSystemInventoryTime": null,
+        "LastUpdateTime": null,
+        "ManufacturingDay": null,
+        "ManufacturingWeek": null,
+        "ManufacturingYear": null,
+        "Name": "DellPhysicalDisk",
+        "NonRAIDDiskCachePolicy": null,
+        "OperationName": null,
+        "OperationPercentCompletePercent": null,
+        "PCIeCapableLinkWidth": "x4",
+        "PCIeNegotiatedLinkWidth": "x4",
+        "PPID": null,
+        "PowerStatus": null,
+        "PredictiveFailureState": null,
+        "ProductID": "a54",
+        "RAIDType": "Unknown",
+        "RaidStatus": null,
+        "SASAddress": null,
+        "Slot": 3,
+        "SystemEraseCapability": "CryptographicErasePD",
+        "T10PICapability": null,
+        "UsedSizeInBytes": 0,
+        "WWN": null
+      },
+      "FIPS140ComplianceDescriptor": {
+        "ComplianceDescriptorModuleName": null,
+        "ComplianceDescriptorType": null,
+        "ComplianceDescriptorVersion": null,
+        "ComplianceHardwareVersion": null,
+        "ComplianceOverallSecurityLevel": null,
+        "ComplianceRelatedStandard": null
+      }
+    }
+  },
+  "Operations": [],
+  "Operations@odata.count": 0,
+  "PartNumber": "REDACTED",
+  "PhysicalLocation": {
+    "PartLocation": {
+      "LocationOrdinalValue": 3,
+      "LocationType": "Slot"
+    }
+  },
+  "PredictedMediaLifeLeftPercent": 94,
+  "Protocol": "PCIe",
+  "Revision": "VDV1DP23",
+  "RotationSpeedRPM": null,
+  "SerialNumber": "REDACTED",
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "WriteCacheEnabled": false
+}

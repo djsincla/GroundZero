@@ -1,0 +1,142 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Drive.Drive",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Drives/Disk.Direct.0-0:AHCI.Slot.1-1",
+  "@odata.type": "#Drive.v1_16_0.Drive",
+  "Actions": {
+    "#Drive.SecureErase": {
+      "@Redfish.OperationApplyTimeSupport": {
+        "@odata.type": "#Settings.v1_3_5.OperationApplyTimeSupport",
+        "SupportedValues": [
+          "Immediate",
+          "OnReset"
+        ]
+      },
+      "target": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Drives/Disk.Direct.0-0:AHCI.Slot.1-1/Actions/Drive.SecureErase"
+    }
+  },
+  "Assembly": {
+    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Assembly"
+  },
+  "BlockSizeBytes": 512,
+  "CapableSpeedGbs": 6,
+  "CapacityBytes": 480103981056,
+  "Description": "Disk 0 on AHCI Controller in slot 1",
+  "EncryptionAbility": "None",
+  "EncryptionStatus": "Unencrypted",
+  "FailurePredicted": false,
+  "HotspareType": "None",
+  "Id": "Disk.Direct.0-0:AHCI.Slot.1-1",
+  "Identifiers": [
+    {
+      "DurableName": null,
+      "DurableNameFormat": null
+    }
+  ],
+  "Identifiers@odata.count": 1,
+  "Links": {
+    "Chassis": {
+      "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+    },
+    "Chassis@odata.count": 1,
+    "Oem": {
+      "Dell": {
+        "@odata.type": "#DellOem.v1_3_0.DellOemLinks",
+        "CPUAffinity": [],
+        "CPUAffinity@odata.count": 0
+      }
+    },
+    "PCIeFunctions": [],
+    "PCIeFunctions@odata.count": 0,
+    "Storage": {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1"
+    },
+    "Volumes": [
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Volumes/Disk.Virtual.0:AHCI.Slot.1-1"
+      }
+    ],
+    "Volumes@odata.count": 1
+  },
+  "Location": [],
+  "LocationIndicatorActive": null,
+  "Manufacturer": "",
+  "MediaType": "SSD",
+  "Model": "VR000480GWFMD",
+  "Name": "SSD 0",
+  "NegotiatedSpeedGbs": 6,
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellDrive.v1_1_0.DellDrive",
+      "DellPhysicalDisk": {
+        "@odata.context": "/redfish/v1/$metadata#DellPhysicalDisk.DellPhysicalDisk",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Drives/Disk.Direct.0-0:AHCI.Slot.1-1/Oem/Dell/DellDrives/Disk.Direct.0-0:AHCI.Slot.1-1",
+        "@odata.type": "#DellPhysicalDisk.v1_6_0.DellPhysicalDisk",
+        "AvailableSparePercent": null,
+        "Certified": "NotApplicable",
+        "Connector": 0,
+        "CryptographicEraseCapable": "NotCapable",
+        "Description": "An instance of DellPhysicalDisk will have Physical Disk specific data.",
+        "DeviceProtocol": null,
+        "DeviceSidebandProtocol": null,
+        "DriveFormFactor": "M.2",
+        "EncryptionProtocol": "None",
+        "ErrorDescription": null,
+        "ErrorRecoverable": "NotApplicable",
+        "ForeignKeyIdentifier": null,
+        "FreeSizeInBytes": 0,
+        "Id": "Disk.Direct.0-0:AHCI.Slot.1-1",
+        "LastSystemInventoryTime": "2025-10-09T03:17:36+00:00",
+        "LastUpdateTime": "2025-10-03T23:57:49+00:00",
+        "ManufacturingDay": 0,
+        "ManufacturingWeek": 0,
+        "ManufacturingYear": 0,
+        "Name": "DellPhysicalDisk",
+        "NonRAIDDiskCachePolicy": "Unknown",
+        "OperationName": "None",
+        "OperationPercentCompletePercent": 0,
+        "PCIeCapableLinkWidth": "None",
+        "PCIeNegotiatedLinkWidth": "None",
+        "PPID": null,
+        "PowerStatus": "On",
+        "PredictiveFailureState": "SmartAlertAbsent",
+        "ProductID": null,
+        "RAIDType": "Unknown",
+        "RaidStatus": "Online",
+        "SASAddress": "REDACTED",
+        "Slot": 0,
+        "SystemEraseCapability": "NotSupported",
+        "T10PICapability": "NotSupported",
+        "UsedSizeInBytes": 480036847616,
+        "WWN": "Not Applicable"
+      },
+      "FIPS140ComplianceDescriptor": {
+        "ComplianceDescriptorModuleName": null,
+        "ComplianceDescriptorType": null,
+        "ComplianceDescriptorVersion": null,
+        "ComplianceHardwareVersion": null,
+        "ComplianceOverallSecurityLevel": null,
+        "ComplianceRelatedStandard": null
+      }
+    }
+  },
+  "Operations": [],
+  "Operations@odata.count": 0,
+  "PartNumber": null,
+  "PhysicalLocation": {
+    "PartLocation": {
+      "LocationOrdinalValue": 0,
+      "LocationType": "Slot"
+    }
+  },
+  "PredictedMediaLifeLeftPercent": 0,
+  "Protocol": "SATA",
+  "Revision": "HPGG",
+  "RotationSpeedRPM": null,
+  "SerialNumber": "REDACTED",
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "WriteCacheEnabled": false
+}

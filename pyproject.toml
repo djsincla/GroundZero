@@ -54,5 +54,9 @@ plugins = ["pydantic.mypy"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-q"
+addopts = "-q -m 'not live'"
+markers = [
+    "functional: black-box tests driving the real server and CLI processes",
+    "live: talks to real lab hardware configured in .env (opt-in: pytest -m live)",
+]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]

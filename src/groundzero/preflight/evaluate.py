@@ -131,7 +131,8 @@ def _compute(inv: HostInventory, need_cores: int) -> list[Check]:
             CpuSupport.SUPPORTED: (CheckStatus.PASS, None),
             CpuSupport.OVERRIDE_REQUIRED: (
                 CheckStatus.WARN,
-                "CPU generation is deprecated for ESXi 9; install requires the CPU support override.",
+                "Deprecated for ESXi 9 (install needs the CPU support override). "
+                "Holodeck also supports an ESXi 8.0u3 host.",
             ),
             CpuSupport.UNSUPPORTED: (CheckStatus.FAIL, "CPU generation is not supported by ESXi 9."),
             CpuSupport.UNKNOWN: (

@@ -29,6 +29,7 @@ app.add_typer(token_app, name="token")
 app.add_typer(dev_app, name="dev")
 
 console = Console()
+EXIT_PREFLIGHT_FAILED = 2
 _STATUS_STYLE = {"pass": "green", "warn": "yellow", "fail": "red", "unknown": "magenta"}
 
 
@@ -83,6 +84,15 @@ def _wait(job: dict[str, Any]) -> dict[str, Any]:
     return job
 
 
+def _bmc_credentials(user: str | None) -> tuple[str, str]:
+    """BMC credentials from GROUNDZERO_BMC_USERNAME/PASSWORD (env or git-ignored .env), else a prompt."""
+    settings = Settings()
+    username = user or settings.bmc_username or "root"
+    if settings.bmc_password is not None:
+        return username, settings.bmc_password.get_secret_value()
+    return username, typer.prompt("BMC password", hide_input=True)
+
+
 # ── server ───────────────────────────────────────────────────────────────
 @app.command()
 def serve(
@@ -112,12 +122,12 @@ def token_show() -> None:
 @hosts_app.command("add")
 def hosts_add(
     bmc: Annotated[str, typer.Option(help="BMC address, e.g. 10.0.0.50")],
-    user: Annotated[str, typer.Option(help="BMC username")] = "root",
+    user: Annotated[str | None, typer.Option(help="BMC username (default: .env or root)")] = None,
     name: Annotated[str | None, typer.Option(help="Friendly name")] = None,
     verify_tls: Annotated[bool, typer.Option(help="Verify BMC TLS certificate")] = False,
 ) -> None:
-    """Register a BMC target (password is prompted, never taken from argv)."""
-    password = typer.prompt("BMC password", hide_input=True)
+    """Register a BMC target. Password comes from .env or a prompt, never from argv."""
+    user, password = _bmc_credentials(user)
     host = _call(
         "POST",
         "/hosts",
@@ -172,14 +182,17 @@ def preflight(
     variant: Annotated[str | None, typer.Option(help="Profile variant, e.g. vcf-9.0-esa-single")] = None,
     wait: Annotated[bool, typer.Option(help="Wait and print the report")] = True,
 ) -> None:
-    """Check a host against Holodeck requirements (read-only)."""
+    """Check a host against Holodeck requirements (read-only). Exit code 2 when the result is FAIL."""
     h = _resolve_host(host)
     job = _call("POST", f"/hosts/{h['id']}/preflight", json={"profile": profile, "variant": variant})
     if not wait:
         console.print(f"Started job {job['id']}")
         return
     _wait(job)
-    _print_report(_call("GET", f"/hosts/{h['id']}/preflight"), h["name"])
+    report = _call("GET", f"/hosts/{h['id']}/preflight")
+    _print_report(report, h["name"])
+    if report["overall"] == "fail":
+        raise typer.Exit(EXIT_PREFLIGHT_FAILED)
 
 
 def _print_report(report: dict[str, Any], host_name: str) -> None:
@@ -240,7 +253,7 @@ def jobs_cancel(job_id: str) -> None:
 def dev_capture(
     bmc: Annotated[str, typer.Option(help="BMC address")],
     out: Annotated[Path, typer.Option(help="Fixture directory, e.g. tests/fixtures/dell-r740xd")],
-    user: Annotated[str, typer.Option(help="BMC username")] = "root",
+    user: Annotated[str | None, typer.Option(help="BMC username (default: .env or root)")] = None,
     verify_tls: bool = False,
 ) -> None:
     """Record sanitized, read-only Redfish responses for test fixtures (talks to the BMC directly)."""
@@ -248,7 +261,7 @@ def dev_capture(
     from groundzero.redfish.capture import Recorder
     from groundzero.redfish.client import RedfishClient
 
-    password = typer.prompt("BMC password", hide_input=True)
+    user, password = _bmc_credentials(user)
     recorder = Recorder()
 
     async def run() -> list[tuple[str, str, int | None]]:

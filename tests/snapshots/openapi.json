@@ -349,6 +349,14 @@
       },
       "Health": {
         "properties": {
+          "mode": {
+            "enum": [
+              "live",
+              "simulated"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -360,7 +368,8 @@
         },
         "required": [
           "status",
-          "version"
+          "version",
+          "mode"
         ],
         "title": "Health",
         "type": "object"

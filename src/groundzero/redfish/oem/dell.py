@@ -36,7 +36,8 @@ def classify_license(text: str) -> LicenseInfo | None:
 
 
 def _license_text(entry: dict[str, Any]) -> str:
-    fields = ("LicenseDescription", "Description", "Name", "LicenseInfo", "EntitlementID")
+    # Descriptive fields only: Name/Id carry the license entitlement id on iDRAC9.
+    fields = ("LicenseDescription", "Description")
     parts: list[str] = []
     for field in fields:
         value = entry.get(field)

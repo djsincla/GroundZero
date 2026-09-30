@@ -6,11 +6,13 @@ import os
 import secrets
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="GROUNDZERO_")
+    # Values also load from a local, git-ignored .env file (e.g. lab BMC credentials).
+    model_config = SettingsConfigDict(env_prefix="GROUNDZERO_", env_file=".env", extra="ignore")
 
     home: Path = Path.home() / ".groundzero"
     bind_host: str = "127.0.0.1"
@@ -19,6 +21,11 @@ class Settings(BaseSettings):
     redfish_timeout: float = 30.0
     redfish_max_parallel: int = 4
     api_token: str | None = None
+    bmc_username: str | None = None
+    bmc_password: SecretStr | None = None
+    # Simulation mode: serve every BMC from a recorded capture directory instead of the network.
+    # Used for demos and black-box functional tests; reported by /healthz as mode "simulated".
+    simulate_bmc_dir: Path | None = None
 
     @property
     def db_path(self) -> Path:

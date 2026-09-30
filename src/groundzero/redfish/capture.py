@@ -30,6 +30,8 @@ def sanitize(value: Any, key: str = "") -> Any:
     if isinstance(value, str):
         if key not in _KEEP_KEYS and _SENSITIVE_KEY.search(key) and value:
             return "REDACTED"
+        if "version" in key.lower():  # firmware versions like 7.10.70.00 look like IPv4 addresses
+            return value
         return _MAC.sub("00:00:5E:00:53:00", _IPV4.sub("192.0.2.10", value))
     return value
 

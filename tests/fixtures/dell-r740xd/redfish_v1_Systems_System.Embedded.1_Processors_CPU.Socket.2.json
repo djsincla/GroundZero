@@ -1,0 +1,119 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Processor.Processor",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.2",
+  "@odata.type": "#Processor.v1_17_0.Processor",
+  "Assembly": {
+    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Assembly"
+  },
+  "Description": "Represents the properties of a Processor attached to this System",
+  "Enabled": true,
+  "Id": "CPU.Socket.2",
+  "InstructionSet": "x86-64",
+  "Links": {
+    "Chassis": {
+      "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+    },
+    "Memory": [
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B4"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B3"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.B2"
+      }
+    ],
+    "Memory@odata.count": 4
+  },
+  "Manufacturer": "Intel",
+  "MaxSpeedMHz": 4000,
+  "MemorySummary": {
+    "TotalCacheSizeMiB": 59,
+    "TotalMemorySizeMiB": 262144
+  },
+  "Model": "Intel(R) Xeon(R) Platinum 8168 CPU @ 2.70GHz",
+  "Name": "CPU 2",
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellOem.v1_3_0.DellOemResources",
+      "DellProcessor": {
+        "@odata.context": "/redfish/v1/$metadata#DellProcessor.DellProcessor",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.2/Oem/Dell/DellProcessors/CPU.Socket.2",
+        "@odata.type": "#DellProcessor.v1_2_0.DellProcessor",
+        "CPUFamily": "Intel(R)Xeon(TM)",
+        "CPUStatus": "CPUEnabled",
+        "Cache1Associativity": "8-WaySet-Associative",
+        "Cache1ErrorMethodology": "Parity",
+        "Cache1InstalledSizeKB": 1536,
+        "Cache1Level": "L1",
+        "Cache1Location": "Internal",
+        "Cache1PrimaryStatus": "OK",
+        "Cache1SRAMType": "Unknown",
+        "Cache1SizeKB": 1536,
+        "Cache1Type": "Unified",
+        "Cache1WritePolicy": "WriteBack",
+        "Cache2Associativity": "16-WaySet-Associative",
+        "Cache2ErrorMethodology": "Single-bitECC",
+        "Cache2InstalledSizeKB": 24576,
+        "Cache2Level": "L2",
+        "Cache2Location": "Internal",
+        "Cache2PrimaryStatus": "OK",
+        "Cache2SRAMType": "Unknown",
+        "Cache2SizeKB": 24576,
+        "Cache2Type": "Unified",
+        "Cache2WritePolicy": "WriteBack",
+        "Cache3Associativity": "FullyAssociative",
+        "Cache3ErrorMethodology": "Single-bitECC",
+        "Cache3InstalledSizeKB": 33792,
+        "Cache3Level": "L3",
+        "Cache3Location": "Internal",
+        "Cache3PrimaryStatus": "OK",
+        "Cache3SRAMType": "Unknown",
+        "Cache3SizeKB": 33792,
+        "Cache3Type": "Unified",
+        "Cache3WritePolicy": "WriteBack",
+        "CurrentClockSpeedMhz": 2700,
+        "ExecuteDisabledCapable": "Yes",
+        "ExecuteDisabledEnabled": "Yes",
+        "ExternalBusClockSpeedMhz": 10400,
+        "HyperThreadingCapable": "Yes",
+        "HyperThreadingEnabled": "Yes",
+        "Id": "CPU.Socket.2",
+        "LastSystemInventoryTime": "2026-06-16T09:22:38+00:00",
+        "LastUpdateTime": "2025-09-24T00:07:06+00:00",
+        "Name": "DellProcessor",
+        "TurboModeCapable": "Yes",
+        "TurboModeEnabled": "Yes",
+        "VirtualizationTechnologyCapable": "Yes",
+        "VirtualizationTechnologyEnabled": "Yes",
+        "Volts": "1.8"
+      }
+    }
+  },
+  "OperatingSpeedMHz": 2700,
+  "ProcessorArchitecture": "x86",
+  "ProcessorId": {
+    "EffectiveFamily": "6",
+    "EffectiveModel": "85",
+    "IdentificationRegisters": "0x00050654",
+    "MicrocodeInfo": "0x2007006",
+    "ProtectedIdentificationNumber": "11176F8F11193A16",
+    "Step": "4",
+    "VendorId": "GenuineIntel"
+  },
+  "ProcessorType": "CPU",
+  "Socket": "CPU.Socket.2",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "TotalCores": 24,
+  "TotalEnabledCores": 24,
+  "TotalThreads": 48,
+  "TurboState": "Enabled",
+  "Version": "Model 85 Stepping 4"
+}

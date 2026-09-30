@@ -75,17 +75,28 @@ tests/         pytest; fixtures replay recorded Redfish responses
 legacy/        the original VCF Readiness v9.7.3 code, kept for reference only
 ```
 
-## Development
+## Development & testing
+
+Functional testing is a first-class requirement. Every feature ships with tests at three levels:
+
+| Level | What it exercises | Command |
+|---|---|---|
+| Unit / contract | Pure logic, API contract (OpenAPI snapshot), problem+json errors | `uv run pytest` |
+| **Functional (black-box)** | The real `groundzero serve` process and the real CLI over HTTP, against a recorded Dell R740xd | `uv run pytest -m functional` (also part of the default run) |
+| **Live** | The same workflows against real lab hardware, with a check that preflight made no changes | `uv run pytest -m live` (opt-in) |
 
 ```bash
-uv run ruff check . && uv run mypy && uv run pytest
+uv run ruff check . && uv run mypy && uv run pytest     # what CI runs
+cp .env.example .env                                    # lab creds for live tests / CLI (git-ignored)
+uv run pytest -m live
 ```
 
-Record fixtures from a real BMC. This is read-only, and serials, MACs and IPs are redacted:
-
-```bash
-uv run groundzero dev capture --bmc 10.0.0.50 --out tests/fixtures/dell-r740xd
-```
+- **Recorded hardware:** capture a BMC's responses, read-only, with serials, MACs and IPs redacted:
+  `uv run groundzero dev capture --bmc 198.51.100.11 --out tests/fixtures/dell-r740xd`
+- **Simulation mode:** `GROUNDZERO_SIMULATE_BMC_DIR=<capture dir> groundzero serve` serves every BMC from a capture.
+  It is used for demos and the functional tests, and `/healthz` reports it as `"mode": "simulated"`.
+- **API contract:** if an API change is intentional, accept it with `UPDATE_SNAPSHOTS=1 uv run pytest tests/test_api.py`.
+- **Preflight exit codes:** 0 = pass or warn, 1 = error, 2 = the host fails the requirements.
 
 ## Origin & license
 
