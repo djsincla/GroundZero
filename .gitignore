@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Build output
+build/
+dist/
+*.spec
+
+# Prebuilt binaries (not reproducible from source) — keep launcher/docs only
+bin/*
+!bin/*.command
+!bin/*.txt
+
+# Scan output and local secrets
+VCF-Scans/
+GroundZero-Scans/
+*.vault
+
+# OS
+.DS_Store

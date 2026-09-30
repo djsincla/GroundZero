@@ -1,0 +1,46 @@
+================================================================================
+          VCF / vSphere 9.1 HCI Readiness Assessment Tool (macOS)
+                           Quick Start & Launch Guide
+================================================================================
+
+HOW TO LAUNCH ON macOS:
+--------------------------------------------------------------------------------
+Option 1 (Simplest — Double Click Launcher):
+  Double-click 'Launch-VCF-Readiness-Web.command'.
+  This opens a Terminal window, starts the local web server, and automatically
+  opens the Web UI in your default browser at:
+  http://127.0.0.1:7182
+
+Option 2 (Direct Executable):
+  Open Terminal, navigate to this unzipped folder, and run:
+    ./VCF-Readiness-Web-v9.7.2-mac
+
+Option 3 (From Python Source):
+  If you have Python 3.9+ installed:
+    python3 scripts/vcfr_web.py
+
+macOS GATEKEEPER / SECURITY NOTICE (FIRST LAUNCH ONLY):
+--------------------------------------------------------------------------------
+Because internal/field tools are not distributed through the Mac App Store,
+macOS Gatekeeper will show a verification prompt on first launch:
+  "Launch-VCF-Readiness-Web.command cannot be opened because the developer
+   cannot be verified."
+
+To bypass this prompt (required only once on first launch):
+  1. Right-click (or Control-click) 'Launch-VCF-Readiness-Web.command' (or the binary).
+  2. Select 'Open' from the context menu.
+  3. Click 'Open' in the confirmation dialog.
+  4. After doing this once, normal double-clicking will work every time.
+
+Alternatively, via Terminal:
+  xattr -cr .
+  ./Launch-VCF-Readiness-Web.command
+
+FEATURES & USAGE:
+--------------------------------------------------------------------------------
+- Interactive browser interface for single/fleet server discovery and scanning.
+- Evaluates CPU, BIOS/BMC firmware, NVMe storage, vSAN ESA, and NICs against VCF 9.1.
+- Generates standalone self-contained HTML assessment reports.
+- Automatically securely stores credentials in the macOS Keychain.
+- Web UI Port: http://127.0.0.1:7182 (Click 'Quit' in header or press Ctrl+C to exit).
+================================================================================
