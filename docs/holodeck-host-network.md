@@ -44,5 +44,8 @@ this layout.
   Installed on vmnic0; vmnic1 is added as a second active uplink on first boot.
 - NTP: `pool.ntp.org`
 - After install: vSwitch MTU 9000, the trunk port groups (VLAN 4095, security set to Accept), NTP enabled
+- Post-install validation: jumbo-frame loop test vmnic0 ↔ vmnic1 across Te1/0/11 ↔ Te1/0/12
+  (`tools/esxi_mtu_loop_test.py`). It is deferred to after the reinstall because the current install's
+  evaluation license expired on 2026-09-14, and an expired evaluation rejects configuration changes.
 
 A reinstall resets all of this. Post-install configuration must recreate requirements 1, 2, 3, 6 and 7.
