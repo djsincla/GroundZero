@@ -6,6 +6,7 @@ Everything except `serve`, `token` and `dev` goes through the REST API — the C
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from pathlib import Path
@@ -25,10 +26,12 @@ hosts_app = typer.Typer(help="Manage BMC targets.", no_args_is_help=True)
 jobs_app = typer.Typer(help="Inspect and cancel jobs.", no_args_is_help=True)
 token_app = typer.Typer(help="API token.", no_args_is_help=True)
 dev_app = typer.Typer(help="Developer utilities.", no_args_is_help=True)
+os_app = typer.Typer(help="The OS (hypervisor) installed on a host.", no_args_is_help=True)
 app.add_typer(hosts_app, name="hosts")
 app.add_typer(jobs_app, name="jobs")
 app.add_typer(token_app, name="token")
 app.add_typer(dev_app, name="dev")
+app.add_typer(os_app, name="os")
 
 console = Console()
 EXIT_PREFLIGHT_FAILED = 2
@@ -93,6 +96,15 @@ def _bmc_credentials(user: str | None) -> tuple[str, str]:
     if settings.bmc_password is not None:
         return username, settings.bmc_password.get_secret_value()
     return username, typer.prompt("BMC password", hide_input=True)
+
+
+def _esxi_credentials(user: str | None) -> tuple[str, str]:
+    """ESXi credentials from GROUNDZERO_ESXI_USERNAME/PASSWORD (env or git-ignored .env), else a prompt."""
+    settings = Settings()
+    username = user or settings.esxi_username or "root"
+    if settings.esxi_password is not None:
+        return username, settings.esxi_password.get_secret_value()
+    return username, typer.prompt("ESXi password", hide_input=True)
 
 
 # ── server ───────────────────────────────────────────────────────────────
@@ -230,6 +242,74 @@ def profiles() -> None:
             )
 
 
+# ── installed OS ─────────────────────────────────────────────────────────
+@os_app.command("set")
+def os_set(
+    host: str,
+    address: Annotated[str, typer.Option(help="OS management address, e.g. ESXi vmk0 IP")],
+    user: Annotated[str | None, typer.Option(help="OS username (default: .env or root)")] = None,
+    verify_tls: bool = False,
+) -> None:
+    """Record how to reach the hypervisor currently installed on a host."""
+    h = _resolve_host(host)
+    user, password = _esxi_credentials(user)
+    body = {"address": address, "username": user, "password": password, "verify_tls": verify_tls}
+    _call("PUT", f"/hosts/{h['id']}/os", json=body)
+    console.print(f"OS access for {escape(h['name'])} set to {escape(address)}")
+
+
+@os_app.command("network")
+def os_network(host: str) -> None:
+    """Read the installed hypervisor's network configuration (read-only)."""
+    h = _resolve_host(host)
+    _wait(_call("POST", f"/hosts/{h['id']}/os/network"))
+    _print_os_network(_call("GET", f"/hosts/{h['id']}/os/network"))
+
+
+def _print_os_network(cfg: dict[str, Any]) -> None:
+    console.print(
+        Text(f"{cfg['product']} at {cfg['address']} (hostname {cfg['hostname'] or '-'})", style="bold")
+    )
+    console.print(
+        Text(
+            f"gateway {cfg['default_gateway'] or '-'}  dns {', '.join(cfg['dns_servers']) or '-'}  "
+            f"search {', '.join(cfg['search_domains']) or '-'}  ntp {', '.join(cfg['ntp_servers']) or 'NONE'}"
+        )
+    )
+    vmks = Table("vmk", "IP", "Portgroup", "VLAN", "Active uplinks", "Standby", "MTU", "Services")
+    pgs = {p["name"]: p for p in cfg["portgroups"]}
+    for v in cfg["vmkernel"]:
+        pg = pgs.get(v["portgroup"] or "", {})
+        ip = "dhcp" if v["dhcp"] else f"{v['ip']}/{v['netmask']}"
+        cells = (
+            v["device"],
+            ip,
+            v["portgroup"] or "-",
+            str(pg.get("vlan_id", "-")),
+            ", ".join(pg.get("active_uplinks", [])),
+            ", ".join(pg.get("standby_uplinks", [])) or "-",
+            str(v["mtu"]),
+            ", ".join(v["services"]),
+        )
+        vmks.add_row(*(Text(c) for c in cells))
+    console.print(vmks)
+    nics = Table("vmnic", "Speed", "Switch", "Port", "Driver", "MAC")
+    for n in cfg["physical_nics"]:
+        speed = f"{n['speed_mbps']} Mb/s" if n["speed_mbps"] else "down"
+        nic_cells = (
+            n["device"],
+            speed,
+            n["switch"] or "-",
+            n["switch_port"] or "-",
+            n["driver"] or "-",
+            n["mac"] or "-",
+        )
+        nics.add_row(*(Text(c) for c in nic_cells))
+    console.print(nics)
+    for vs in cfg["vswitches"]:
+        console.print(Text(f"{vs['name']}: MTU {vs['mtu']}, uplinks {', '.join(vs['uplinks'])}"))
+
+
 # ── jobs ─────────────────────────────────────────────────────────────────
 @jobs_app.command("list")
 def jobs_list(limit: int = 20) -> None:
@@ -253,6 +333,24 @@ def jobs_cancel(job_id: str) -> None:
 
 
 # ── dev ──────────────────────────────────────────────────────────────────
+@dev_app.command("capture-esxi")
+def dev_capture_esxi(
+    address: Annotated[str, typer.Option(help="ESXi management address")],
+    out: Annotated[Path, typer.Option(help="Output JSON, e.g. tests/fixtures/esxi1-network.json")],
+    user: Annotated[str | None, typer.Option(help="ESXi username (default: .env or root)")] = None,
+) -> None:
+    """Record an ESXi network config with IPs/MACs pseudonymized consistently (read-only)."""
+    from groundzero.esxi.reader import read_network
+    from groundzero.redfish.capture import Pseudonymizer, pseudonymize
+
+    user, password = _esxi_credentials(user)
+    config = asyncio.run(read_network(address, user, password))
+    clean = pseudonymize(config.model_dump(mode="json"), Pseudonymizer())
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(clean, indent=2, sort_keys=True) + "\n")
+    console.print(f"Wrote {out}")
+
+
 @dev_app.command("capture")
 def dev_capture(
     bmc: Annotated[str, typer.Option(help="BMC address")],

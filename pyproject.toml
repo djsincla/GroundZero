@@ -17,6 +17,7 @@ dependencies = [
     "httpx>=0.27",
     "typer>=0.12",
     "cryptography>=43",
+    "pyvmomi>=9.1.1.0",
 ]
 
 [project.scripts]
@@ -60,3 +61,8 @@ markers = [
     "live: talks to real lab hardware configured in .env (opt-in: pytest -m live)",
 ]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
+
+[[tool.mypy.overrides]]
+# pyVim connect helpers (SmartConnect/Disconnect) are untyped; only the ESXi adapter calls them.
+module = ["groundzero.esxi.reader"]
+disallow_untyped_calls = false

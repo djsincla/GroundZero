@@ -33,6 +33,8 @@ uv run groundzero hosts add --bmc 10.0.0.50 --user root --name r740xd   # passwo
 uv run groundzero preflight r740xd                                      # default: VCF 9.0 ESA single site
 uv run groundzero preflight r740xd --variant vvf-9.0-single
 uv run groundzero profiles                                              # list profiles/variants
+uv run groundzero os set r740xd --address 192.0.2.101                  # ESXi creds from .env or prompt
+uv run groundzero os network r740xd                                     # read current ESXi networking
 ```
 
 To call the API directly, use the bearer token from `uv run groundzero token show`:
@@ -53,6 +55,9 @@ curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7182/api/v1/hosts
 | POST | `/api/v1/hosts/{id}/inventory` | start inventory job (202 + Job) |
 | POST | `/api/v1/hosts/{id}/preflight` | start preflight job (202 + Job), body `{profile, variant}` |
 | GET | `/api/v1/hosts/{id}/inventory`, `/preflight` | latest result |
+| PUT/GET | `/api/v1/hosts/{id}/os` | set / show how to reach the installed hypervisor (password never returned) |
+| POST | `/api/v1/hosts/{id}/os/network` | start an ESXi network read job: vmk, VLANs, teaming, CDP/LLDP, security |
+| GET | `/api/v1/hosts/{id}/os/network` | latest ESXi network config |
 | GET | `/api/v1/jobs`, `/api/v1/jobs/{id}` | job status |
 | GET | `/api/v1/jobs/{id}/events` | server-sent events for one job |
 | POST | `/api/v1/jobs/{id}/cancel` | cancel a job |

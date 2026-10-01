@@ -57,3 +57,39 @@ def test_live_preflight_is_read_only(live: tuple[GroundZero, str]) -> None:
     assert host["vendor"] != "generic"
     writes = [c for c in job["result"]["audit"]["non_get"] if "/Sessions" not in c]
     assert writes == [], f"preflight changed BMC state: {writes}"
+
+
+class LiveEsxi(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="GROUNDZERO_", env_file=REPO_ROOT / ".env", extra="ignore")
+
+    live_esxi: str | None = None
+    esxi_username: str = "root"
+    esxi_password: str | None = None
+
+
+def test_live_esxi_network_read(tmp_path: Path) -> None:
+    lab, esxi = LiveLab(), LiveEsxi()
+    if not (lab.live_bmc and lab.bmc_password and esxi.live_esxi and esxi.esxi_password):
+        pytest.skip("set GROUNDZERO_LIVE_ESXI / GROUNDZERO_ESXI_PASSWORD (and the BMC vars) in .env")
+    gz = GroundZero(
+        home=tmp_path,
+        extra_env={
+            "GROUNDZERO_BMC_USERNAME": lab.bmc_username,
+            "GROUNDZERO_BMC_PASSWORD": lab.bmc_password,
+            "GROUNDZERO_ESXI_USERNAME": esxi.esxi_username,
+            "GROUNDZERO_ESXI_PASSWORD": esxi.esxi_password,
+        },
+    )
+    gz.start()
+    try:
+        assert gz.cli("hosts", "add", "--bmc", lab.live_bmc, "--name", "lab").code == 0
+        assert gz.cli("os", "set", "lab", "--address", esxi.live_esxi).code == 0
+        result = gz.cli("os", "network", "lab", timeout=180)
+        assert result.code == 0, result.output
+        with gz.api() as api:
+            host = api.get("/api/v1/hosts").json()[0]
+            cfg = api.get(f"/api/v1/hosts/{host['id']}/os/network").json()
+        mgmt = next(v for v in cfg["vmkernel"] if "management" in v["services"])
+        assert mgmt["ip"] == esxi.live_esxi
+    finally:
+        gz.stop()

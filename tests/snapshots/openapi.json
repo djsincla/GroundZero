@@ -334,6 +334,122 @@
         "title": "Drive",
         "type": "object"
       },
+      "EsxiNetworkConfig": {
+        "properties": {
+          "address": {
+            "description": "Address GroundZero used to reach the host",
+            "title": "Address",
+            "type": "string"
+          },
+          "build": {
+            "title": "Build",
+            "type": "string"
+          },
+          "default_gateway": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Gateway"
+          },
+          "dns_from_dhcp": {
+            "default": false,
+            "title": "Dns From Dhcp",
+            "type": "boolean"
+          },
+          "dns_servers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dns Servers",
+            "type": "array"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "hostname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hostname"
+          },
+          "ntp_servers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ntp Servers",
+            "type": "array"
+          },
+          "physical_nics": {
+            "items": {
+              "$ref": "#/components/schemas/PhysicalNic"
+            },
+            "title": "Physical Nics",
+            "type": "array"
+          },
+          "portgroups": {
+            "items": {
+              "$ref": "#/components/schemas/PortGroup"
+            },
+            "title": "Portgroups",
+            "type": "array"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "search_domains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Search Domains",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "vmkernel": {
+            "items": {
+              "$ref": "#/components/schemas/VmkInterface"
+            },
+            "title": "Vmkernel",
+            "type": "array"
+          },
+          "vswitches": {
+            "items": {
+              "$ref": "#/components/schemas/VSwitch"
+            },
+            "title": "Vswitches",
+            "type": "array"
+          }
+        },
+        "required": [
+          "address",
+          "product",
+          "version",
+          "build"
+        ],
+        "title": "EsxiNetworkConfig",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -653,7 +769,8 @@
       "JobKind": {
         "enum": [
           "inventory",
-          "preflight"
+          "preflight",
+          "os_network"
         ],
         "title": "JobKind",
         "type": "string"
@@ -772,6 +889,183 @@
           "id"
         ],
         "title": "NetworkPort",
+        "type": "object"
+      },
+      "OsAccess": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "verify_tls": {
+            "title": "Verify Tls",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "username",
+          "verify_tls"
+        ],
+        "title": "OsAccess",
+        "type": "object"
+      },
+      "OsAccessSet": {
+        "description": "How to reach the operating system (hypervisor) currently installed on a host.",
+        "properties": {
+          "address": {
+            "description": "OS management IP or hostname, e.g. the ESXi vmk0 address",
+            "title": "Address",
+            "type": "string"
+          },
+          "password": {
+            "format": "password",
+            "title": "Password",
+            "type": "string",
+            "writeOnly": true
+          },
+          "username": {
+            "default": "root",
+            "title": "Username",
+            "type": "string"
+          },
+          "verify_tls": {
+            "default": false,
+            "title": "Verify Tls",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "password"
+        ],
+        "title": "OsAccessSet",
+        "type": "object"
+      },
+      "PhysicalNic": {
+        "properties": {
+          "device": {
+            "title": "Device",
+            "type": "string"
+          },
+          "driver": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Driver"
+          },
+          "mac": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mac"
+          },
+          "pci": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pci"
+          },
+          "speed_mbps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Mbps"
+          },
+          "switch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Neighbour switch from CDP/LLDP",
+            "title": "Switch"
+          },
+          "switch_port": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Switch Port"
+          }
+        },
+        "required": [
+          "device"
+        ],
+        "title": "PhysicalNic",
+        "type": "object"
+      },
+      "PortGroup": {
+        "properties": {
+          "active_uplinks": {
+            "description": "Effective (computed) teaming order",
+            "items": {
+              "type": "string"
+            },
+            "title": "Active Uplinks",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "security": {
+            "$ref": "#/components/schemas/SecurityPolicy",
+            "description": "Effective (computed) policy"
+          },
+          "standby_uplinks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Standby Uplinks",
+            "type": "array"
+          },
+          "vlan_id": {
+            "default": 0,
+            "title": "Vlan Id",
+            "type": "integer"
+          },
+          "vswitch": {
+            "title": "Vswitch",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "vswitch"
+        ],
+        "title": "PortGroup",
         "type": "object"
       },
       "PreflightReport": {
@@ -992,6 +1286,46 @@
         "title": "ResetCapability",
         "type": "object"
       },
+      "SecurityPolicy": {
+        "description": "Effective L2 security policy. Holodeck trunks need all three set to Accept (True).",
+        "properties": {
+          "allow_promiscuous": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Promiscuous"
+          },
+          "forged_transmits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forged Transmits"
+          },
+          "mac_changes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mac Changes"
+          }
+        },
+        "title": "SecurityPolicy",
+        "type": "object"
+      },
       "SystemInfo": {
         "properties": {
           "bios_version": {
@@ -1052,6 +1386,61 @@
           "model"
         ],
         "title": "SystemInfo",
+        "type": "object"
+      },
+      "VSwitch": {
+        "properties": {
+          "active_uplinks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Active Uplinks",
+            "type": "array"
+          },
+          "mtu": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtu"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "portgroups": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Portgroups",
+            "type": "array"
+          },
+          "security": {
+            "$ref": "#/components/schemas/SecurityPolicy"
+          },
+          "standby_uplinks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Standby Uplinks",
+            "type": "array"
+          },
+          "uplinks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Uplinks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "VSwitch",
         "type": "object"
       },
       "ValidationError": {
@@ -1207,6 +1596,87 @@
           "path"
         ],
         "title": "VirtualMediaSlot",
+        "type": "object"
+      },
+      "VmkInterface": {
+        "properties": {
+          "device": {
+            "title": "Device",
+            "type": "string"
+          },
+          "dhcp": {
+            "default": false,
+            "title": "Dhcp",
+            "type": "boolean"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip"
+          },
+          "mac": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mac"
+          },
+          "mtu": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtu"
+          },
+          "netmask": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Netmask"
+          },
+          "portgroup": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portgroup"
+          },
+          "services": {
+            "description": "management, vmotion, vsan, ...",
+            "items": {
+              "type": "string"
+            },
+            "title": "Services",
+            "type": "array"
+          }
+        },
+        "required": [
+          "device"
+        ],
+        "title": "VmkInterface",
         "type": "object"
       }
     },
@@ -1471,6 +1941,202 @@
           }
         ],
         "summary": "Start Inventory",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/os": {
+      "get": {
+        "operationId": "get_os_access_api_v1_hosts__host_id__os_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OsAccess"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Os Access",
+        "tags": [
+          "hosts"
+        ]
+      },
+      "put": {
+        "description": "Record how to reach the OS currently installed on the host (e.g. ESXi management IP).",
+        "operationId": "set_os_access_api_v1_hosts__host_id__os_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OsAccessSet"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OsAccess"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Os Access",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/os/network": {
+      "get": {
+        "operationId": "latest_os_network_api_v1_hosts__host_id__os_network_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EsxiNetworkConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Latest Os Network",
+        "tags": [
+          "hosts"
+        ]
+      },
+      "post": {
+        "description": "Read the installed hypervisor's network configuration (read-only).",
+        "operationId": "start_os_network_api_v1_hosts__host_id__os_network_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Os Network",
         "tags": [
           "hosts"
         ]

@@ -59,6 +59,7 @@ class Profile(BaseModel):
     default_variant: str
     holorouter: dict[str, float]
     host: dict[str, Any]
+    host_network: dict[str, Any] = Field(default_factory=dict)
     variants: dict[str, Variant]
 
 

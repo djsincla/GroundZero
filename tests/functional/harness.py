@@ -19,6 +19,7 @@ import httpx
 EXECUTABLE = str(Path(sys.executable).with_name("groundzero"))
 REPO_ROOT = Path(__file__).resolve().parents[2]
 R740XD_CAPTURE = REPO_ROOT / "tests" / "fixtures" / "dell-r740xd"
+ESXI1_CAPTURE = REPO_ROOT / "tests" / "fixtures" / "esxi1-network.json"
 
 
 def free_port() -> int:

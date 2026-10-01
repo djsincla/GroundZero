@@ -1,0 +1,212 @@
+{
+  "address": "192.0.2.10",
+  "build": "24957456",
+  "default_gateway": "192.0.2.12",
+  "dns_from_dhcp": false,
+  "dns_servers": [
+    "192.0.2.13"
+  ],
+  "domain": null,
+  "hostname": "esxi1",
+  "ntp_servers": [],
+  "physical_nics": [
+    {
+      "device": "vmnic0",
+      "driver": "qfle3",
+      "mac": "00:00:5E:00:53:00",
+      "pci": "0000:19:00.0",
+      "speed_mbps": 10000,
+      "switch": "dwayneN4032",
+      "switch_port": "Te1/0/11"
+    },
+    {
+      "device": "vmnic1",
+      "driver": "qfle3",
+      "mac": "00:00:5E:00:53:01",
+      "pci": "0000:19:00.1",
+      "speed_mbps": 10000,
+      "switch": "dwayneN4032",
+      "switch_port": "Te1/0/12"
+    },
+    {
+      "device": "vmnic2",
+      "driver": "qfle3",
+      "mac": "00:00:5E:00:53:02",
+      "pci": "0000:19:00.2",
+      "speed_mbps": 1000,
+      "switch": "dwayneN4032",
+      "switch_port": "Te1/0/9"
+    },
+    {
+      "device": "vmnic3",
+      "driver": "qfle3",
+      "mac": "00:00:5E:00:53:03",
+      "pci": "0000:19:00.3",
+      "speed_mbps": 1000,
+      "switch": "dwayneN4032",
+      "switch_port": "Te1/0/10"
+    }
+  ],
+  "portgroups": [
+    {
+      "active_uplinks": [
+        "vmnic0"
+      ],
+      "name": "HoloDeckSite2",
+      "security": {
+        "allow_promiscuous": true,
+        "forged_transmits": true,
+        "mac_changes": true
+      },
+      "standby_uplinks": [
+        "vmnic1"
+      ],
+      "vlan_id": 4095,
+      "vswitch": "vSwitch0"
+    },
+    {
+      "active_uplinks": [
+        "vmnic0"
+      ],
+      "name": "HoloDeckSite1",
+      "security": {
+        "allow_promiscuous": true,
+        "forged_transmits": true,
+        "mac_changes": true
+      },
+      "standby_uplinks": [
+        "vmnic1"
+      ],
+      "vlan_id": 4095,
+      "vswitch": "vSwitch0"
+    },
+    {
+      "active_uplinks": [
+        "vmnic0"
+      ],
+      "name": "ManagementVM",
+      "security": {
+        "allow_promiscuous": false,
+        "forged_transmits": false,
+        "mac_changes": false
+      },
+      "standby_uplinks": [
+        "vmnic1"
+      ],
+      "vlan_id": 100,
+      "vswitch": "vSwitch0"
+    },
+    {
+      "active_uplinks": [
+        "vmnic0"
+      ],
+      "name": "holoSiteB",
+      "security": {
+        "allow_promiscuous": true,
+        "forged_transmits": true,
+        "mac_changes": true
+      },
+      "standby_uplinks": [
+        "vmnic1"
+      ],
+      "vlan_id": 4095,
+      "vswitch": "vSwitch0"
+    },
+    {
+      "active_uplinks": [
+        "vmnic0"
+      ],
+      "name": "holoSiteA",
+      "security": {
+        "allow_promiscuous": true,
+        "forged_transmits": true,
+        "mac_changes": true
+      },
+      "standby_uplinks": [
+        "vmnic1"
+      ],
+      "vlan_id": 4095,
+      "vswitch": "vSwitch0"
+    },
+    {
+      "active_uplinks": [
+        "vmnic0"
+      ],
+      "name": "VM Network",
+      "security": {
+        "allow_promiscuous": false,
+        "forged_transmits": false,
+        "mac_changes": false
+      },
+      "standby_uplinks": [
+        "vmnic1"
+      ],
+      "vlan_id": 100,
+      "vswitch": "vSwitch0"
+    },
+    {
+      "active_uplinks": [
+        "vmnic0",
+        "vmnic1"
+      ],
+      "name": "Management Network",
+      "security": {
+        "allow_promiscuous": false,
+        "forged_transmits": false,
+        "mac_changes": false
+      },
+      "standby_uplinks": [],
+      "vlan_id": 100,
+      "vswitch": "vSwitch0"
+    }
+  ],
+  "product": "VMware ESXi 192.0.2.11.24957456",
+  "search_domains": [
+    "vcflab.local"
+  ],
+  "version": "9.0.1",
+  "vmkernel": [
+    {
+      "device": "vmk0",
+      "dhcp": false,
+      "ip": "192.0.2.10",
+      "mac": "00:00:5E:00:53:00",
+      "mtu": 1500,
+      "netmask": "255.255.255.0",
+      "portgroup": "Management Network",
+      "services": [
+        "management"
+      ]
+    }
+  ],
+  "vswitches": [
+    {
+      "active_uplinks": [
+        "vmnic0"
+      ],
+      "mtu": 1500,
+      "name": "vSwitch0",
+      "portgroups": [
+        "HoloDeckSite2",
+        "HoloDeckSite1",
+        "ManagementVM",
+        "holoSiteB",
+        "holoSiteA",
+        "VM Network",
+        "Management Network"
+      ],
+      "security": {
+        "allow_promiscuous": false,
+        "forged_transmits": false,
+        "mac_changes": false
+      },
+      "standby_uplinks": [
+        "vmnic1"
+      ],
+      "uplinks": [
+        "vmnic1",
+        "vmnic0"
+      ]
+    }
+  ]
+}

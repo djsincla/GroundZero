@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from groundzero.core.models import Host, Job, JobError, JobKind, JobStatus
+from groundzero.core.models import Host, Job, JobError, JobKind, JobStatus, OsAccess
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS hosts (
@@ -49,6 +49,13 @@ CREATE TABLE IF NOT EXISTS results (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS results_host ON results(host_id, kind, created_at);
+CREATE TABLE IF NOT EXISTS os_access (
+    host_id TEXT PRIMARY KEY,
+    address TEXT NOT NULL,
+    username TEXT NOT NULL,
+    secret BLOB NOT NULL,
+    verify_tls INTEGER NOT NULL
+);
 """
 
 
@@ -125,9 +132,31 @@ class Store:
     def delete_host(self, host_id: str) -> bool:
         with self._tx() as cur:
             cur.execute("DELETE FROM results WHERE host_id = ?", (host_id,))
+            cur.execute("DELETE FROM os_access WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM jobs WHERE host_id = ?", (host_id,))
             deleted = cur.execute("DELETE FROM hosts WHERE id = ?", (host_id,)).rowcount
         return deleted > 0
+
+    # ── OS access ──────────────────────────────────────────────────────
+    def set_os_access(self, host_id: str, access: OsAccess, secret: bytes) -> None:
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO os_access (host_id, address, username, secret, verify_tls)"
+                " VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(host_id) DO UPDATE SET address = excluded.address,"
+                " username = excluded.username, secret = excluded.secret, verify_tls = excluded.verify_tls",
+                (host_id, access.address, access.username, secret, int(access.verify_tls)),
+            )
+
+    def get_os_access(self, host_id: str) -> tuple[OsAccess, bytes] | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM os_access WHERE host_id = ?", (host_id,)).fetchone()
+        if not row:
+            return None
+        access = OsAccess(
+            address=row["address"], username=row["username"], verify_tls=bool(row["verify_tls"])
+        )
+        return access, bytes(row["secret"])
 
     # ── jobs ─────────────────────────────────────────────────────────────
     def create_job(self, *, kind: JobKind, host_id: str, params: dict[str, Any]) -> Job:

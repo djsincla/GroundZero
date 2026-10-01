@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Simulation mode: serve every BMC from a recorded capture directory instead of the network.
     # Used for demos and black-box functional tests; reported by /healthz as mode "simulated".
     simulate_bmc_dir: Path | None = None
+    # Same idea for the installed OS: answer ESXi network reads from a recorded JSON capture.
+    simulate_esxi_file: Path | None = None
+    esxi_username: str | None = None
+    esxi_password: SecretStr | None = None
 
     @property
     def db_path(self) -> Path:

@@ -13,10 +13,12 @@ from fastapi.testclient import TestClient
 
 from groundzero.api.app import create_app
 from groundzero.core.config import Settings
-from groundzero.core.models import Host
+from groundzero.core.models import Host, OsAccess
+from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.redfish.client import RedfishClient
 
 SNAPSHOT = Path(__file__).parent / "snapshots" / "openapi.json"
+ESXI1 = Path(__file__).parent / "fixtures" / "esxi1-network.json"
 TOKEN = "test-token"
 
 
@@ -28,7 +30,12 @@ def api(tmp_path: Path, idrac9: dict[str, Any]) -> Iterator[TestClient]:
         assert password == "calvin"
         return make_client(idrac9)
 
-    with TestClient(create_app(settings, client_factory=factory)) as client:
+    async def esxi_reader(access: OsAccess, password: str) -> EsxiNetworkConfig:
+        assert password == "esxi-secret"
+        cfg = EsxiNetworkConfig.model_validate_json(ESXI1.read_text())
+        return cfg.model_copy(update={"address": access.address})
+
+    with TestClient(create_app(settings, client_factory=factory, esxi_reader=esxi_reader)) as client:
         client.headers["Authorization"] = f"Bearer {TOKEN}"
         yield client
 
@@ -139,3 +146,22 @@ def test_openapi_snapshot(api: TestClient) -> None:
         SNAPSHOT.parent.mkdir(exist_ok=True)
         SNAPSHOT.write_text(json.dumps(spec, indent=2, sort_keys=True) + "\n")
     assert spec == json.loads(SNAPSHOT.read_text())
+
+
+def test_os_network_read_flow(api: TestClient) -> None:
+    host = _add_host(api)
+    missing = api.post(f"/api/v1/hosts/{host['id']}/os/network")
+    assert missing.status_code == 404 and "PUT /hosts" in missing.json()["detail"]
+
+    put = api.put(
+        f"/api/v1/hosts/{host['id']}/os", json={"address": "192.0.2.101", "password": "esxi-secret"}
+    )
+    assert put.status_code == 200 and "password" not in put.json()
+    assert put.json() == {"address": "192.0.2.101", "username": "root", "verify_tls": False}
+
+    job = _wait(api, api.post(f"/api/v1/hosts/{host['id']}/os/network").json()["id"])
+    assert job["status"] == "succeeded", job
+    cfg = api.get(f"/api/v1/hosts/{host['id']}/os/network").json()
+    assert cfg["address"] == "192.0.2.101"
+    mgmt = next(p for p in cfg["portgroups"] if p["name"] == "Management Network")
+    assert (mgmt["vlan_id"], mgmt["active_uplinks"]) == (100, ["vmnic0", "vmnic1"])

@@ -6,7 +6,8 @@ from fastapi import APIRouter, Response, status
 from pydantic import BaseModel, Field
 
 from groundzero.api.deps import ServicesDep
-from groundzero.core.models import Host, HostCreate, Job, JobKind
+from groundzero.core.models import Host, HostCreate, Job, JobKind, OsAccess, OsAccessSet
+from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.inventory.models import HostInventory
 from groundzero.preflight.evaluate import PreflightReport
 
@@ -68,3 +69,25 @@ async def start_preflight(
 @router.get("/{host_id}/preflight", response_model=PreflightReport)
 def latest_preflight(host_id: str, services: ServicesDep) -> PreflightReport:
     return PreflightReport.model_validate(services.latest_result(host_id, JobKind.PREFLIGHT))
+
+
+@router.put("/{host_id}/os", response_model=OsAccess)
+def set_os_access(host_id: str, body: OsAccessSet, services: ServicesDep) -> OsAccess:
+    """Record how to reach the OS currently installed on the host (e.g. ESXi management IP)."""
+    return services.set_os_access(host_id, body)
+
+
+@router.get("/{host_id}/os", response_model=OsAccess)
+def get_os_access(host_id: str, services: ServicesDep) -> OsAccess:
+    return services.get_os_access(host_id)
+
+
+@router.post("/{host_id}/os/network", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
+async def start_os_network(host_id: str, services: ServicesDep, response: Response) -> Job:
+    """Read the installed hypervisor's network configuration (read-only)."""
+    return _accepted(response, services.start_os_network(host_id))
+
+
+@router.get("/{host_id}/os/network", response_model=EsxiNetworkConfig)
+def latest_os_network(host_id: str, services: ServicesDep) -> EsxiNetworkConfig:
+    return EsxiNetworkConfig.model_validate(services.latest_result(host_id, JobKind.OS_NETWORK))

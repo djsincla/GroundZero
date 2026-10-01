@@ -31,6 +31,22 @@ class Host(BaseModel):
 class JobKind(StrEnum):
     INVENTORY = "inventory"
     PREFLIGHT = "preflight"
+    OS_NETWORK = "os_network"
+
+
+class OsAccessSet(BaseModel):
+    """How to reach the operating system (hypervisor) currently installed on a host."""
+
+    address: str = Field(description="OS management IP or hostname, e.g. the ESXi vmk0 address")
+    username: str = "root"
+    password: SecretStr
+    verify_tls: bool = False
+
+
+class OsAccess(BaseModel):
+    address: str
+    username: str
+    verify_tls: bool
 
 
 class JobStatus(StrEnum):

@@ -18,6 +18,18 @@ supported_esxi = ["8.0u3", "9.0"]
 storage_media = "SSD/NVMe"
 min_nic_speed_mbps = 10000  # recommendation for the trunk uplink; slower links produce a warning
 
+# ESX host networking for a standalone host on a vSphere Standard Switch (Holodeck docs: "Networking").
+# GroundZero configures/validates these on the installed hypervisor before starting Holodeck.
+[host_network]
+vswitch_mtu = 9000                       # vSS/vDS/NSX switch MTU; upstream switch ports need jumbo frames
+trunk_portgroup_vlan = 4095              # dedicated trunk port group carrying the nested VLANs
+trunk_security_accept = ["allow_promiscuous", "mac_changes", "forged_transmits"]
+site_a_vlans = "0,10-25"                 # default; shift with -VLANRangeStart
+site_b_vlans = "40-58"                   # dual-site only
+upstream_vlans_needed_for = "multi-host vCenter clusters only (standalone host keeps VLANs inside the trunk)"
+holorouter_external_portgroup = true     # separate mgmt/external port group + one external IP per environment
+ntp_required = true
+
 [variants."vcf-5.2-single"]
 title = "VCF 5.2, single site"
 cores = 16

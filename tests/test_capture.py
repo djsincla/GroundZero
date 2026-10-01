@@ -6,7 +6,7 @@ from typing import Any
 from conftest import make_client
 
 from groundzero.inventory.collect import collect_inventory
-from groundzero.redfish.capture import Recorder, load_recording, sanitize
+from groundzero.redfish.capture import Pseudonymizer, Recorder, load_recording, pseudonymize, sanitize
 
 
 def test_sanitize_redacts_identifiers() -> None:
@@ -36,3 +36,18 @@ async def test_record_and_replay_round_trip(tmp_path: Path, idrac9: dict[str, An
         _, replayed = await collect_inventory(client)
     assert replayed.total_cores == original.total_cores
     assert replayed.system.serial_number == "REDACTED"
+
+
+def test_pseudonyms_are_consistent_and_keep_netmasks() -> None:
+    pseudo = Pseudonymizer()
+    data = {
+        "vmk": {"ip": "192.0.2.101", "netmask": "255.255.255.0", "mac": "18:66:DA:85:7F:C2"},
+        "nic": {"mac": "18:66:da:85:7f:c2"},
+        "gateway": "192.0.2.1",
+        "again": "192.0.2.101",
+    }
+    clean = pseudonymize(data, pseudo)
+    assert clean["vmk"]["netmask"] == "255.255.255.0"
+    assert clean["vmk"]["ip"] == clean["again"] != clean["gateway"]
+    assert clean["vmk"]["mac"] == clean["nic"]["mac"]  # relationships survive
+    assert "10.7." not in str(clean) and "18:66" not in str(clean).lower()
