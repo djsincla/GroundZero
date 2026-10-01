@@ -185,6 +185,17 @@ async def _serve(settings: Settings) -> None:
             await media_task
 
 
+@app.command()
+def ui() -> None:
+    """Open the web UI in your browser, signed in (the token travels in the URL fragment only)."""
+    import webbrowser
+
+    settings = Settings()
+    url = os.environ.get("GROUNDZERO_URL", f"http://{settings.bind_host}:{settings.port}")
+    webbrowser.open(f"{url}/#token={settings.resolve_api_token()}")
+    console.print(f"Opened {url}")
+
+
 @token_app.command("show")
 def token_show() -> None:
     """Print the API bearer token."""

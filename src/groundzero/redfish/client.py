@@ -148,8 +148,9 @@ class RedfishClient:
         paths = [m["@odata.id"] for m in collection.get("Members", []) if "@odata.id" in m]
         return list(await asyncio.gather(*(self.get_json(p) for p in paths)))
 
-    async def post(self, path: str, body: dict[str, Any]) -> RedfishResponse:
-        return await self.request("POST", path, json=body)
+    async def post(self, path: str, body: dict[str, Any], *, timeout: float | None = None) -> RedfishResponse:
+        """``timeout`` overrides the client default; BMC actions (e.g. InsertMedia) can take minutes."""
+        return await self.request("POST", path, json=body, timeout=timeout)
 
     async def patch(self, path: str, body: dict[str, Any], *, etag: str | None = None) -> RedfishResponse:
         headers = {"If-Match": etag} if etag else None
@@ -165,13 +166,14 @@ class RedfishClient:
         *,
         json: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
+        timeout: float | None = None,
     ) -> RedfishResponse:
         path = self.normalize_path(path)
         relogged = False
         for attempt in range(1, self._retries + 1):
             try:
                 async with self._parallel:
-                    resp = await self._send(method, path, json=json, headers=headers)
+                    resp = await self._send(method, path, json=json, headers=headers, timeout=timeout)
             except RedfishTransportError:
                 # A timed-out action may still be executing on the BMC (seen live: iDRAC InsertMedia).
                 # Replaying it could double a Reset or collide with itself, so only idempotent verbs retry.
@@ -220,6 +222,7 @@ class RedfishClient:
         json: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         authenticate: bool = True,
+        timeout: float | None = None,
     ) -> RedfishResponse:
         req_headers = dict(headers or {})
         auth: httpx.BasicAuth | None = None
@@ -229,10 +232,12 @@ class RedfishClient:
             elif self._basic_auth:
                 auth = httpx.BasicAuth(self._username, self._password)
         try:
-            raw = await self._http.request(method, path, json=json, headers=req_headers, auth=auth)
+            extra: dict[str, Any] = {"timeout": timeout} if timeout is not None else {}
+            raw = await self._http.request(method, path, json=json, headers=req_headers, auth=auth, **extra)
         except httpx.HTTPError as exc:
             self.request_log.append(RequestRecord(method, path, None))
-            raise RedfishTransportError(f"{method} {path} failed: {exc}", path=path) from exc
+            detail = str(exc) or type(exc).__name__  # e.g. ReadTimeout carries no message
+            raise RedfishTransportError(f"{method} {path} failed: {detail}", path=path) from exc
         self.request_log.append(RequestRecord(method, path, raw.status_code))
         return RedfishResponse(status=raw.status_code, headers=raw.headers, body=_parse_body(raw))
 

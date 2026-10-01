@@ -5,8 +5,11 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib import resources
 
 from fastapi import Depends, FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from groundzero import __version__
 from groundzero.api.deps import require_token
@@ -66,6 +69,14 @@ def create_app(
         lifespan=lifespan,
     )
     install_error_handlers(app)
+    # Web UI: static files, a pure client of the API below (served without auth; data calls need the token).
+    web = resources.files("groundzero") / "web"
+    app.mount("/ui", StaticFiles(directory=str(web)), name="ui")
+
+    @app.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        return FileResponse(str(web / "index.html"), headers={"Cache-Control": "no-store"})
+
     app.include_router(meta.health_router)
     secured = [Depends(require_token)]
     for router in (meta.router, hosts.router, jobs.router):

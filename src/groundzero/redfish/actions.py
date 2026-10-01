@@ -13,7 +13,7 @@ import logging
 from groundzero.redfish.capabilities import BmcCapabilities, VirtualMediaSlot
 from groundzero.redfish.client import RedfishClient
 from groundzero.redfish.detect import BmcIdentity
-from groundzero.redfish.errors import RedfishError
+from groundzero.redfish.errors import RedfishTransportError
 from groundzero.redfish.oem import VendorProfile
 
 logger = logging.getLogger(__name__)
@@ -40,20 +40,60 @@ async def eject(client: RedfishClient, slot: VirtualMediaSlot) -> None:
         raise BmcActionError(f"{slot.path} still has {image} inserted after EjectMedia")
 
 
-async def insert(client: RedfishClient, slot: VirtualMediaSlot, url: str) -> None:
-    """Mount ``url`` read-only. Refuses to replace media someone else mounted."""
+async def insert(
+    client: RedfishClient,
+    slot: VirtualMediaSlot,
+    url: str,
+    *,
+    action_timeout: float = 180.0,
+    settle_timeout: float = 120.0,
+    poll: float = 5.0,
+) -> None:
+    """Mount ``url`` read-only. Refuses to replace media someone else mounted.
+
+    InsertMedia is never retried. If the call times out (seen live: iDRAC answered after >30 s while
+    the mount went through), the slot is polled until our image shows up or ``settle_timeout`` ends.
+    """
     inserted, image = await slot_state(client, slot)
     if inserted and image != url:
         raise BmcActionError(f"{slot.path} already has {image} inserted; eject it first")
     if not inserted:
         if not slot.insert_target:
             raise BmcActionError(f"{slot.path} has no InsertMedia action")
-        await client.post(slot.insert_target, {"Image": url, "Inserted": True, "WriteProtected": True})
+        body = {"Image": url, "Inserted": True, "WriteProtected": True}
+        try:
+            await client.post(slot.insert_target, body, timeout=action_timeout)
+        except RedfishTransportError:
+            logger.warning("InsertMedia on %s timed out; checking whether it took effect", slot.path)
+            if not await _wait_for_image(client, slot, url, settle_timeout, poll):
+                raise
     inserted, image = await slot_state(client, slot)
     if not inserted or image != url:
         raise BmcActionError(
             f"InsertMedia did not take effect on {slot.path} (inserted={inserted}, image={image})"
         )
+
+
+async def _wait_for_image(
+    client: RedfishClient, slot: VirtualMediaSlot, url: str, timeout: float, poll: float
+) -> bool:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        inserted, image = await slot_state(client, slot)
+        if inserted and image == url:
+            return True
+        await asyncio.sleep(poll)
+    return False
+
+
+async def eject_if_ours(client: RedfishClient, slot: VirtualMediaSlot, url: str) -> None:
+    """Best-effort cleanup that never ejects media someone else mounted."""
+    try:
+        inserted, image = await slot_state(client, slot)
+        if inserted and image == url:
+            await eject(client, slot)
+    except Exception:
+        logger.exception("Could not clean up media on %s", slot.path)
 
 
 async def power_state(client: RedfishClient, identity: BmcIdentity) -> str:
@@ -73,17 +113,23 @@ async def restart(client: RedfishClient, identity: BmcIdentity, caps: BmcCapabil
 
 
 async def boot_once_from_virtual_cd(
-    client: RedfishClient, identity: BmcIdentity, caps: BmcCapabilities, profile: VendorProfile, url: str
+    client: RedfishClient,
+    identity: BmcIdentity,
+    caps: BmcCapabilities,
+    profile: VendorProfile,
+    url: str,
+    *,
+    action_timeout: float = 180.0,
 ) -> VirtualMediaSlot:
     """Mount ``url`` and arrange for the next boot (only) to use it. Returns the slot used."""
     slot = profile.choose_cd_slot(caps)
     if slot is None:
         raise BmcActionError("No virtual CD slot with InsertMedia on this BMC")
-    await insert(client, slot, url)
     try:
+        await insert(client, slot, url, action_timeout=action_timeout)
         await profile.set_one_time_cd_boot(client, identity, slot)
-    except (RedfishError, BmcActionError):
-        await eject(client, slot)  # leave the BMC as we found it
+    except BaseException:
+        await eject_if_ours(client, slot, url)  # leave the BMC as we found it, even if the mount half-worked
         raise
     return slot
 

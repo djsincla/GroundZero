@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GroundZero</title>
+  <link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">GroundZero</a>
+    <nav>
+      <a href="#/" data-nav="hosts">Hosts</a>
+      <a href="#/jobs" data-nav="jobs">Jobs</a>
+      <a href="/docs" target="_blank" rel="noopener">API</a>
+    </nav>
+    <span id="mode" class="mode" hidden></span>
+  </header>
+  <main id="app" aria-live="polite"></main>
+  <dialog id="dialog"></dialog>
+  <script type="module" src="/ui/app.js"></script>
+</body>
+</html>

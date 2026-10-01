@@ -41,3 +41,12 @@ def simulated_r740xd_ignoring_boot_once(tmp_path: Path) -> Iterator[GroundZero]:
     gz.start()
     yield gz
     gz.stop()
+
+
+@pytest.fixture
+def simulated_r740xd_slow_insert(tmp_path: Path) -> Iterator[GroundZero]:
+    """The simulated iDRAC completes InsertMedia but its HTTP response times out (seen live)."""
+    gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_FAULTS='["slow-insert"]')
+    gz.start()
+    yield gz
+    gz.stop()

@@ -136,3 +136,14 @@ async def test_reads_are_retried_after_a_timeout() -> None:
     async with _client(httpx.MockTransport(handler)) as client:
         assert await client.get_json("/redfish/v1") == {"ok": 1}
     assert gets["n"] == 2
+
+
+async def test_timeout_error_message_is_never_empty() -> None:
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.method == "POST" and req.url.path.endswith("/Sessions"):
+            return httpx.Response(201, headers={"X-Auth-Token": "t"})
+        raise httpx.ReadTimeout("", request=req)
+
+    async with _client(httpx.MockTransport(handler)) as client:
+        with pytest.raises(RedfishTransportError, match="failed: ReadTimeout"):
+            await client.post("/redfish/v1/x/Actions/VirtualMedia.InsertMedia", {}, timeout=1)

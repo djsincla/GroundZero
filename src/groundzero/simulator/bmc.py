@@ -29,7 +29,11 @@ class SimulatedBmc:
         esxi: SimulatedEsxi | None = None,
         faults: frozenset[str] = frozenset(),
     ) -> None:
-        """``faults`` injects misbehaviour for tests, e.g. "ignore-boot-once" (override silently ignored)."""
+        """``faults`` injects misbehaviour seen on real BMCs, for tests:
+
+        - "ignore-boot-once": the one-time boot override is accepted but not honoured
+        - "slow-insert": InsertMedia takes effect but its response times out
+        """
         self.responses = copy.deepcopy(responses)
         self.esxi = esxi
         self.faults = faults
@@ -113,6 +117,10 @@ class SimulatedBmc:
                 500, "Unable to locate the ISO or IMG image file or folder in the network share location"
             )
         self.media[slot] = url
+        if (
+            "slow-insert" in self.faults
+        ):  # seen on a real iDRAC: mount completes, the response never arrives in time
+            raise httpx.ReadTimeout("simulated slow InsertMedia", request=None)
         return httpx.Response(204)
 
     def _reset(self, reset_type: str) -> httpx.Response:

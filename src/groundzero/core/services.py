@@ -161,6 +161,7 @@ class Services:
             media_port=self.settings.media_port,
             timings=InstallTimings(
                 poll_seconds=self.settings.install_poll_seconds,
+                action_timeout=self.settings.redfish_action_timeout,
                 installer_boot_minutes=self.settings.installer_boot_minutes,
             ),
         )

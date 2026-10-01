@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     max_concurrent_jobs: int = 4
     redfish_timeout: float = 30.0
     redfish_max_parallel: int = 4
+    redfish_action_timeout: float = 180.0  # BMC actions such as InsertMedia can take minutes
     api_token: str | None = None
     bmc_username: str | None = None
     bmc_password: SecretStr | None = None

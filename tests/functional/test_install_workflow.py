@@ -104,3 +104,15 @@ def test_failed_one_time_boot_stops_safely(simulated_r740xd_ignoring_boot_once: 
     report = _report(gz)
     assert report["installed_build"] is None and report["validation"] == []
     assert report["bmc_audit"]["non_get"][-1].endswith("VirtualMedia.EjectMedia")  # media still ejected
+
+
+def test_slow_insert_media_is_verified_not_retried(simulated_r740xd_slow_insert: GroundZero) -> None:
+    """Regression (live R740xd): InsertMedia answered after the client timeout but had mounted."""
+    gz = simulated_r740xd_slow_insert
+    iso = _prepare(gz)
+    result = gz.cli("install", "esxi1", "--iso", str(iso), "--confirm", "install esxi1", timeout=180)
+    assert result.code == 0, result.output
+    report = _report(gz)
+    inserts = [w for w in report["bmc_audit"]["non_get"] if w.endswith("VirtualMedia.InsertMedia")]
+    assert len(inserts) == 1  # verified by reading the slot back, never re-sent
+    assert all(c["ok"] for c in report["validation"])
