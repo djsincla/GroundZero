@@ -17,6 +17,7 @@ from groundzero.core.credentials import CredentialCipher
 from groundzero.core.jobs import JobRunner
 from groundzero.core.services import ClientFactory, EsxiReader, Services
 from groundzero.core.store import Store
+from groundzero.media.registry import MediaRegistry
 
 API_PREFIX = "/api/v1"
 logger = logging.getLogger(__name__)
@@ -24,8 +25,10 @@ logger = logging.getLogger(__name__)
 
 def create_app(
     settings: Settings | None = None,
+    *,
     client_factory: ClientFactory | None = None,
     esxi_reader: EsxiReader | None = None,
+    media: MediaRegistry | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
 
@@ -41,7 +44,13 @@ def create_app(
         runner = JobRunner(store, settings.max_concurrent_jobs)
         app.state.api_token = settings.resolve_api_token()
         app.state.services = Services(
-            settings, store, runner, CredentialCipher(settings), client_factory, esxi_reader
+            settings,
+            store,
+            runner,
+            CredentialCipher(settings),
+            client_factory=client_factory,
+            esxi_reader=esxi_reader,
+            media=media,
         )
         try:
             yield

@@ -18,6 +18,7 @@ from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.esxi.reader import read_network
 from groundzero.inventory.collect import collect_inventory
 from groundzero.inventory.models import HostInventory
+from groundzero.media.registry import MediaRegistry
 from groundzero.preflight.evaluate import UnknownProfileError, evaluate, load_profile
 from groundzero.redfish.capture import load_recording, replay_transport
 from groundzero.redfish.client import RedfishClient
@@ -43,10 +44,13 @@ class Services:
         store: Store,
         runner: JobRunner,
         cipher: CredentialCipher,
+        *,
         client_factory: ClientFactory | None = None,
         esxi_reader: EsxiReader | None = None,
+        media: MediaRegistry | None = None,
     ) -> None:
         self.settings = settings
+        self.media = media or MediaRegistry()
         self.store = store
         self.runner = runner
         self._cipher = cipher

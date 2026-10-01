@@ -46,6 +46,7 @@ class GroundZero:
     home: Path
     extra_env: dict[str, str] = field(default_factory=dict)
     port: int = field(default_factory=free_port)
+    media_port: int = field(default_factory=free_port)
     _proc: subprocess.Popen[bytes] | None = None
 
     @property
@@ -53,11 +54,16 @@ class GroundZero:
         return f"http://127.0.0.1:{self.port}"
 
     @property
+    def media_url(self) -> str:
+        return f"https://127.0.0.1:{self.media_port}"
+
+    @property
     def env(self) -> dict[str, str]:
         env = {k: v for k, v in os.environ.items() if not k.startswith("GROUNDZERO_")}
         env.update(
             GROUNDZERO_HOME=str(self.home),
             GROUNDZERO_PORT=str(self.port),
+            GROUNDZERO_MEDIA_PORT=str(self.media_port),
             GROUNDZERO_URL=self.url,
             COLUMNS="200",  # keep rich tables on one line so assertions are stable
             NO_COLOR="1",

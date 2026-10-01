@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     simulate_bmc_dir: Path | None = None
     # Same idea for the installed OS: answer ESXi network reads from a recorded JSON capture.
     simulate_esxi_file: Path | None = None
+    # HTTPS listener BMCs download installer ISOs from (must be reachable from the BMC network).
+    media_bind_host: str = "0.0.0.0"
+    media_port: int = 443
+    media_public_url: str | None = None  # e.g. https://203.0.113.124; default: auto-detect per BMC
     esxi_username: str | None = None
     esxi_password: SecretStr | None = None
 

@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated, Any, NoReturn
 
@@ -110,20 +111,68 @@ def _esxi_credentials(user: str | None) -> tuple[str, str]:
 # ── server ───────────────────────────────────────────────────────────────
 @app.command()
 def serve(
-    host: Annotated[str | None, typer.Option(help="Bind address (default 127.0.0.1)")] = None,
-    port: Annotated[int | None, typer.Option(help="Port (default 7182)")] = None,
+    host: Annotated[str | None, typer.Option(help="API bind address (default 127.0.0.1)")] = None,
+    port: Annotated[int | None, typer.Option(help="API port (default 7182)")] = None,
 ) -> None:
-    """Run the GroundZero API server."""
+    """Run the GroundZero API (localhost) and the HTTPS media endpoint BMCs install from."""
+    settings = Settings()
+    if host:
+        settings.bind_host = host
+    if port:
+        settings.port = port
+    asyncio.run(_serve(settings))
+
+
+async def _serve(settings: Settings) -> None:
+    import contextlib
+    import socket
+
     import uvicorn
 
     from groundzero.api.app import create_app
+    from groundzero.media.registry import MediaRegistry
+    from groundzero.media.server import create_media_app, ensure_tls_certificate
 
-    settings = Settings()
-    bind, bind_port = host or settings.bind_host, port or settings.port
-    console.print(
-        f"GroundZero API on http://{bind}:{bind_port}  (docs: /docs, token: `groundzero token show`)"
+    class _NoSignals(uvicorn.Server):
+        @contextlib.contextmanager
+        def capture_signals(self) -> Iterator[None]:  # the API server owns Ctrl-C
+            yield
+
+    registry = MediaRegistry()
+    api = uvicorn.Server(
+        uvicorn.Config(create_app(settings, media=registry), host=settings.bind_host, port=settings.port)
     )
-    uvicorn.run(create_app(settings), host=bind, port=bind_port, log_level="info")
+    console.print(f"GroundZero API   http://{settings.bind_host}:{settings.port}  (docs: /docs)")
+
+    media: uvicorn.Server | None = None
+    try:
+        with socket.socket() as probe:  # fail soft: the API is useful even if the media port is taken
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind((settings.media_bind_host, settings.media_port))
+    except OSError as exc:
+        console.print(f"[yellow]media endpoint disabled: cannot bind :{settings.media_port} ({exc})[/yellow]")
+    else:
+        settings.ensure_home()
+        cert, key = ensure_tls_certificate(settings.home / "tls", [])
+        media = _NoSignals(
+            uvicorn.Config(
+                create_media_app(registry),
+                host=settings.media_bind_host,
+                port=settings.media_port,
+                ssl_certfile=str(cert),
+                ssl_keyfile=str(key),
+                log_level="warning",
+            )
+        )
+        console.print(f"GroundZero media https://{settings.media_bind_host}:{settings.media_port}/media/...")
+
+    media_task = asyncio.create_task(media.serve()) if media else None
+    try:
+        await api.serve()
+    finally:
+        if media and media_task:
+            media.should_exit = True
+            await media_task
 
 
 @token_app.command("show")
