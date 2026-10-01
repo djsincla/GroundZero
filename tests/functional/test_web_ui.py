@@ -17,6 +17,7 @@ def test_ui_assets_served_without_auth_and_data_still_protected(simulated_r740xd
     assert index.headers["cache-control"] == "no-store"
     js = httpx.get(gz.url + "/ui/app.js")
     assert js.status_code == 200 and "javascript" in js.headers["content-type"]
-    assert "innerHTML" not in js.text  # rendering goes through textContent only
+    for sink in (".innerHTML", ".outerHTML", "insertAdjacentHTML", "document.write"):
+        assert sink not in js.text  # rendering goes through textContent only
     assert httpx.get(gz.url + "/ui/app.css").status_code == 200
     assert httpx.get(gz.url + "/api/v1/hosts").status_code == 401  # the UI shell is public, the data is not
