@@ -35,6 +35,9 @@ _SESSION_PATHS = ("/redfish/v1/SessionService/Sessions", "/redfish/v1/Sessions")
 # Transient "busy" conditions reported with non-503 statuses by some BMCs.
 _BUSY_MESSAGE_MARKERS = ("SYS518", "ResourceNotReady", "ServiceTemporarilyUnavailable")
 _RETRY_STATUSES = frozenset({429, 503})
+# Safe to resend after a lost response. Busy/503 replies are retried for every verb: the BMC
+# explicitly did not act on the request.
+_IDEMPOTENT = frozenset({"GET", "HEAD", "DELETE"})
 
 
 @dataclass(frozen=True)
@@ -170,7 +173,9 @@ class RedfishClient:
                 async with self._parallel:
                     resp = await self._send(method, path, json=json, headers=headers)
             except RedfishTransportError:
-                if attempt == self._retries:
+                # A timed-out action may still be executing on the BMC (seen live: iDRAC InsertMedia).
+                # Replaying it could double a Reset or collide with itself, so only idempotent verbs retry.
+                if attempt == self._retries or method not in _IDEMPOTENT:
                     raise
                 await self._sleep(attempt)
                 continue

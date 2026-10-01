@@ -4,7 +4,12 @@ import httpx
 import pytest
 
 from groundzero.redfish.client import RedfishClient
-from groundzero.redfish.errors import RedfishAuthError, RedfishError, RedfishNotFoundError
+from groundzero.redfish.errors import (
+    RedfishAuthError,
+    RedfishError,
+    RedfishNotFoundError,
+    RedfishTransportError,
+)
 
 
 def _client(handler: httpx.MockTransport) -> RedfishClient:
@@ -97,3 +102,37 @@ async def test_refuses_links_to_other_hosts() -> None:
         with pytest.raises(RedfishError, match="another host"):
             await client.get("https://evil.test/redfish/v1/Systems")
         assert client._session_uri is None  # foreign Location header ignored, token never sent there
+
+
+async def test_actions_are_not_replayed_after_a_timeout() -> None:
+    """Regression (live iDRAC): a timed-out InsertMedia was re-sent and collided with itself."""
+    posts = {"n": 0}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/Sessions"):
+            return httpx.Response(201, headers={"X-Auth-Token": "t"})
+        if req.method == "POST":
+            posts["n"] += 1
+            raise httpx.ReadTimeout("BMC still working", request=req)
+        return httpx.Response(200, json={})
+
+    async with _client(httpx.MockTransport(handler)) as client:
+        with pytest.raises(RedfishTransportError):
+            await client.post("/redfish/v1/Systems/1/Actions/ComputerSystem.Reset", {"ResetType": "On"})
+    assert posts["n"] == 1
+
+
+async def test_reads_are_retried_after_a_timeout() -> None:
+    gets = {"n": 0}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.method == "POST":
+            return httpx.Response(201, headers={"X-Auth-Token": "t"})
+        gets["n"] += 1
+        if gets["n"] == 1:
+            raise httpx.ConnectTimeout("blip", request=req)
+        return httpx.Response(200, json={"ok": 1})
+
+    async with _client(httpx.MockTransport(handler)) as client:
+        assert await client.get_json("/redfish/v1") == {"ok": 1}
+    assert gets["n"] == 2

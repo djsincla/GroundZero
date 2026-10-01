@@ -29,3 +29,7 @@ GroundZero-Scans/
 *.sqlite3
 .mypy_cache/
 .coverage
+
+# Installer media (large, licensed binaries)
+images/
+*.iso
