@@ -63,6 +63,28 @@
         "title": "BiosSettings",
         "type": "object"
       },
+      "BmcAudit": {
+        "description": "Every request a job sent to the BMC, so callers can verify what was (not) changed.",
+        "properties": {
+          "non_get": {
+            "description": "e.g. \"POST /redfish/v1/...\"",
+            "items": {
+              "type": "string"
+            },
+            "title": "Non Get",
+            "type": "array"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "title": "BmcAudit",
+        "type": "object"
+      },
       "BmcCapabilities": {
         "properties": {
           "boot_override": {
@@ -653,6 +675,185 @@
         "title": "HostInventory",
         "type": "object"
       },
+      "InstallReport": {
+        "properties": {
+          "bmc_audit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BmcAudit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "durations_s": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Durations S",
+            "type": "object"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "installed_build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installed Build"
+          },
+          "iso_build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iso Build"
+          },
+          "iso_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iso Version"
+          },
+          "media_bytes_served": {
+            "default": 0,
+            "title": "Media Bytes Served",
+            "type": "integer"
+          },
+          "media_url_host": {
+            "title": "Media Url Host",
+            "type": "string"
+          },
+          "previous_build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Build"
+          },
+          "reset_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reset Type"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          },
+          "validation": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationCheck"
+            },
+            "title": "Validation",
+            "type": "array"
+          }
+        },
+        "required": [
+          "host",
+          "iso_version",
+          "iso_build",
+          "previous_build",
+          "spec",
+          "media_url_host"
+        ],
+        "title": "InstallReport",
+        "type": "object"
+      },
+      "InstallRequest": {
+        "properties": {
+          "allow_legacy_cpu": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: on if preflight flags the CPU",
+            "title": "Allow Legacy Cpu"
+          },
+          "confirm": {
+            "description": "Must be exactly \"install <host name>\"",
+            "title": "Confirm",
+            "type": "string"
+          },
+          "iso_path": {
+            "description": "Stock ESXi installer ISO on the GroundZero host",
+            "title": "Iso Path",
+            "type": "string"
+          },
+          "ntp_servers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ntp Servers",
+            "type": "array"
+          },
+          "profile": {
+            "default": "holodeck-9",
+            "title": "Profile",
+            "type": "string"
+          },
+          "timeout_minutes": {
+            "default": 90,
+            "maximum": 240.0,
+            "minimum": 10.0,
+            "title": "Timeout Minutes",
+            "type": "integer"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variant"
+          },
+          "wipe_install_disk_vmfs": {
+            "default": false,
+            "description": "Overwrite VMFS on the install disk",
+            "title": "Wipe Install Disk Vmfs",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "iso_path",
+          "confirm"
+        ],
+        "title": "InstallRequest",
+        "type": "object"
+      },
       "Job": {
         "properties": {
           "created_at": {
@@ -770,7 +971,8 @@
         "enum": [
           "inventory",
           "preflight",
-          "os_network"
+          "os_network",
+          "install"
         ],
         "title": "JobKind",
         "type": "string"
@@ -1443,6 +1645,34 @@
         "title": "VSwitch",
         "type": "object"
       },
+      "ValidationCheck": {
+        "properties": {
+          "expected": {
+            "title": "Expected",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "observed": {
+            "title": "Observed",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "ok",
+          "expected",
+          "observed"
+        ],
+        "title": "ValidationCheck",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1849,6 +2079,109 @@
           }
         ],
         "summary": "Get Host",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/install": {
+      "get": {
+        "operationId": "latest_install_api_v1_hosts__host_id__install_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Latest Install",
+        "tags": [
+          "hosts"
+        ]
+      },
+      "post": {
+        "description": "Reinstall ESXi on the host (destructive). `confirm` must be exactly \"install <host name>\".",
+        "operationId": "start_install_api_v1_hosts__host_id__install_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Install",
         "tags": [
           "hosts"
         ]

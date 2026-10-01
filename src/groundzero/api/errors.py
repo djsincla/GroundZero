@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
 from groundzero.core.jobs import HostBusyError
-from groundzero.core.services import ConflictError, NotFoundError
+from groundzero.core.services import ConfirmationError, ConflictError, NotFoundError
 from groundzero.preflight.evaluate import UnknownProfileError
 
 PROBLEM_JSON = "application/problem+json"
@@ -53,6 +53,7 @@ _DOMAIN_ERRORS: tuple[tuple[type[Exception], int, str], ...] = (
     (ConflictError, 409, "conflict"),
     (HostBusyError, 409, "host_busy"),
     (UnknownProfileError, 422, "unknown_profile"),
+    (ConfirmationError, 422, "confirmation_required"),
 )
 
 

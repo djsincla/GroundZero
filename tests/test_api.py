@@ -16,9 +16,10 @@ from groundzero.core.config import Settings
 from groundzero.core.models import Host, OsAccess
 from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.redfish.client import RedfishClient
+from groundzero.simulator.esxi import SimulatedEsxi
 
 SNAPSHOT = Path(__file__).parent / "snapshots" / "openapi.json"
-ESXI1 = Path(__file__).parent / "fixtures" / "esxi1-network.json"
+ESXI1 = Path(__file__).parent / "fixtures" / "esxi1"
 TOKEN = "test-token"
 
 
@@ -30,12 +31,12 @@ def api(tmp_path: Path, idrac9: dict[str, Any]) -> Iterator[TestClient]:
         assert password == "calvin"
         return make_client(idrac9)
 
-    async def esxi_reader(access: OsAccess, password: str) -> EsxiNetworkConfig:
-        assert password == "esxi-secret"
-        cfg = EsxiNetworkConfig.model_validate_json(ESXI1.read_text())
-        return cfg.model_copy(update={"address": access.address})
+    class Esxi(SimulatedEsxi):
+        async def read_network(self, access: OsAccess, password: str) -> EsxiNetworkConfig:
+            assert password == "esxi-secret"
+            return await super().read_network(access, password)
 
-    with TestClient(create_app(settings, client_factory=factory, esxi_reader=esxi_reader)) as client:
+    with TestClient(create_app(settings, client_factory=factory, esxi=Esxi(ESXI1))) as client:
         client.headers["Authorization"] = f"Bearer {TOKEN}"
         yield client
 

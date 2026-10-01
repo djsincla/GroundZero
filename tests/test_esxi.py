@@ -9,7 +9,7 @@ import pytest
 from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.esxi.reader import extract_network
 
-ESXI1 = Path(__file__).parent / "fixtures" / "esxi1-network.json"
+ESXI1 = Path(__file__).parent / "fixtures" / "esxi1" / "network.json"
 
 
 @pytest.fixture

@@ -32,6 +32,7 @@ class JobKind(StrEnum):
     INVENTORY = "inventory"
     PREFLIGHT = "preflight"
     OS_NETWORK = "os_network"
+    INSTALL = "install"
 
 
 class OsAccessSet(BaseModel):

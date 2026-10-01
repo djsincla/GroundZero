@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pycdlib
 import pytest
+from isofactory import STOCK_CFG, make_stock_iso
 from pydantic import ValidationError
 
 from groundzero.install.crypt import sha512_crypt
@@ -15,16 +16,6 @@ from groundzero.install.kickstart import render_kickstart
 from groundzero.install.spec import InstallSpec, ManagementNetwork
 
 BOSS = "t10.ATA_____DELLBOSS_VD_____________________________6b82d07b9f4d001000000000"
-STOCK_CFG = "\n".join(
-    [
-        "bootstate=0",
-        "title=Loading ESXi installer",
-        "kernel=/b.b00",
-        "kernelopt=runweasel cdromBoot",
-        "modules=/k.b00",
-        "",
-    ]
-)
 
 
 def _spec(**overrides: object) -> InstallSpec:
@@ -119,28 +110,9 @@ def test_spec_rejects_bad_disk_ntp_and_plaintext_password() -> None:
 
 
 # ── ISO ──────────────────────────────────────────────────────────────────
-def _add(iso: pycdlib.PyCdlib, path: str, data: bytes) -> None:
-    iso.add_fp(io.BytesIO(data), len(data), iso_path=path)
-
-
 @pytest.fixture
 def stock_iso(tmp_path: Path) -> Path:
-    """A small ISO shaped like the ESXi installer: BIOS + EFI El Torito, two BOOT.CFGs, .DISCINFO."""
-    iso = pycdlib.PyCdlib()
-    iso.new(interchange_level=4)  # allows the leading-dot .DISCINFO name used by the real ISO
-    _add(iso, "/.DISCINFO;1", b"ESXi\nVersion: 9.1.1-0.25714478\n")
-    iso.add_directory("/EFI")
-    iso.add_directory("/EFI/BOOT")
-    _add(iso, "/BOOT.CFG;1", STOCK_CFG.encode())
-    _add(iso, "/EFI/BOOT/BOOT.CFG;1", STOCK_CFG.encode())
-    _add(iso, "/ISOLINUX.BIN;1", b"\xeb\x3c" + b"\x00" * (7 * 2048 - 2))
-    _add(iso, "/EFIBOOT.IMG;1", b"EFI" * 1000)
-    iso.add_eltorito("/ISOLINUX.BIN;1", bootcatfile="/BOOT.CAT;1", boot_info_table=True, media_name="noemul")
-    iso.add_eltorito("/EFIBOOT.IMG;1", efi=True, media_name="noemul")
-    path = tmp_path / "VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso"
-    iso.write(str(path))
-    iso.close()
-    return path
+    return make_stock_iso(tmp_path / "VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso")
 
 
 def test_build_install_iso(stock_iso: Path, tmp_path: Path) -> None:

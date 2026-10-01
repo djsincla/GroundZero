@@ -6,7 +6,8 @@ HTTP handlers stay thin; everything here is plain Python that can be tested with
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from groundzero.core.config import Settings
@@ -14,19 +15,20 @@ from groundzero.core.credentials import CredentialCipher
 from groundzero.core.jobs import JobContext, JobRunner
 from groundzero.core.models import BmcAudit, Host, HostCreate, Job, JobKind, OsAccess, OsAccessSet
 from groundzero.core.store import Store
-from groundzero.esxi.models import EsxiNetworkConfig
-from groundzero.esxi.reader import read_network
+from groundzero.esxi.ops import EsxiOps, LiveEsxiOps
+from groundzero.install.job import Installer, InstallRequest, InstallTimings
 from groundzero.inventory.collect import collect_inventory
 from groundzero.inventory.models import HostInventory
 from groundzero.media.registry import MediaRegistry
 from groundzero.preflight.evaluate import UnknownProfileError, evaluate, load_profile
-from groundzero.redfish.capture import load_recording, replay_transport
+from groundzero.redfish.capture import load_recording
 from groundzero.redfish.client import RedfishClient
+from groundzero.simulator.bmc import SimulatedBmc
+from groundzero.simulator.esxi import SimulatedEsxi
 
 logger = logging.getLogger(__name__)
 
 ClientFactory = Callable[[Host, str], RedfishClient]
-EsxiReader = Callable[[OsAccess, str], Awaitable[EsxiNetworkConfig]]
 
 
 class NotFoundError(LookupError):
@@ -35,6 +37,10 @@ class NotFoundError(LookupError):
 
 class ConflictError(ValueError):
     error_type = "conflict"
+
+
+class ConfirmationError(ValueError):
+    error_type = "confirmation_required"
 
 
 class Services:
@@ -46,7 +52,7 @@ class Services:
         cipher: CredentialCipher,
         *,
         client_factory: ClientFactory | None = None,
-        esxi_reader: EsxiReader | None = None,
+        esxi: EsxiOps | None = None,
         media: MediaRegistry | None = None,
     ) -> None:
         self.settings = settings
@@ -54,8 +60,19 @@ class Services:
         self.store = store
         self.runner = runner
         self._cipher = cipher
+        # Simulation mode (demos, black-box tests): one stateful BMC + ESXi pair shared by all clients.
+        self.sim_esxi = SimulatedEsxi(settings.simulate_esxi_dir) if settings.simulate_esxi_dir else None
+        self.sim_bmc = (
+            SimulatedBmc(
+                load_recording(settings.simulate_bmc_dir),
+                esxi=self.sim_esxi,
+                faults=frozenset(settings.simulate_faults),
+            )
+            if settings.simulate_bmc_dir
+            else None
+        )
         self._client_factory = client_factory or self._default_client
-        self._esxi_reader = esxi_reader or self._default_esxi_reader
+        self.esxi: EsxiOps = esxi or self.sim_esxi or LiveEsxiOps()
 
     # ── hosts ────────────────────────────────────────────────────────────
     def add_host(self, req: HostCreate) -> Host:
@@ -107,7 +124,7 @@ class Services:
 
         async def run(ctx: JobContext) -> dict[str, Any]:
             ctx.progress(0.1, f"Reading network configuration from {access.address}")
-            config = await self._esxi_reader(access, password)
+            config = await self.esxi.read_network(access, password)
             data = config.model_dump(mode="json")
             self.store.save_result(
                 host_id=host_id, kind=JobKind.OS_NETWORK.value, job_id=ctx.job.id, data=data
@@ -115,6 +132,55 @@ class Services:
             return {"os_network": data}
 
         return self.runner.submit(kind=JobKind.OS_NETWORK, host_id=host_id, params={}, func=run)
+
+    def start_install(self, host_id: str, req: InstallRequest) -> Job:
+        """Reinstall ESXi on the host. Destructive: requires the exact confirmation phrase."""
+        host = self.get_host(host_id)
+        expected = f"install {host.name}"
+        if req.confirm != expected:
+            raise ConfirmationError(f'Confirmation must be exactly "{expected}"')
+        if not Path(req.iso_path).is_file():
+            raise NotFoundError(f"ISO not found on the GroundZero host: {req.iso_path}")
+        profile = load_profile(req.profile)  # bad profile/variant is a 4xx, not a failed job
+        if req.variant is not None and req.variant not in profile.variants:
+            raise UnknownProfileError(
+                f"Unknown variant '{req.variant}'; choose from {sorted(profile.variants)}"
+            )
+        access, secret = self._os_access(host_id)
+        installer = Installer(
+            host=host,
+            bmc_password=self._cipher.decrypt(self._secret(host.id)),
+            os_access=access,
+            os_password=self._cipher.decrypt(secret),
+            request=req,
+            client_factory=self._client_factory,
+            esxi=self.esxi,
+            media=self.media,
+            media_dir=self.settings.media_dir,
+            media_base_url=self.settings.media_public_url,
+            media_port=self.settings.media_port,
+            timings=InstallTimings(
+                poll_seconds=self.settings.install_poll_seconds,
+                installer_boot_minutes=self.settings.installer_boot_minutes,
+            ),
+        )
+
+        async def run(ctx: JobContext) -> dict[str, Any]:
+            try:
+                result = await installer.run(ctx)
+            finally:
+                report = installer.last_report
+                if report is not None:
+                    self.store.save_result(
+                        host_id=host.id,
+                        kind=JobKind.INSTALL.value,
+                        job_id=ctx.job.id,
+                        data=report.model_dump(mode="json"),
+                    )
+            return result
+
+        params = req.model_dump(exclude={"confirm"})
+        return self.runner.submit(kind=JobKind.INSTALL, host_id=host.id, params=params, func=run)
 
     # ── jobs ─────────────────────────────────────────────────────────────
     def get_job(self, job_id: str) -> Job:
@@ -196,16 +262,8 @@ class Services:
             raise NotFoundError(f"Host {host_id} not found")
         return secret
 
-    async def _default_esxi_reader(self, access: OsAccess, password: str) -> EsxiNetworkConfig:
-        if self.settings.simulate_esxi_file is not None:
-            recorded = EsxiNetworkConfig.model_validate_json(self.settings.simulate_esxi_file.read_text())
-            return recorded.model_copy(update={"address": access.address})
-        return await read_network(access.address, access.username, password, verify_tls=access.verify_tls)
-
     def _default_client(self, host: Host, password: str) -> RedfishClient:
-        transport = None
-        if self.settings.simulate_bmc_dir is not None:
-            transport = replay_transport(load_recording(self.settings.simulate_bmc_dir))
+        transport = self.sim_bmc.transport() if self.sim_bmc else None
         return RedfishClient(
             host.bmc_address,
             host.username,

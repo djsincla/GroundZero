@@ -67,6 +67,16 @@ def _call(method: str, path: str, **kwargs: Any) -> Any:
     return resp.json() if resp.content else None
 
 
+def _call_optional(method: str, path: str) -> Any:
+    """Like _call, but a 404 returns None instead of exiting."""
+    try:
+        with _client() as client:
+            resp = client.request(method, path)
+    except httpx.ConnectError:
+        return None
+    return resp.json() if resp.status_code == 200 else None
+
+
 def _resolve_host(ref: str) -> dict[str, Any]:
     hosts: list[dict[str, Any]] = _call("GET", "/hosts")
     for host in hosts:
@@ -357,6 +367,73 @@ def _print_os_network(cfg: dict[str, Any]) -> None:
     console.print(nics)
     for vs in cfg["vswitches"]:
         console.print(Text(f"{vs['name']}: MTU {vs['mtu']}, uplinks {', '.join(vs['uplinks'])}"))
+
+
+# ── install ──────────────────────────────────────────────────────────────
+@app.command()
+def install(
+    host: str,
+    iso: Annotated[Path, typer.Option(help="Stock ESXi installer ISO")],
+    ntp: Annotated[list[str] | None, typer.Option(help="NTP server (repeatable)")] = None,
+    wipe_install_disk_vmfs: Annotated[
+        bool, typer.Option(help="Overwrite the VMFS datastore on the install disk (default: preserve)")
+    ] = False,
+    allow_legacy_cpu: Annotated[
+        bool | None, typer.Option(help="Force the CPU override on/off (default: from preflight)")
+    ] = None,
+    confirm: Annotated[
+        str | None, typer.Option(help='Non-interactive confirmation: "install <host name>"')
+    ] = None,
+) -> None:
+    """Reinstall ESXi on a host via its BMC (DESTRUCTIVE for the boot disk's system partitions)."""
+    h = _resolve_host(host)
+    os_access = _call("GET", f"/hosts/{h['id']}/os")
+    expected = f"install {h['name']}"
+    if confirm is None:
+        console.print(
+            Text(
+                f"This reinstalls ESXi on {h['name']} (BMC {h['bmc_address']}, "
+                f"OS {os_access['address']}) from {iso}.\n"
+                f"The install disk's VMFS datastore will be "
+                f"{'OVERWRITTEN' if wipe_install_disk_vmfs else 'preserved'}; other disks are not touched."
+            ),
+            style="yellow",
+        )
+        confirm = typer.prompt(f'Type "{expected}" to continue')
+    body: dict[str, Any] = {
+        "iso_path": str(iso.resolve()),
+        "confirm": confirm,
+        "wipe_install_disk_vmfs": wipe_install_disk_vmfs,
+        "allow_legacy_cpu": allow_legacy_cpu,
+    }
+    if ntp:
+        body["ntp_servers"] = ntp
+    job = _call("POST", f"/hosts/{h['id']}/install", json=body)
+    console.print(f"Install job {job['id']} started")
+    try:
+        _wait(job)
+    finally:
+        report = _call_optional("GET", f"/hosts/{h['id']}/install")
+        if report:
+            _print_install(report)
+
+
+def _print_install(report: dict[str, Any]) -> None:
+    console.print(
+        Text(
+            f"ESXi {report['iso_version']} build {report['iso_build']} on {report['host']} "
+            f"(was {report['previous_build'] or '?'}); media read {report['media_bytes_served'] // 2**20} MiB"
+        )
+    )
+    table = Table("Check", "OK", "Expected", "Observed")
+    for c in report["validation"]:
+        table.add_row(
+            Text(c["name"]), "yes" if c["ok"] else "[red]NO[/red]", Text(c["expected"]), Text(c["observed"])
+        )
+    if report["validation"]:
+        console.print(table)
+    audit = report.get("bmc_audit") or {}
+    console.print(Text(f"BMC writes: {', '.join(audit.get('non_get', [])) or 'none'}"), style="dim")
 
 
 # ── jobs ─────────────────────────────────────────────────────────────────

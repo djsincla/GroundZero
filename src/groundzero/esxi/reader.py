@@ -11,7 +11,10 @@ import ssl
 from typing import Any
 
 from groundzero.esxi.models import (
+    Datastore,
+    EsxiAbout,
     EsxiNetworkConfig,
+    EsxiStorage,
     PhysicalNic,
     PortGroup,
     SecurityPolicy,
@@ -141,12 +144,8 @@ def _read_network_blocking(address: str, username: str, password: str, verify_tl
     from pyVim.connect import Disconnect, SmartConnect
     from pyVmomi import vim
 
-    context = ssl.create_default_context()
-    if not verify_tls:
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
     try:
-        si = SmartConnect(host=address, user=username, pwd=password, sslContext=context)
+        si = SmartConnect(host=address, user=username, pwd=password, sslContext=_ssl_context(verify_tls))
     except vim.fault.InvalidLogin as exc:
         raise EsxiError(f"ESXi rejected the credentials for {address}") from exc
     except (OSError, ssl.SSLError) as exc:
@@ -189,3 +188,70 @@ async def read_network(
     address: str, username: str, password: str, *, verify_tls: bool = False
 ) -> EsxiNetworkConfig:
     return await asyncio.to_thread(_read_network_blocking, address, username, password, verify_tls)
+
+
+def extract_storage(mount_info: list[Any]) -> EsxiStorage:
+    datastores: list[Datastore] = []
+    boot_disk: str | None = None
+    for mount in mount_info:
+        volume = mount.volume
+        disks = [extent.diskName for extent in getattr(volume, "extent", None) or []]
+        if volume.name.startswith("OSDATA") and disks:
+            boot_disk = disks[0]
+        datastores.append(
+            Datastore(
+                name=volume.name, type=volume.type, capacity_gb=round(volume.capacity / 1e9, 1), disks=disks
+            )
+        )
+    return EsxiStorage(boot_disk=boot_disk, datastores=datastores)
+
+
+def _ssl_context(verify_tls: bool) -> ssl.SSLContext:
+    context = ssl.create_default_context()
+    if not verify_tls:
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    return context
+
+
+def _read_storage_blocking(address: str, username: str, password: str, verify_tls: bool) -> EsxiStorage:
+    from pyVim.connect import Disconnect, SmartConnect
+    from pyVmomi import vim
+
+    try:
+        si = SmartConnect(host=address, user=username, pwd=password, sslContext=_ssl_context(verify_tls))
+    except vim.fault.InvalidLogin as exc:
+        raise EsxiError(f"ESXi rejected the credentials for {address}") from exc
+    except (OSError, ssl.SSLError) as exc:
+        raise EsxiError(f"Cannot connect to ESXi at {address}: {exc}") from exc
+    try:
+        content = si.RetrieveContent()
+        view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
+        host = view.view[0]
+        view.Destroy()
+        return extract_storage(list(host.config.fileSystemVolume.mountInfo or []))
+    finally:
+        Disconnect(si)
+
+
+def _probe_about_blocking(address: str, timeout: float) -> EsxiAbout | None:
+    """Anonymous version/build query (no login). None when the host is not answering."""
+    from pyVim.connect import SmartStubAdapter
+    from pyVmomi import vim
+
+    try:
+        stub = SmartStubAdapter(host=address, sslContext=_ssl_context(False), connectionPoolTimeout=timeout)
+        about = vim.ServiceInstance("ServiceInstance", stub).RetrieveContent().about
+    except Exception:  # noqa: BLE001 - any failure here simply means "not up (yet)"
+        return None
+    return EsxiAbout(product=about.fullName, version=about.version, build=about.build)
+
+
+async def read_storage(
+    address: str, username: str, password: str, *, verify_tls: bool = False
+) -> EsxiStorage:
+    return await asyncio.to_thread(_read_storage_blocking, address, username, password, verify_tls)
+
+
+async def probe_about(address: str, *, timeout: float = 10.0) -> EsxiAbout | None:
+    return await asyncio.to_thread(_probe_about_blocking, address, timeout)

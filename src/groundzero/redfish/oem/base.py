@@ -6,8 +6,10 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
+from groundzero.redfish.capabilities import BmcCapabilities, VirtualMediaSlot
 from groundzero.redfish.client import RedfishClient
 from groundzero.redfish.detect import BmcIdentity, Vendor
+from groundzero.redfish.errors import RedfishError
 
 _TRUTHY = frozenset({"ENABLED", "ENABLE", "ON", "TRUE", "YES", "AUTO"})
 _FALSY = frozenset({"DISABLED", "DISABLE", "OFF", "FALSE", "NO"})
@@ -74,3 +76,26 @@ class VendorProfile:
     async def license(self, client: RedfishClient, identity: BmcIdentity) -> LicenseInfo | None:
         """BMC license tier, if the vendor gates features (like virtual media) behind one."""
         return None
+
+    def choose_cd_slot(self, caps: BmcCapabilities) -> VirtualMediaSlot | None:
+        """Standard Redfish: prefer a System-scoped virtual CD, then a Manager-scoped one."""
+        cds = [s for s in caps.virtual_media if s.is_cd and s.insert_target]
+        cds.sort(key=lambda s: "/Systems/" not in s.path)
+        return cds[0] if cds else None
+
+    async def set_one_time_cd_boot(
+        self, client: RedfishClient, identity: BmcIdentity, slot: VirtualMediaSlot
+    ) -> None:
+        """Standard Redfish one-time boot override to the (virtual) CD, UEFI mode."""
+        boot = {
+            "BootSourceOverrideTarget": "Cd",
+            "BootSourceOverrideEnabled": "Once",
+            "BootSourceOverrideMode": "UEFI",
+        }
+        await client.patch(identity.system_path, {"Boot": boot})
+        current = (await client.get_json(identity.system_path)).get("Boot", {})
+        if (current.get("BootSourceOverrideTarget"), current.get("BootSourceOverrideEnabled")) != (
+            "Cd",
+            "Once",
+        ):
+            raise RedfishError(f"Boot override did not take effect: {current}", path=identity.system_path)

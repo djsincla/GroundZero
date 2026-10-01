@@ -109,3 +109,27 @@ class EsxiNetworkConfig(BaseModel):
                 return match.device
         uplinks = self.management_uplinks()
         return uplinks[0] if uplinks else None
+
+
+class Datastore(BaseModel):
+    name: str
+    type: str
+    capacity_gb: float
+    disks: list[str] = Field(default_factory=list)
+
+
+class EsxiStorage(BaseModel):
+    boot_disk: str | None = Field(
+        default=None, description="Disk holding OSDATA/bootbanks (the install disk)"
+    )
+    datastores: list[Datastore] = Field(default_factory=list)
+
+    @property
+    def vmfs_names(self) -> list[str]:
+        return sorted(d.name for d in self.datastores if d.type == "VMFS")
+
+
+class EsxiAbout(BaseModel):
+    product: str
+    version: str
+    build: str

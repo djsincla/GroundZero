@@ -15,8 +15,9 @@ from groundzero.api.routers import hosts, jobs, meta
 from groundzero.core.config import Settings
 from groundzero.core.credentials import CredentialCipher
 from groundzero.core.jobs import JobRunner
-from groundzero.core.services import ClientFactory, EsxiReader, Services
+from groundzero.core.services import ClientFactory, Services
 from groundzero.core.store import Store
+from groundzero.esxi.ops import EsxiOps
 from groundzero.media.registry import MediaRegistry
 
 API_PREFIX = "/api/v1"
@@ -27,7 +28,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     client_factory: ClientFactory | None = None,
-    esxi_reader: EsxiReader | None = None,
+    esxi: EsxiOps | None = None,
     media: MediaRegistry | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
@@ -49,7 +50,7 @@ def create_app(
             runner,
             CredentialCipher(settings),
             client_factory=client_factory,
-            esxi_reader=esxi_reader,
+            esxi=esxi,
             media=media,
         )
         try:

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from groundzero.api.deps import ServicesDep
 from groundzero.core.models import Host, HostCreate, Job, JobKind, OsAccess, OsAccessSet
 from groundzero.esxi.models import EsxiNetworkConfig
+from groundzero.install.job import InstallReport, InstallRequest
 from groundzero.inventory.models import HostInventory
 from groundzero.preflight.evaluate import PreflightReport
 
@@ -91,3 +92,14 @@ async def start_os_network(host_id: str, services: ServicesDep, response: Respon
 @router.get("/{host_id}/os/network", response_model=EsxiNetworkConfig)
 def latest_os_network(host_id: str, services: ServicesDep) -> EsxiNetworkConfig:
     return EsxiNetworkConfig.model_validate(services.latest_result(host_id, JobKind.OS_NETWORK))
+
+
+@router.post("/{host_id}/install", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
+async def start_install(host_id: str, body: InstallRequest, services: ServicesDep, response: Response) -> Job:
+    """Reinstall ESXi on the host (destructive). `confirm` must be exactly "install <host name>"."""
+    return _accepted(response, services.start_install(host_id, body))
+
+
+@router.get("/{host_id}/install", response_model=InstallReport)
+def latest_install(host_id: str, services: ServicesDep) -> InstallReport:
+    return InstallReport.model_validate(services.latest_result(host_id, JobKind.INSTALL))

@@ -1,0 +1,89 @@
+{
+  "boot_disk": "t10.ATA_____DELLBOSS_VD_____________________________SN01",
+  "datastores": [
+    {
+      "capacity_gb": 342.5,
+      "disks": [
+        "t10.ATA_____DELLBOSS_VD_____________________________SN01"
+      ],
+      "name": "boss",
+      "type": "VMFS"
+    },
+    {
+      "capacity_gb": 999.9,
+      "disks": [
+        "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN02"
+      ],
+      "name": "esx1ds",
+      "type": "VMFS"
+    },
+    {
+      "capacity_gb": 999.9,
+      "disks": [
+        "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN03"
+      ],
+      "name": "esx2ds",
+      "type": "VMFS"
+    },
+    {
+      "capacity_gb": 999.9,
+      "disks": [
+        "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN04"
+      ],
+      "name": "esx3ds",
+      "type": "VMFS"
+    },
+    {
+      "capacity_gb": 999.9,
+      "disks": [
+        "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN05"
+      ],
+      "name": "localVM",
+      "type": "VMFS"
+    },
+    {
+      "capacity_gb": 999.9,
+      "disks": [
+        "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN06"
+      ],
+      "name": "esxi4ds",
+      "type": "VMFS"
+    },
+    {
+      "capacity_gb": 999.9,
+      "disks": [
+        "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN07"
+      ],
+      "name": "esxi5ds",
+      "type": "VMFS"
+    },
+    {
+      "capacity_gb": 4000.8,
+      "disks": [
+        "t10.NVMe____Dell_Express_Flash_NVMe_P4510_4TB_SFF___SN08"
+      ],
+      "name": "localHolodeck",
+      "type": "VMFS"
+    },
+    {
+      "capacity_gb": 128.6,
+      "disks": [
+        "t10.ATA_____DELLBOSS_VD_____________________________SN01"
+      ],
+      "name": "OSDATA-0000",
+      "type": "OTHER"
+    },
+    {
+      "capacity_gb": 4.3,
+      "disks": [],
+      "name": "BOOTBANK1",
+      "type": "OTHER"
+    },
+    {
+      "capacity_gb": 4.3,
+      "disks": [],
+      "name": "BOOTBANK2",
+      "type": "OTHER"
+    }
+  ]
+}

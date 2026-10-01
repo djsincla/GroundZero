@@ -26,8 +26,11 @@ class Settings(BaseSettings):
     # Simulation mode: serve every BMC from a recorded capture directory instead of the network.
     # Used for demos and black-box functional tests; reported by /healthz as mode "simulated".
     simulate_bmc_dir: Path | None = None
-    # Same idea for the installed OS: answer ESXi network reads from a recorded JSON capture.
-    simulate_esxi_file: Path | None = None
+    # Same idea for the installed OS: a simulated ESXi from a capture dir (network/storage/about.json).
+    simulate_esxi_dir: Path | None = None
+    simulate_faults: list[str] = []  # simulator fault injection, e.g. ["ignore-boot-once"]
+    install_poll_seconds: float = 20.0
+    installer_boot_minutes: float = 20.0
     # HTTPS listener BMCs download installer ISOs from (must be reachable from the BMC network).
     media_bind_host: str = "0.0.0.0"
     media_port: int = 443
@@ -42,6 +45,10 @@ class Settings(BaseSettings):
     @property
     def token_path(self) -> Path:
         return self.home / "api-token"
+
+    @property
+    def media_dir(self) -> Path:
+        return self.home / "media"
 
     @property
     def key_path(self) -> Path:
