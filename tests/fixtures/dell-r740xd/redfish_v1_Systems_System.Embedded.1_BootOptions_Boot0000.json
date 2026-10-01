@@ -1,0 +1,12 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#BootOption.BootOption",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/BootOptions/Boot0000",
+  "@odata.type": "#BootOption.v1_0_4.BootOption",
+  "BootOptionEnabled": true,
+  "BootOptionReference": "Boot0000",
+  "Description": "Current settings of the UEFI Boot option",
+  "DisplayName": "Disk connected to back USB 2: SD",
+  "Id": "Boot0000",
+  "Name": "Uefi Boot Option",
+  "UefiDevicePath": "PciRoot(0x0)/Pci(0x14,0x0)/USB(0x12,0x0)"
+}

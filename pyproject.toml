@@ -31,6 +31,7 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "paramiko>=5.0.0",
+    "pytest-playwright>=0.9.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -58,10 +59,13 @@ plugins = ["pydantic.mypy"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-q -m 'not live'"
+# Browser tests run in their own process (pytest -m browser): Playwright's sync API keeps an event loop
+# running that breaks pytest-asyncio tests sharing the session.
+addopts = "-q -m 'not live and not browser'"
 markers = [
     "functional: black-box tests driving the real server and CLI processes",
     "live: talks to real lab hardware configured in .env (opt-in: pytest -m live)",
+    "browser: drives the web UI in headless Chromium (Playwright)",
 ]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 

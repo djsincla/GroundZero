@@ -83,7 +83,7 @@
         "HyperThreadingCapable": "Yes",
         "HyperThreadingEnabled": "Yes",
         "Id": "CPU.Socket.1",
-        "LastSystemInventoryTime": "2026-06-16T09:22:38+00:00",
+        "LastSystemInventoryTime": "2026-10-02T03:06:10+00:00",
         "LastUpdateTime": "2025-09-24T00:07:06+00:00",
         "Name": "DellProcessor",
         "TurboModeCapable": "Yes",

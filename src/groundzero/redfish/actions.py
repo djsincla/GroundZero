@@ -120,18 +120,19 @@ async def boot_once_from_virtual_cd(
     url: str,
     *,
     action_timeout: float = 180.0,
-) -> VirtualMediaSlot:
-    """Mount ``url`` and arrange for the next boot (only) to use it. Returns the slot used."""
+) -> tuple[VirtualMediaSlot, str]:
+    """Mount ``url`` and arrange for the next boot (only) to use it. Returns (slot, boot method)."""
     slot = profile.choose_cd_slot(caps)
     if slot is None:
         raise BmcActionError("No virtual CD slot with InsertMedia on this BMC")
     try:
         await insert(client, slot, url, action_timeout=action_timeout)
-        await profile.set_one_time_cd_boot(client, identity, slot)
+        method = await profile.set_one_time_cd_boot(client, identity, caps)
+        logger.info("One-time boot to virtual CD via %s", method)
     except BaseException:
         await eject_if_ours(client, slot, url)  # leave the BMC as we found it, even if the mount half-worked
         raise
-    return slot
+    return slot, method
 
 
 async def wait_for_power(

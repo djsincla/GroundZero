@@ -87,6 +87,7 @@ class InstallReport(BaseModel):
     media_url_host: str
     media_bytes_served: int = 0
     reset_type: str | None = None
+    boot_method: str | None = None
     validation: list[ValidationCheck] = Field(default_factory=list)
     bmc_audit: BmcAudit | None = None
     durations_s: dict[str, float] = Field(default_factory=dict)
@@ -259,7 +260,7 @@ class Installer:
                 profile = profile_for(identity.vendor)
 
                 ctx.progress(0.12, "Mounting installer ISO and setting one-time boot")
-                slot = await actions.boot_once_from_virtual_cd(
+                slot, report.boot_method = await actions.boot_once_from_virtual_cd(
                     client, identity, caps, profile, url, action_timeout=self.t.action_timeout
                 )
                 ctx.progress(0.15, "Restarting the host into the installer")

@@ -183,7 +183,7 @@
     "MaxConcurrentSessions": 5,
     "ServiceEnabled": true
   },
-  "DateTime": "2026-09-30T21:48:54-05:00",
+  "DateTime": "2026-10-01T22:17:36-05:00",
   "DateTimeLocalOffset": "-05:00",
   "Description": "BMC",
   "EthernetInterfaces": {
@@ -202,7 +202,7 @@
     "@odata.id": "/redfish/v1/Managers/iDRAC.Embedded.1/HostInterfaces"
   },
   "Id": "iDRAC.Embedded.1",
-  "LastResetTime": "2025-10-11T17:50:36-05:00",
+  "LastResetTime": "2025-10-11T17:37:47-05:00",
   "Links": {
     "ActiveSoftwareImage": {
       "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Installed-25227-7.00.00.182__iDRAC.Embedded.1-1"
@@ -316,8 +316,8 @@
         "Description": "An instance of DelliDRACCard will have data specific to the Integrated Dell Remote Access Controller (iDRAC) in the managed system.",
         "IPMIVersion": "2.0",
         "Id": "iDRAC.Embedded.1-1_0x23_IDRACinfo",
-        "LastSystemInventoryTime": "2026-06-16T09:22:38+00:00",
-        "LastUpdateTime": "2026-10-01T02:48:36+00:00",
+        "LastSystemInventoryTime": "2026-10-02T03:06:10+00:00",
+        "LastUpdateTime": "2026-10-02T03:17:13+00:00",
         "Name": "DelliDRACCard",
         "URLString": "https://192.0.2.10:443"
       },

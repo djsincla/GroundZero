@@ -39,9 +39,10 @@
     "BootOrder": [
       "Boot0002",
       "Boot0001",
-      "Boot0000"
+      "Boot0000",
+      "Boot0003"
     ],
-    "BootOrder@odata.count": 3,
+    "BootOrder@odata.count": 4,
     "BootSourceOverrideEnabled": "Disabled",
     "BootSourceOverrideMode": "UEFI",
     "BootSourceOverrideTarget": "None",
@@ -91,7 +92,7 @@
   "Id": "System.Embedded.1",
   "IndicatorLED": "Lit",
   "IndicatorLED@Redfish.Deprecated": "Please migrate to use LocationIndicatorActive property",
-  "LastResetTime": "2026-06-16T04:22:40-05:00",
+  "LastResetTime": "2026-10-01T22:06:21-05:00",
   "Links": {
     "Chassis": [
       {
@@ -233,7 +234,7 @@
         "CoolingRollupStatus": "OK",
         "CurrentRollupStatus": "OK",
         "EstimatedExhaustTemperatureCelsius": 37,
-        "EstimatedSystemAirflowCFM": 52,
+        "EstimatedSystemAirflowCFM": 51,
         "ExpressServiceCode": "REDACTED",
         "FanRollupStatus": "OK",
         "IDSDMRedundancyStatus": null,
@@ -241,7 +242,7 @@
         "Id": "System.Embedded.1",
         "IntrusionRollupStatus": "OK",
         "IsOEMBranded": "False",
-        "LastSystemInventoryTime": "2026-06-16T09:22:38+00:00",
+        "LastSystemInventoryTime": "2026-10-02T03:06:10+00:00",
         "LastUpdateTime": "2025-10-20T07:34:47+00:00",
         "LicensingRollupStatus": "OK",
         "ManagedSystemSize": "2 U",

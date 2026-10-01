@@ -153,6 +153,41 @@
         "title": "BmcInfo",
         "type": "object"
       },
+      "BootOption": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "uefi_device_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uefi Device Path"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "BootOption",
+        "type": "object"
+      },
       "BootOverrideCapability": {
         "properties": {
           "allowed_modes": {
@@ -201,6 +236,14 @@
               }
             ],
             "title": "Current Target"
+          },
+          "options": {
+            "description": "UEFI boot options from the last POST",
+            "items": {
+              "$ref": "#/components/schemas/BootOption"
+            },
+            "title": "Options",
+            "type": "array"
           }
         },
         "title": "BootOverrideCapability",
@@ -686,6 +729,17 @@
                 "type": "null"
               }
             ]
+          },
+          "boot_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Boot Method"
           },
           "durations_s": {
             "additionalProperties": {

@@ -88,6 +88,7 @@ Functional testing is a first-class requirement. Every feature ships with tests 
 |---|---|---|
 | Unit / contract | Pure logic, API contract (OpenAPI snapshot), problem+json errors | `uv run pytest` |
 | **Functional (black-box)** | The real `groundzero serve` process and the real CLI over HTTP, against a recorded Dell R740xd | `uv run pytest -m functional` (also part of the default run) |
+| **Browser** | The web UI in headless Chromium (Playwright) against the simulated R740xd | `uv run pytest -m browser` |
 | **Live** | The same workflows against real lab hardware, with a check that preflight made no changes | `uv run pytest -m live` (opt-in) |
 
 ```bash

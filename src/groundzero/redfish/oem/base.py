@@ -84,18 +84,24 @@ class VendorProfile:
         return cds[0] if cds else None
 
     async def set_one_time_cd_boot(
-        self, client: RedfishClient, identity: BmcIdentity, slot: VirtualMediaSlot
-    ) -> None:
-        """Standard Redfish one-time boot override to the (virtual) CD, UEFI mode."""
-        boot = {
-            "BootSourceOverrideTarget": "Cd",
-            "BootSourceOverrideEnabled": "Once",
-            "BootSourceOverrideMode": "UEFI",
-        }
+        self, client: RedfishClient, identity: BmcIdentity, caps: BmcCapabilities
+    ) -> str:
+        """Standard Redfish one-time boot to the BMC's virtual CD. Returns the method used.
+
+        Prefers UefiTarget at the exact "Virtual Optical Drive" UEFI boot option (unambiguous);
+        falls back to the generic "Cd" target, which on some BMCs means a *physical* optical drive.
+        """
+        vcd = next(
+            (o for o in caps.boot_override.options if o.is_virtual_optical and o.uefi_device_path), None
+        )
+        if vcd is not None and "UefiTarget" in caps.boot_override.allowed_targets:
+            target, boot = "UefiTarget", {"UefiTargetBootSourceOverride": vcd.uefi_device_path}
+        else:
+            target, boot = "Cd", {}
+        boot.update({"BootSourceOverrideTarget": target, "BootSourceOverrideEnabled": "Once"})
         await client.patch(identity.system_path, {"Boot": boot})
         current = (await client.get_json(identity.system_path)).get("Boot", {})
-        if (current.get("BootSourceOverrideTarget"), current.get("BootSourceOverrideEnabled")) != (
-            "Cd",
-            "Once",
-        ):
+        applied = (current.get("BootSourceOverrideTarget"), current.get("BootSourceOverrideEnabled"))
+        if applied != (target, "Once"):
             raise RedfishError(f"Boot override did not take effect: {current}", path=identity.system_path)
+        return f"{target} {vcd.uefi_device_path}" if target == "UefiTarget" and vcd else target

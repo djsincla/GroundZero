@@ -57,7 +57,12 @@ def test_install_reinstalls_and_validates(simulated_r740xd: GroundZero) -> None:
 
     writes = [w.split("/redfish/v1/")[-1] for w in report["bmc_audit"]["non_get"]]
     assert "Managers/iDRAC.Embedded.1/VirtualMedia/CD/Actions/VirtualMedia.InsertMedia" in writes
-    assert "Managers/iDRAC.Embedded.1/Attributes" in writes  # Dell one-time boot to VCD-DVD
+    assert "Systems/System.Embedded.1" in writes  # standard Boot PATCH (one-time UefiTarget)
+    assert "Managers/iDRAC.Embedded.1/Attributes" not in writes  # VCD-DVD does not boot RFS media (live)
+    assert (
+        report["boot_method"]
+        == "UefiTarget PciRoot(0x0)/Pci(0x14,0x0)/USB(0xD,0x0)/USB(0x3,0x0)/USB(0x1,0x0)"
+    )
     assert "Systems/System.Embedded.1/Actions/ComputerSystem.Reset" in writes
     assert writes[-1].endswith("VirtualMedia.EjectMedia")  # media ejected last
     assert report["reset_type"] == "ForceRestart"

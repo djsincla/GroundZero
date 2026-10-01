@@ -6,6 +6,7 @@ Read-only: this module inspects resource ``Actions`` and allowable values, it ne
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -21,7 +22,21 @@ class ResetCapability(BaseModel):
     allowed_types: list[str] = Field(default_factory=list)
 
 
+class BootOption(BaseModel):
+    id: str
+    name: str | None = None
+    uefi_device_path: str | None = None
+
+    @property
+    def is_virtual_optical(self) -> bool:
+        """BMC virtual media as UEFI sees it ("Virtual Optical Drive" on iDRAC, "Virtual CD/DVD" else)."""
+        return bool(re.search(r"virtual\s*(optical|cd|dvd)", self.name or "", re.IGNORECASE))
+
+
 class BootOverrideCapability(BaseModel):
+    options: list[BootOption] = Field(
+        default_factory=list, description="UEFI boot options from the last POST"
+    )
     allowed_targets: list[str] = Field(default_factory=list)
     allowed_modes: list[str] = Field(default_factory=list)
     current_enabled: str | None = None
@@ -83,9 +98,24 @@ async def _reset(client: RedfishClient, system: dict[str, Any]) -> ResetCapabili
     return ResetCapability(target=action.get("target"), allowed_types=allowed)
 
 
-def _boot_override(system: dict[str, Any]) -> BootOverrideCapability:
+async def _boot_options(client: RedfishClient, system: dict[str, Any]) -> list[BootOption]:
+    link = system.get("Boot", {}).get("BootOptions", {}).get("@odata.id")
+    if not link:
+        return []
+    try:
+        members = await client.get_members(link)
+    except RedfishError:
+        return []
+    return [
+        BootOption(id=str(m.get("Id")), name=m.get("DisplayName"), uefi_device_path=m.get("UefiDevicePath"))
+        for m in members
+    ]
+
+
+async def _boot_override(client: RedfishClient, system: dict[str, Any]) -> BootOverrideCapability:
     boot = system.get("Boot", {})
     return BootOverrideCapability(
+        options=await _boot_options(client, system),
         allowed_targets=_allowable(boot, "BootSourceOverrideTarget"),
         allowed_modes=_allowable(boot, "BootSourceOverrideMode"),
         current_enabled=boot.get("BootSourceOverrideEnabled"),
@@ -135,6 +165,6 @@ async def discover_capabilities(
     resources = [r for r in (manager, system) if r]
     return BmcCapabilities(
         reset=await _reset(client, system),
-        boot_override=_boot_override(system),
+        boot_override=await _boot_override(client, system),
         virtual_media=await _virtual_media_slots(client, resources),
     )

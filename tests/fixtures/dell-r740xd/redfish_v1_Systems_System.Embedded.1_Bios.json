@@ -287,7 +287,7 @@
     "SerialComm": "REDACTED",
     "SerialPortAddress": "REDACTED",
     "SetBootOrderDis": "",
-    "SetBootOrderEn": "AHCI.Slot.1-2,GenericUSB.Placeholder.1-1,Disk.USBBack.2-1",
+    "SetBootOrderEn": "AHCI.Slot.1-2,GenericUSB.Placeholder.1-1,Disk.USBBack.2-1,Optical.iDRACVirtual.1-1",
     "SetBootOrderFqdd1": "",
     "SetBootOrderFqdd10": "",
     "SetBootOrderFqdd11": "",

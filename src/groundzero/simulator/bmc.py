@@ -140,15 +140,28 @@ class SimulatedBmc:
         return httpx.Response(204)
 
     def _consume_one_time_cd_boot(self) -> bool:
+        """Apply and clear a pending one-time boot; True if it targets the virtual CD (RFS) device.
+
+        Mirrors what the real R740xd (iDRAC 7.x) did: the Dell ServerBoot FirstBootDevice=VCD-DVD
+        attribute is consumed but does NOT boot Redfish-mounted (RFS) media; UefiTarget at the
+        "Virtual Optical Drive" boot option does.
+        """
         boot = self.responses[self._system_path()].setdefault("Boot", {})
-        if boot.get("BootSourceOverrideEnabled") == "Once" and boot.get("BootSourceOverrideTarget") == "Cd":
-            boot.update({"BootSourceOverrideEnabled": "Disabled", "BootSourceOverrideTarget": "None"})
+        if self.attributes.get("ServerBoot.1.FirstBootDevice") != "Normal":
+            self.attributes["ServerBoot.1.FirstBootDevice"] = "Normal"  # consumed, boots nothing from RFS
+        if boot.get("BootSourceOverrideEnabled") != "Once":
+            return False
+        target = boot.get("BootSourceOverrideTarget")
+        path = boot.get("UefiTargetBootSourceOverride")
+        boot.update({"BootSourceOverrideEnabled": "Disabled", "BootSourceOverrideTarget": "None"})
+        if target == "Cd":
             return True
-        if self.attributes.get("ServerBoot.1.BootOnce") == "Enabled" and self.attributes.get(
-            "ServerBoot.1.FirstBootDevice"
-        ) in ("VCD-DVD", "CD-DVD"):
-            self.attributes["ServerBoot.1.FirstBootDevice"] = "Normal"
-            return True
+        if target == "UefiTarget":
+            options = [v for k, v in self.responses.items() if "/BootOptions/" in k]
+            return any(
+                o.get("UefiDevicePath") == path and "virtual optical" in str(o.get("DisplayName", "")).lower()
+                for o in options
+            )
         return False
 
     async def _boot_installer(self, url: str) -> None:
