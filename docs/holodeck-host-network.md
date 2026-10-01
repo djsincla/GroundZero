@@ -32,8 +32,17 @@ this layout.
 | 3 | OK | All four trunk port groups accept promiscuous, MAC changes and forged transmits |
 | 4/5 | OK | Standalone host, so nothing is needed upstream |
 | 6 | OK | VLAN 100 port groups (VM Network, ManagementVM) can carry the Holorouter uplink |
-| 7 | **Gap** | No NTP server is configured |
+| 7 | **Gap** | No NTP server is configured. Lab decision: use **`pool.ntp.org`** |
 | | Note | The trunk port groups use only vmnic0. Management uses vmnic0 and vmnic1. |
 | | Note | The upstream ports Te1/0/11 and Te1/0/12 must allow MTU 9000 once the vSwitch is raised. Not yet verified. |
+
+## Reinstall spec for `esxi1` (decided with the lab owner)
+
+- ESXi 9.x with the CPU override (`allowLegacyCPU=true`; Skylake-SP is in Deprecated Mode)
+- Keep the existing VMFS datastore (`--preservevmfs`). No wipe unless it is explicitly confirmed.
+- Static management IP (same address as today, recorded in the host record and `.env`), VLAN 100.
+  Installed on vmnic0; vmnic1 is added as a second active uplink on first boot.
+- NTP: `pool.ntp.org`
+- After install: vSwitch MTU 9000, the trunk port groups (VLAN 4095, security set to Accept), NTP enabled
 
 A reinstall resets all of this. Post-install configuration must recreate requirements 1, 2, 3, 6 and 7.
