@@ -384,13 +384,20 @@ def _print_os_network(cfg: dict[str, Any]) -> None:
 @app.command()
 def install(
     host: str,
-    iso: Annotated[Path, typer.Option(help="Stock ESXi installer ISO")],
-    ntp: Annotated[list[str] | None, typer.Option(help="NTP server (repeatable)")] = None,
+    iso: Annotated[
+        str, typer.Option(help="Stock ISO: repository id or filename (see `isos list`), or a path")
+    ],
+    config: Annotated[
+        str | None, typer.Option(help="Config set name or id (default: capture from the running OS)")
+    ] = None,
+    hostname: Annotated[str | None, typer.Option(help="Per-server hostname (with --config)")] = None,
+    ip: Annotated[str | None, typer.Option(help="Per-server management IP (with --config)")] = None,
+    ntp: Annotated[list[str] | None, typer.Option(help="NTP server (repeatable; without --config)")] = None,
     wipe_install_disk_vmfs: Annotated[
-        bool, typer.Option(help="Overwrite the VMFS datastore on the install disk (default: preserve)")
+        bool, typer.Option(help="Overwrite the install disk's VMFS (without --config; default: preserve)")
     ] = False,
     allow_legacy_cpu: Annotated[
-        bool | None, typer.Option(help="Force the CPU override on/off (default: from preflight)")
+        bool | None, typer.Option(help="Force the CPU override on/off (without --config)")
     ] = None,
     confirm: Annotated[
         str | None, typer.Option(help='Non-interactive confirmation: "install <host name>"')
@@ -399,30 +406,33 @@ def install(
         int, typer.Option(help="Give up if the new build is not up after this long (10-240)")
     ] = 90,
 ) -> None:
-    """Reinstall ESXi on a host via its BMC (DESTRUCTIVE for the boot disk's system partitions)."""
+    """Install ESXi on a host via its BMC (DESTRUCTIVE for the boot disk's system partitions)."""
     h = _resolve_host(host)
-    os_access = _call("GET", f"/hosts/{h['id']}/os")
+    body: dict[str, Any] = {"timeout_minutes": timeout_minutes}
+    if Path(iso).is_file():
+        body["iso_path"] = str(Path(iso).resolve())
+    else:
+        body["iso_id"] = _resolve_iso(iso)["id"]
+    if config:
+        body["config_set_id"] = _resolve_config_set(config)["id"]
+        if hostname or ip:
+            stored = _call_optional("GET", f"/hosts/{h['id']}/host-values/esxi") or {}
+            body["host_values"] = {**stored, **{k: v for k, v in (("hostname", hostname), ("ip", ip)) if v}}
+    else:
+        body.update({"wipe_install_disk_vmfs": wipe_install_disk_vmfs, "allow_legacy_cpu": allow_legacy_cpu})
+        if ntp:
+            body["ntp_servers"] = ntp
     expected = f"install {h['name']}"
     if confirm is None:
-        console.print(
-            Text(
-                f"This reinstalls ESXi on {h['name']} (BMC {h['bmc_address']}, "
-                f"OS {os_access['address']}) from {iso}.\n"
-                f"The install disk's VMFS datastore will be "
-                f"{'OVERWRITTEN' if wipe_install_disk_vmfs else 'preserved'}; other disks are not touched."
-            ),
-            style="yellow",
-        )
+        preview_body = {**body, "confirm": "-"}
+        if config:
+            preview = _call("POST", f"/hosts/{h['id']}/install/preview", json=preview_body)
+            console.print(Text(preview["kickstart"]), style="dim")
+            for note in preview["notes"]:
+                console.print(Text(f"note: {note}"), style="dim")
+        console.print(Text(f"This installs ESXi on {h['name']} (BMC {h['bmc_address']})."), style="yellow")
         confirm = typer.prompt(f'Type "{expected}" to continue')
-    body: dict[str, Any] = {
-        "iso_path": str(iso.resolve()),
-        "confirm": confirm,
-        "wipe_install_disk_vmfs": wipe_install_disk_vmfs,
-        "allow_legacy_cpu": allow_legacy_cpu,
-        "timeout_minutes": timeout_minutes,
-    }
-    if ntp:
-        body["ntp_servers"] = ntp
+    body["confirm"] = confirm
     job = _call("POST", f"/hosts/{h['id']}/install", json=body)
     console.print(f"Install job {job['id']} started")
     try:
@@ -431,6 +441,80 @@ def install(
         report = _call_optional("GET", f"/hosts/{h['id']}/install")
         if report:
             _print_install(report)
+
+
+def _resolve_iso(ref: str) -> dict[str, Any]:
+    isos: list[dict[str, Any]] = _call("GET", "/isos") or _call("POST", "/isos/rescan")
+    for image in isos:
+        if ref in (image["id"], image["filename"]):
+            return image
+    _fail(f"no ISO matches '{ref}' in the repository (run `groundzero isos rescan`)")
+
+
+def _resolve_config_set(ref: str) -> dict[str, Any]:
+    for cs in _call("GET", "/config-sets"):
+        if ref in (cs["id"], cs["name"]):
+            return dict(cs)
+    _fail(f"no config set matches '{ref}'")
+
+
+# ── config sets & ISO repository ─────────────────────────────────────────
+config_app = typer.Typer(help="Config sets: shared OS settings applied at install.", no_args_is_help=True)
+isos_app = typer.Typer(help="Stock installer ISOs in the repository folder.", no_args_is_help=True)
+app.add_typer(config_app, name="config")
+app.add_typer(isos_app, name="isos")
+
+
+@config_app.command("list")
+def config_list() -> None:
+    table = Table("Name", "OS", "Source", "Password", "Updated")
+    for cs in _call("GET", "/config-sets"):
+        cells = (
+            cs["name"],
+            cs["os_family"],
+            cs["source"],
+            "set" if cs["has_root_password"] else "-",
+            cs["updated_at"][:16],
+        )
+        table.add_row(*(Text(c) for c in cells))
+    console.print(table)
+
+
+@config_app.command("show")
+def config_show(name: str) -> None:
+    console.print_json(data=_resolve_config_set(name))
+
+
+@config_app.command("capture")
+def config_capture(host: str, name: Annotated[str, typer.Option(help="Name for the new config set")]) -> None:
+    """Create a config set (and the host's per-server values) from its running OS. Read-only."""
+    h = _resolve_host(host)
+    job = _wait(_call("POST", f"/hosts/{h['id']}/os/capture", json={"name": name}))
+    console.print(f"Captured config set {escape(name)} ({job['result']['config_set_id']})")
+
+
+@config_app.command("delete")
+def config_delete(name: str) -> None:
+    cs = _resolve_config_set(name)
+    _call("DELETE", f"/config-sets/{cs['id']}")
+    console.print(f"Deleted config set {escape(cs['name'])}")
+
+
+@isos_app.command("list")
+def isos_list(rescan: Annotated[bool, typer.Option(help="Rescan the folder first")] = True) -> None:
+    isos = _call("POST", "/isos/rescan") if rescan else _call("GET", "/isos")
+    table = Table("ID", "File", "OS", "Version", "Build", "Size")
+    for i in isos:
+        cells = (
+            i["id"],
+            i["filename"],
+            i["os_family"] or "?",
+            i["version"] or "-",
+            i["build"] or "-",
+            f"{i['size'] / 2**20:.0f} MiB",
+        )
+        table.add_row(*(Text(c) for c in cells))
+    console.print(table)
 
 
 def _print_install(report: dict[str, Any]) -> None:

@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     media_cleanup_watch_seconds: float = 90.0  # after a failed mount, watch for a late attach to eject
     installer_boot_minutes: float = 20.0
     # HTTPS listener BMCs download installer ISOs from (must be reachable from the BMC network).
+    iso_repository: Path | None = None  # folder of stock ISOs (default ./images); GROUNDZERO_ISO_REPOSITORY
     media_bind_host: str = "0.0.0.0"
     media_port: int = 443
     media_public_url: str | None = None  # e.g. https://203.0.113.124; default: auto-detect per BMC
@@ -49,6 +50,10 @@ class Settings(BaseSettings):
     @property
     def token_path(self) -> Path:
         return self.home / "api-token"
+
+    @property
+    def iso_dir(self) -> Path:
+        return self.iso_repository or Path("images")
 
     @property
     def media_dir(self) -> Path:

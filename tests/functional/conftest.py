@@ -20,6 +20,7 @@ def _simulated(tmp_path: Path, **extra: str) -> GroundZero:
             "GROUNDZERO_INSTALLER_BOOT_MINUTES": "0.5",
             "GROUNDZERO_MEDIA_SETTLE_SECONDS": "0",
             "GROUNDZERO_MEDIA_CLEANUP_WATCH_SECONDS": "8",
+            "GROUNDZERO_ISO_REPOSITORY": str(tmp_path / "isos"),
             **extra,
         },
     )
@@ -67,6 +68,15 @@ def simulated_r740xd_late_attach(tmp_path: Path) -> Iterator[GroundZero]:
 def simulated_r740xd_kickstart_error(tmp_path: Path) -> Iterator[GroundZero]:
     """The simulated installer rejects the kickstart and reboots into the old ESXi (seen live)."""
     gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_FAULTS='["kickstart-error"]')
+    gz.start()
+    yield gz
+    gz.stop()
+
+
+@pytest.fixture
+def simulated_r740xd_os_unreachable(tmp_path: Path) -> Iterator[GroundZero]:
+    """The installed OS answers nothing until GroundZero reinstalls it (e.g. a wiped or hung host)."""
+    gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_FAULTS='["os-unreachable"]')
     gz.start()
     yield gz
     gz.stop()

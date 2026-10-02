@@ -5,21 +5,38 @@ HTTP handlers stay thin; everything here is plain Python that can be tested with
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, ValidationError
+
 from groundzero.core.config import Settings
 from groundzero.core.credentials import CredentialCipher
 from groundzero.core.jobs import JobContext, JobRunner
-from groundzero.core.models import BmcAudit, Host, HostCreate, Job, JobKind, OsAccess, OsAccessSet
+from groundzero.core.models import (
+    BmcAudit,
+    ConfigSet,
+    ConfigSetWrite,
+    Host,
+    HostCreate,
+    Job,
+    JobKind,
+    OsAccess,
+    OsAccessSet,
+)
 from groundzero.core.store import Store
 from groundzero.esxi.ops import EsxiOps, LiveEsxiOps
-from groundzero.install.job import Installer, InstallRequest, InstallTimings
+from groundzero.install.job import InstallConfig, Installer, InstallRequest, InstallTimings
+from groundzero.install.kickstart import render_kickstart
 from groundzero.inventory.collect import collect_inventory
 from groundzero.inventory.models import HostInventory
+from groundzero.isos import IsoImage, IsoRepository
 from groundzero.media.registry import MediaRegistry
+from groundzero.osconfig import PLUGINS, OsConfigError, plugin_for
+from groundzero.osconfig.esxi import EsxiHostValues, EsxiPlugin, EsxiSettings
 from groundzero.preflight.evaluate import UnknownProfileError, evaluate, load_profile
 from groundzero.redfish.capture import load_recording
 from groundzero.redfish.client import RedfishClient
@@ -43,6 +60,40 @@ class ConfirmationError(ValueError):
     error_type = "confirmation_required"
 
 
+class SettingsValidationError(ValueError):
+    """Settings failed the OS family's schema; carries field-level errors for the UI."""
+
+    error_type = "validation_error"
+
+    def __init__(self, where: str, exc: ValidationError) -> None:
+        self.errors: list[dict[str, object]] = [
+            {"loc": [where, *e["loc"]], "msg": e["msg"], "type": e["type"]} for e in exc.errors()
+        ]
+        super().__init__(
+            f"Invalid {where}: "
+            + "; ".join(f"{'.'.join(str(x) for x in e['loc'])}: {e['msg']}" for e in exc.errors())
+        )
+
+
+class OsFamily(BaseModel):
+    family: str
+    title: str
+    install_supported: bool
+    settings_schema: dict[str, Any]
+    host_values_schema: dict[str, Any]
+    secret_fields: list[str]
+
+
+class InstallPreview(BaseModel):
+    """What a deployment would do, without touching the BMC or the server."""
+
+    iso: IsoImage | None
+    config_set: str | None
+    spec: dict[str, Any]
+    kickstart: str  # root password hash masked
+    notes: list[str]
+
+
 class Services:
     def __init__(
         self,
@@ -61,7 +112,14 @@ class Services:
         self.runner = runner
         self._cipher = cipher
         # Simulation mode (demos, black-box tests): one stateful BMC + ESXi pair shared by all clients.
-        self.sim_esxi = SimulatedEsxi(settings.simulate_esxi_dir) if settings.simulate_esxi_dir else None
+        self.sim_esxi = (
+            SimulatedEsxi(
+                settings.simulate_esxi_dir,
+                unreachable_until_installed="os-unreachable" in settings.simulate_faults,
+            )
+            if settings.simulate_esxi_dir
+            else None
+        )
         self.sim_bmc = (
             SimulatedBmc(
                 load_recording(settings.simulate_bmc_dir),
@@ -72,6 +130,8 @@ class Services:
             else None
         )
         self._client_factory = client_factory or self._default_client
+        settings.ensure_home()
+        self.isos = IsoRepository(settings.iso_dir, settings.home / "iso-cache.json")
         self.esxi: EsxiOps = esxi or self.sim_esxi or LiveEsxiOps()
 
     # ── hosts ────────────────────────────────────────────────────────────
@@ -139,20 +199,29 @@ class Services:
         expected = f"install {host.name}"
         if req.confirm != expected:
             raise ConfirmationError(f'Confirmation must be exactly "{expected}"')
-        if not Path(req.iso_path).is_file():
-            raise NotFoundError(f"ISO not found on the GroundZero host: {req.iso_path}")
+        req = req.model_copy(update={"iso_path": str(self._resolve_iso(req))})
         profile = load_profile(req.profile)  # bad profile/variant is a 4xx, not a failed job
         if req.variant is not None and req.variant not in profile.variants:
             raise UnknownProfileError(
                 f"Unknown variant '{req.variant}'; choose from {sorted(profile.variants)}"
             )
-        access, secret = self._os_access(host_id)
+        stored_access = self.store.get_os_access(host_id)
+        access = stored_access[0] if stored_access else None
+        os_password = self._cipher.decrypt(stored_access[1]) if stored_access else None
+        config = self._install_config(host, req, os_password)
+        if config is None and access is None:
+            raise NotFoundError(
+                f"No OS access configured for host {host_id}; set it, or install with a config set"
+            )
+        if config is not None:
+            self.store.set_host_values(host.id, EsxiPlugin.family, config.values.model_dump(mode="json"))
         installer = Installer(
             host=host,
             bmc_password=self._cipher.decrypt(self._secret(host.id)),
             os_access=access,
-            os_password=self._cipher.decrypt(secret),
+            os_password=os_password,
             request=req,
+            config=config,
             client_factory=self._client_factory,
             esxi=self.esxi,
             media=self.media,
@@ -172,6 +241,20 @@ class Services:
         async def run(ctx: JobContext) -> dict[str, Any]:
             try:
                 result = await installer.run(ctx)
+                if installer.last_network is not None:
+                    # Keep the host's "installed OS" view current without an extra read.
+                    self.store.save_result(
+                        host_id=host.id,
+                        kind=JobKind.OS_NETWORK.value,
+                        job_id=ctx.job.id,
+                        data=installer.last_network.model_dump(mode="json"),
+                    )
+                if config is not None:  # the host now answers at the configured IP with the set's password
+                    self.store.set_os_access(
+                        host.id,
+                        installer.new_access,
+                        self._cipher.encrypt(config.root_password),
+                    )
             finally:
                 report = installer.last_report
                 if report is not None:
@@ -183,8 +266,158 @@ class Services:
                     )
             return result
 
-        params = req.model_dump(exclude={"confirm"})
+        params = req.model_dump(exclude={"confirm", "host_values"})
         return self.runner.submit(kind=JobKind.INSTALL, host_id=host.id, params=params, func=run)
+
+    def preview_install(self, host_id: str, req: InstallRequest) -> InstallPreview:
+        """Build the spec and kickstart a deployment would use. No BMC or OS calls."""
+        host = self.get_host(host_id)
+        notes: list[str] = []
+        iso = None
+        if req.iso_id:
+            resolved = self.isos.resolve(req.iso_id)
+            if resolved is None:
+                raise NotFoundError(
+                    f"ISO {req.iso_id} is not in the repository; rescan or check {self.settings.iso_dir}"
+                )
+            iso = resolved[0]
+        stored_access = self.store.get_os_access(host_id)
+        os_password = self._cipher.decrypt(stored_access[1]) if stored_access else None
+        config = self._install_config(host, req, os_password)
+        if config is None:
+            raise OsConfigError(
+                "Preview needs a config set (without one, settings are captured at install time)"
+            )
+        current_disk = None
+        if config.settings.install_disk.mode == "current-boot-disk":
+            current_disk = "CURRENT-BOOT-DISK"  # placeholder: read from the running OS at install time
+            notes.append(
+                "The install disk is the current boot disk, read from the running OS at install time."
+            )
+        if config.settings.cpu_override == "auto":
+            notes.append("The CPU override is decided by the preflight at install time (previewed as on).")
+        spec = EsxiPlugin.build_spec(
+            config.settings,
+            config.values,
+            root_password=config.root_password,
+            legacy_cpu_detected=True,
+            current_boot_disk=current_disk,
+        )
+        masked = render_kickstart(spec).replace(spec.root_password_hash, "$6$<hidden>")
+        return InstallPreview(
+            iso=iso,
+            config_set=self._config_set_name(req.config_set_id),
+            spec=spec.model_dump(mode="json", exclude={"root_password_hash"}),
+            kickstart=masked,
+            notes=notes,
+        )
+
+    # ── OS families, config sets, host values ───────────────────────────
+    def list_os_families(self) -> list[OsFamily]:
+        return [
+            OsFamily(
+                family=p.family,
+                title=p.title,
+                install_supported=p.install_supported,
+                settings_schema=p.settings_model.model_json_schema(),
+                host_values_schema=p.host_values_model.model_json_schema(),
+                secret_fields=list(p.secret_fields),
+            )
+            for p in PLUGINS.values()
+        ]
+
+    def list_config_sets(self) -> list[ConfigSet]:
+        return self.store.list_config_sets()
+
+    def get_config_set(self, set_id: str) -> ConfigSet:
+        found = self.store.get_config_set(set_id)
+        if found is None:
+            raise NotFoundError(f"Config set {set_id} not found")
+        return found[0]
+
+    def create_config_set(self, req: ConfigSetWrite, source: str = "manual") -> ConfigSet:
+        settings = self._validated_settings(req.os_family, req.settings)
+        if self.store.find_config_set_by_name(req.name):
+            raise ConflictError(f"A config set named '{req.name}' already exists")
+        return self.store.add_config_set(
+            name=req.name,
+            os_family=req.os_family,
+            settings=settings,
+            secrets=self._seal(req.root_password.get_secret_value()) if req.root_password else None,
+            source=source,
+        )
+
+    def update_config_set(self, set_id: str, req: ConfigSetWrite) -> ConfigSet:
+        current = self.get_config_set(set_id)
+        if req.os_family != current.os_family:
+            raise OsConfigError("The OS family of a config set cannot be changed; create a new one")
+        other = self.store.find_config_set_by_name(req.name)
+        if other is not None and other.id != set_id:
+            raise ConflictError(f"A config set named '{req.name}' already exists")
+        settings = self._validated_settings(req.os_family, req.settings)
+        self.store.update_config_set(
+            set_id,
+            name=req.name,
+            settings=settings,
+            secrets=self._seal(req.root_password.get_secret_value()) if req.root_password else None,
+            keep_secrets=req.root_password is None,
+        )
+        return self.get_config_set(set_id)
+
+    def delete_config_set(self, set_id: str) -> None:
+        if not self.store.delete_config_set(set_id):
+            raise NotFoundError(f"Config set {set_id} not found")
+
+    def get_host_values(self, host_id: str, family: str) -> dict[str, Any]:
+        self.get_host(host_id)
+        plugin_for(family)
+        values = self.store.get_host_values(host_id, family)
+        if values is None:
+            raise NotFoundError(f"No {family} values stored for host {host_id}; capture or set them")
+        return values
+
+    def set_host_values(self, host_id: str, family: str, values: dict[str, Any]) -> dict[str, Any]:
+        self.get_host(host_id)
+        model = plugin_for(family).host_values_model
+        data = self._validate(model, values, "host_values")
+        self.store.set_host_values(host_id, family, data)
+        return data
+
+    def start_os_capture(self, host_id: str, name: str) -> Job:
+        host = self.get_host(host_id)
+        if self.store.find_config_set_by_name(name):
+            raise ConflictError(f"A config set named '{name}' already exists")
+        access, secret = self._os_access(host_id)
+        password = self._cipher.decrypt(secret)
+
+        async def run(ctx: JobContext) -> dict[str, Any]:
+            ctx.progress(0.2, f"Reading configuration from {access.address}")
+            network = await self.esxi.read_network(access, password)
+            storage = await self.esxi.read_storage(access, password)
+            captured = EsxiPlugin.capture(network, storage)
+            ctx.progress(0.8, "Saving config set")
+            config_set = self.create_config_set(
+                ConfigSetWrite(
+                    name=name,
+                    os_family=EsxiPlugin.family,
+                    settings=captured.settings,
+                    root_password=password,
+                ),
+                source=f"captured from {host.name} ({access.address})",
+            )
+            self.store.set_host_values(host.id, EsxiPlugin.family, captured.host_values)
+            return {"config_set_id": config_set.id, "host_values": captured.host_values}
+
+        return self.runner.submit(kind=JobKind.OS_CAPTURE, host_id=host.id, params={"name": name}, func=run)
+
+    # ── ISO repository ───────────────────────────────────────────────────
+    def list_isos(self) -> list[IsoImage]:
+        return self.isos.list()
+
+    async def rescan_isos(self) -> list[IsoImage]:
+        import asyncio
+
+        return await asyncio.to_thread(self.isos.scan)
 
     # ── jobs ─────────────────────────────────────────────────────────────
     def get_job(self, job_id: str) -> Job:
@@ -252,6 +485,74 @@ class Services:
             data=inventory.model_dump(mode="json"),
         )
         return inventory, audit
+
+    def _resolve_iso(self, req: InstallRequest) -> Path:
+        if req.iso_id:
+            resolved = self.isos.resolve(req.iso_id)
+            if resolved is None:
+                raise NotFoundError(
+                    f"ISO {req.iso_id} is not in the repository; rescan or check {self.settings.iso_dir}"
+                )
+            image, path = resolved
+            if image.os_family != EsxiPlugin.family:
+                raise OsConfigError(f"{image.filename} is not an ESXi installer ISO")
+            return path
+        if req.iso_path and Path(req.iso_path).is_file():
+            return Path(req.iso_path)
+        raise NotFoundError(f"ISO not found: {req.iso_path or req.iso_id}")
+
+    def _install_config(
+        self, host: Host, req: InstallRequest, os_password: str | None
+    ) -> InstallConfig | None:
+        if req.config_set_id is None:
+            return None
+        found = self.store.get_config_set(req.config_set_id)
+        if found is None:
+            raise NotFoundError(f"Config set {req.config_set_id} not found")
+        config_set, sealed = found
+        if config_set.os_family != EsxiPlugin.family:
+            raise OsConfigError(f"Config set '{config_set.name}' is for {config_set.os_family}, not ESXi")
+        raw_values = req.host_values or self.store.get_host_values(host.id, EsxiPlugin.family)
+        if raw_values is None:
+            raise OsConfigError(
+                f"Per-server values (hostname, ip) are needed for {host.name}: pass host_values, "
+                "set them for the host, or capture from its running OS"
+            )
+        values = EsxiHostValues.model_validate(self._validate(EsxiHostValues, raw_values, "host_values"))
+        root_password = self._unseal(sealed).get("root_password") if sealed else None
+        root_password = root_password or os_password
+        if not root_password:
+            raise OsConfigError(
+                f"Config set '{config_set.name}' has no root password and the host has no OS access"
+            )
+        return InstallConfig(
+            settings=EsxiSettings.model_validate(config_set.settings),
+            values=values,
+            root_password=root_password,
+        )
+
+    def _config_set_name(self, set_id: str | None) -> str | None:
+        if set_id is None:
+            return None
+        found = self.store.get_config_set(set_id)
+        return found[0].name if found else None
+
+    def _validated_settings(self, family: str, settings: dict[str, Any]) -> dict[str, Any]:
+        return self._validate(plugin_for(family).settings_model, settings, "settings")
+
+    @staticmethod
+    def _validate(model: type[BaseModel], data: dict[str, Any], where: str) -> dict[str, Any]:
+        try:
+            return model.model_validate(data).model_dump(mode="json")
+        except ValidationError as exc:
+            raise SettingsValidationError(where, exc) from exc
+
+    def _seal(self, root_password: str) -> bytes:
+        return self._cipher.encrypt(json.dumps({"root_password": root_password}))
+
+    def _unseal(self, sealed: bytes) -> dict[str, str]:
+        data: dict[str, str] = json.loads(self._cipher.decrypt(sealed))
+        return data
 
     def _os_access(self, host_id: str) -> tuple[OsAccess, bytes]:
         self.get_host(host_id)

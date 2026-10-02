@@ -33,6 +33,7 @@ class JobKind(StrEnum):
     PREFLIGHT = "preflight"
     OS_NETWORK = "os_network"
     INSTALL = "install"
+    OS_CAPTURE = "os_capture"
 
 
 class OsAccessSet(BaseModel):
@@ -95,3 +96,30 @@ class JobEvent(BaseModel):
     progress: float
     message: str
     at: datetime
+
+
+class ConfigSetWrite(BaseModel):
+    """Create or replace a config set. ``settings`` is validated against the OS family's schema."""
+
+    name: str = Field(min_length=1, max_length=80)
+    os_family: str = Field(description="OS family, see GET /os-families")
+    settings: dict[str, Any]
+    root_password: SecretStr | None = Field(
+        default=None,
+        description="Root/admin password set by the install. On update, omit to keep the stored one.",
+    )
+
+
+class ConfigSet(BaseModel):
+    id: str
+    name: str
+    os_family: str
+    settings: dict[str, Any]
+    has_root_password: bool
+    source: str = Field(description='"manual" or "captured from <host> (<address>)"')
+    created_at: datetime
+    updated_at: datetime
+
+
+class OsCaptureRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80, description="Name for the new config set")

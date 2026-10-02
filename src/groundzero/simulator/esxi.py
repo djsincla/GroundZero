@@ -18,6 +18,7 @@ import pycdlib
 
 from groundzero.core.models import OsAccess
 from groundzero.esxi.models import EsxiAbout, EsxiNetworkConfig, EsxiStorage, VmkInterface
+from groundzero.esxi.reader import EsxiError
 
 
 def _read_iso_file(iso_bytes: bytes, path: str) -> str:
@@ -40,7 +41,11 @@ def _options(line: str) -> dict[str, str]:
 
 
 class SimulatedEsxi:
-    def __init__(self, capture_dir: Path, *, boot_delay: float = 0.5) -> None:
+    def __init__(
+        self, capture_dir: Path, *, boot_delay: float = 0.5, unreachable_until_installed: bool = False
+    ) -> None:
+        """``unreachable_until_installed``: the host answers nothing until the simulated installer has run."""
+        self.unreachable = unreachable_until_installed
         self.network = EsxiNetworkConfig.model_validate_json((capture_dir / "network.json").read_text())
         self.storage = EsxiStorage.model_validate_json((capture_dir / "storage.json").read_text())
         self.about: EsxiAbout | None = EsxiAbout.model_validate_json((capture_dir / "about.json").read_text())
@@ -50,13 +55,19 @@ class SimulatedEsxi:
 
     # ── EsxiOps ──────────────────────────────────────────────────────────
     async def read_network(self, access: OsAccess, password: str) -> EsxiNetworkConfig:
+        self._reachable(access.address)
         return self.network.model_copy(update={"address": access.address})
 
     async def read_storage(self, access: OsAccess, password: str) -> EsxiStorage:
+        self._reachable(access.address)
         return self.storage.model_copy(deep=True)
 
     async def probe(self, address: str) -> EsxiAbout | None:
-        return self.about
+        return None if self.unreachable else self.about
+
+    def _reachable(self, address: str) -> None:
+        if self.unreachable or self.about is None:
+            raise EsxiError(f"Cannot connect to ESXi at {address}: simulated host is not answering")
 
     # ── driven by the simulated BMC ──────────────────────────────────────
     def power_off(self) -> None:
@@ -98,6 +109,9 @@ class SimulatedEsxi:
         old_mgmt = self.network.management
         self.network = self.network.model_copy(
             update={
+                "product": f"VMware ESXi {version}",
+                "version": version,
+                "build": build,
                 "hostname": net["hostname"],
                 "default_gateway": net["gateway"],
                 "dns_servers": net["nameserver"].split(","),
@@ -116,7 +130,7 @@ class SimulatedEsxi:
                 ],
             }
         )
-        if "overwritevmfs" in install:
+        if "overwritevmfs" in install and "disk" in install:
             disk = install["disk"]
             self.storage = self.storage.model_copy(
                 update={
@@ -127,3 +141,4 @@ class SimulatedEsxi:
             )
         self.about = EsxiAbout(product=f"VMware ESXi {version}", version=version, build=build)
         self.installs += 1
+        self.unreachable = False

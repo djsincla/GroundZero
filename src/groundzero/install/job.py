@@ -32,6 +32,7 @@ from groundzero.install.kickstart import render_kickstart
 from groundzero.install.spec import InstallSpec, ManagementNetwork
 from groundzero.inventory.collect import collect_inventory
 from groundzero.media.registry import MediaFetch, MediaRegistry, media_url, source_address_towards
+from groundzero.osconfig.esxi import EsxiHostValues, EsxiPlugin, EsxiSettings
 from groundzero.preflight.evaluate import CheckStatus, evaluate
 from groundzero.redfish import actions
 from groundzero.redfish.capabilities import VirtualMediaSlot, discover_capabilities
@@ -55,8 +56,19 @@ class InstallError(Exception):
 
 
 class InstallRequest(BaseModel):
-    iso_path: str = Field(description="Stock ESXi installer ISO on the GroundZero host")
+    iso_id: str | None = Field(default=None, description="Stock ISO from the repository (GET /isos)")
+    iso_path: str | None = Field(
+        default=None, description="Alternative to iso_id: a path on the GroundZero host"
+    )
     confirm: str = Field(description='Must be exactly "install <host name>"')
+    config_set_id: str | None = Field(
+        default=None,
+        description="Config set to apply. Without one, settings are captured from the running OS "
+        "(and ntp_servers / wipe_install_disk_vmfs / allow_legacy_cpu below apply).",
+    )
+    host_values: dict[str, Any] | None = Field(
+        default=None, description="Per-server values (hostname, ip, ...); default: remembered for this host"
+    )
     ntp_servers: list[str] = Field(default_factory=lambda: ["pool.ntp.org"])
     wipe_install_disk_vmfs: bool = Field(default=False, description="Overwrite VMFS on the install disk")
     allow_legacy_cpu: bool | None = Field(default=None, description="Default: on if preflight flags the CPU")
@@ -140,21 +152,30 @@ def derive_spec(
     )
 
 
+def _on_install_disk(spec: InstallSpec, disks: list[str]) -> bool:
+    if spec.install_disk:
+        return spec.install_disk in disks
+    tokens = [t.upper() for t in (spec.install_firstdisk or "").split(",") if t and t.lower() != "local"]
+    return any(tok in disk.upper() for disk in disks for tok in tokens)
+
+
 def validate_install(
     spec: InstallSpec,
     expected_build: str | None,
     about: EsxiAbout | None,
     network: EsxiNetworkConfig,
     storage: EsxiStorage,
-    before: EsxiStorage,
+    before: EsxiStorage | None,
 ) -> list[ValidationCheck]:
     net = spec.network
     mgmt = network.management
-    expected_vmfs = before.vmfs_names
-    if spec.preserve_vmfs is False:  # a wiped install disk loses its VMFS by design
-        expected_vmfs = [
-            d.name for d in before.datastores if d.type == "VMFS" and spec.install_disk not in d.disks
-        ]
+    expected_vmfs: list[str] = []
+    if before is not None:
+        expected_vmfs = before.vmfs_names
+        if spec.preserve_vmfs is False:  # a wiped install disk loses its VMFS by design
+            expected_vmfs = [
+                d.name for d in before.datastores if d.type == "VMFS" and not _on_install_disk(spec, d.disks)
+            ]
     missing = sorted(set(expected_vmfs) - set(storage.vmfs_names))
     uplinks = sorted([net.install_nic, *net.extra_uplinks])
 
@@ -178,9 +199,22 @@ def validate_install(
             "ntp", set(spec.ntp_servers) <= set(network.ntp_servers), spec.ntp_servers, network.ntp_servers
         ),
         check(
-            "datastores", not missing, expected_vmfs, f"missing {missing}" if missing else storage.vmfs_names
+            "datastores",
+            not missing,
+            expected_vmfs
+            if before is not None
+            else "not checked: the OS was not readable before the install",
+            f"missing {missing}" if missing else storage.vmfs_names,
         ),
     ]
+
+
+class InstallConfig(BaseModel):
+    """A resolved config set for one server: shared settings + per-server values + root password."""
+
+    settings: EsxiSettings
+    values: EsxiHostValues
+    root_password: str
 
 
 class Installer:
@@ -189,9 +223,10 @@ class Installer:
         *,
         host: Host,
         bmc_password: str,
-        os_access: OsAccess,
-        os_password: str,
+        os_access: OsAccess | None,
+        os_password: str | None,
         request: InstallRequest,
+        config: InstallConfig | None = None,
         client_factory: Callable[[Host, str], RedfishClient],
         esxi: EsxiOps,
         media: MediaRegistry,
@@ -205,6 +240,14 @@ class Installer:
         self.access = os_access
         self.os_password = os_password
         self.req = request
+        self.config = config
+        # The *new* OS is reached at the configured IP with the configured root password.
+        if config is not None:
+            self.new_access = OsAccess(address=config.values.ip, username="root", verify_tls=False)
+            self.new_password = config.root_password
+        else:
+            assert os_access is not None and os_password is not None
+            self.new_access, self.new_password = os_access, os_password
         self.client_factory = client_factory
         self.esxi = esxi
         self.media = media
@@ -213,6 +256,7 @@ class Installer:
         self.media_port = media_port
         self.t = timings
         self.last_report: InstallReport | None = None
+        self.last_network: EsxiNetworkConfig | None = None  # the new OS as read during validation
 
     async def run(self, ctx: JobContext) -> dict[str, Any]:
         try:
@@ -229,10 +273,7 @@ class Installer:
         def mark(name: str) -> None:
             marks[name] = round(time.monotonic() - started, 1)
 
-        ctx.progress(0.02, f"Reading current configuration of {self.access.address}")
-        network = await self.esxi.read_network(self.access, self.os_password)
-        before = await self.esxi.read_storage(self.access, self.os_password)
-        previous = await self.esxi.probe(self.access.address)
+        network, before, previous = await self._snapshot(ctx)
 
         ctx.progress(0.05, "Running preflight against the BMC")
         async with self.client_factory(self.host, self.bmc_password) as client:
@@ -246,7 +287,22 @@ class Installer:
         if legacy_cpu is None:
             legacy_cpu = cpu is not None and cpu.status is CheckStatus.WARN
 
-        spec = derive_spec(network, before, self.req, legacy_cpu, self.os_password)
+        if self.config is not None:
+            spec = EsxiPlugin.build_spec(
+                self.config.settings,
+                self.config.values,
+                root_password=self.config.root_password,
+                legacy_cpu_detected=legacy_cpu,
+                current_boot_disk=before.boot_disk if before else None,
+            )
+        else:
+            if network is None or before is None or self.os_password is None:
+                raise InstallError(
+                    "Without a config set, the running OS must be reachable to capture its settings"
+                )
+            spec = derive_spec(network, before, self.req, legacy_cpu, self.os_password)
+        if not self.req.iso_path:
+            raise InstallError("No installer ISO resolved for this install")
         stock = Path(self.req.iso_path)
         iso_info = inspect_iso(stock)
         ctx.progress(0.08, f"Building installer ISO (ESXi {iso_info.version} build {iso_info.build})")
@@ -341,7 +397,7 @@ class Installer:
             if served >= threshold:
                 ctx.progress(0.3, f"Installer booted from the ISO ({served // 2**20} MiB read)")
                 return
-            about = await self.esxi.probe(self.access.address)
+            about = await self.esxi.probe(self.new_access.address)
             if about is None:
                 seen_down = True
             elif seen_down and about.build == previous_build and self._served(token) < threshold:
@@ -368,7 +424,7 @@ class Installer:
     ) -> None:
         deadline = started + self.req.timeout_minutes * 60
         while time.monotonic() < deadline:
-            about = await self.esxi.probe(self.access.address)
+            about = await self.esxi.probe(self.new_access.address)
             if about and about.build == build:
                 ctx.progress(0.85, f"ESXi {about.version} build {about.build} is up")
                 return
@@ -384,15 +440,34 @@ class Installer:
             f"Host did not come back on build {build} within {self.req.timeout_minutes} minutes"
         )
 
+    async def _snapshot(
+        self, ctx: JobContext
+    ) -> tuple[EsxiNetworkConfig | None, EsxiStorage | None, EsxiAbout | None]:
+        """Read the running OS. Optional with a config set: the install works without it."""
+        if self.access is None or self.os_password is None:
+            return None, None, None
+        ctx.progress(0.02, f"Reading current configuration of {self.access.address}")
+        try:
+            network = await self.esxi.read_network(self.access, self.os_password)
+            before = await self.esxi.read_storage(self.access, self.os_password)
+            previous = await self.esxi.probe(self.access.address)
+        except Exception as exc:
+            if self.config is None:
+                raise
+            logger.warning("Running OS not readable (%s); continuing from the config set", exc)
+            return None, None, None
+        return network, before, previous
+
     async def _validate(
-        self, spec: InstallSpec, build: str | None, before: EsxiStorage
+        self, spec: InstallSpec, build: str | None, before: EsxiStorage | None
     ) -> list[ValidationCheck]:
         # Firstboot (extra uplinks, NTP) runs shortly after hostd starts; give it a few polls to settle.
         checks: list[ValidationCheck] = []
         for _ in range(10):
-            about = await self.esxi.probe(self.access.address)
-            network = await self.esxi.read_network(self.access, self.os_password)
-            storage = await self.esxi.read_storage(self.access, self.os_password)
+            about = await self.esxi.probe(self.new_access.address)
+            network = await self.esxi.read_network(self.new_access, self.new_password)
+            storage = await self.esxi.read_storage(self.new_access, self.new_password)
+            self.last_network = network
             checks = validate_install(spec, build, about, network, storage, before)
             if all(c.ok for c in checks):
                 break

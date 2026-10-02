@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
 from groundzero.core.jobs import HostBusyError
-from groundzero.core.services import ConfirmationError, ConflictError, NotFoundError
+from groundzero.core.services import ConfirmationError, ConflictError, NotFoundError, SettingsValidationError
+from groundzero.osconfig import OsConfigError
 from groundzero.preflight.evaluate import UnknownProfileError
 
 PROBLEM_JSON = "application/problem+json"
@@ -54,6 +55,7 @@ _DOMAIN_ERRORS: tuple[tuple[type[Exception], int, str], ...] = (
     (HostBusyError, 409, "host_busy"),
     (UnknownProfileError, 422, "unknown_profile"),
     (ConfirmationError, 422, "confirmation_required"),
+    (OsConfigError, 422, "os_config_invalid"),
 )
 
 
@@ -81,5 +83,10 @@ def install_error_handlers(app: FastAPI) -> None:
         errors = [{"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
         return problem_response(request, 422, "validation_error", "Request validation failed", errors=errors)
 
+    def settings_handler(request: Request, exc: Exception) -> JSONResponse:
+        assert isinstance(exc, SettingsValidationError)
+        return problem_response(request, 422, "validation_error", str(exc), errors=exc.errors)
+
+    app.add_exception_handler(SettingsValidationError, settings_handler)
     app.add_exception_handler(HTTPException, http_handler)
     app.add_exception_handler(RequestValidationError, validation_handler)

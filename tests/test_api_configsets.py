@@ -1,0 +1,194 @@
+"""API: OS families, config sets, per-server values, capture, ISO repository, deploy preview."""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import pytest
+from conftest import make_client
+from fastapi.testclient import TestClient
+from isofactory import make_stock_iso
+
+from groundzero.api.app import create_app
+from groundzero.core.config import Settings
+from groundzero.core.models import Host
+from groundzero.redfish.client import RedfishClient
+from groundzero.simulator.esxi import SimulatedEsxi
+
+ESXI1 = Path(__file__).parent / "fixtures" / "esxi1"
+TOKEN = "test-token"
+SECRET = "S3cret-root!"
+
+LAB = {
+    "netmask": "255.255.255.0",
+    "gateway": "192.0.2.1",
+    "nameservers": ["8.8.8.8"],
+    "vlan_id": 100,
+    "install_nic": "vmnic0",
+    "extra_uplinks": ["vmnic1"],
+    "ntp_servers": ["pool.ntp.org"],
+    "install_disk": {"mode": "first-match", "value": "DELLBOSS"},
+}
+
+
+@pytest.fixture
+def api(tmp_path: Path, idrac9: dict[str, Any]) -> Iterator[TestClient]:
+    isos = tmp_path / "isos"
+    make_stock_iso(isos / "VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso")
+    (isos / "notes.iso").write_bytes(b"not an installer")
+    settings = Settings(home=tmp_path / "home", api_token=TOKEN, iso_repository=isos)
+
+    def factory(host: Host, password: str) -> RedfishClient:
+        return make_client(idrac9)
+
+    with TestClient(create_app(settings, client_factory=factory, esxi=SimulatedEsxi(ESXI1))) as client:
+        client.headers["Authorization"] = f"Bearer {TOKEN}"
+        yield client
+
+
+def _host(api: TestClient, with_os: bool = True) -> str:
+    host = api.post(
+        "/api/v1/hosts",
+        json={"bmc_address": "bmc.test", "username": "root", "password": "calvin", "name": "esxi1"},
+    ).json()
+    if with_os:
+        assert (
+            api.put(
+                f"/api/v1/hosts/{host['id']}/os", json={"address": "192.0.2.101", "password": "esxi-pw"}
+            ).status_code
+            == 200
+        )
+    return str(host["id"])
+
+
+def _wait(api: TestClient, job_id: str) -> dict[str, Any]:
+    for _ in range(200):
+        job = api.get(f"/api/v1/jobs/{job_id}").json()
+        if job["status"] not in ("queued", "running"):
+            return dict(job)
+        time.sleep(0.05)
+    raise AssertionError("job did not finish")
+
+
+def test_os_families_expose_schemas(api: TestClient) -> None:
+    families = api.get("/api/v1/os-families").json()
+    esxi = next(f for f in families if f["family"] == "esxi")
+    assert esxi["install_supported"] is True and esxi["secret_fields"] == ["root_password"]
+    assert {"netmask", "vlan_id", "install_disk", "cpu_override"} <= set(
+        esxi["settings_schema"]["properties"]
+    )
+    assert set(esxi["host_values_schema"]["required"]) == {"hostname", "ip"}
+
+
+def test_config_set_crud_never_returns_the_password(api: TestClient) -> None:
+    body = {"name": "lab-esxi", "os_family": "esxi", "settings": LAB, "root_password": SECRET}
+    created = api.post("/api/v1/config-sets", json=body)
+    assert created.status_code == 201, created.text
+    cs = created.json()
+    assert cs["has_root_password"] is True and cs["source"] == "manual"
+    assert cs["settings"]["cpu_override"] == "auto"  # defaults filled in
+
+    assert api.post("/api/v1/config-sets", json=body).status_code == 409  # duplicate name
+
+    # Updating without a password keeps the stored one
+    upd = api.put(
+        f"/api/v1/config-sets/{cs['id']}",
+        json={**body, "root_password": None, "settings": {**LAB, "vlan_id": 200}},
+    )
+    assert (
+        upd.status_code == 200
+        and upd.json()["settings"]["vlan_id"] == 200
+        and upd.json()["has_root_password"]
+    )
+
+    for resp in (api.get("/api/v1/config-sets"), api.get(f"/api/v1/config-sets/{cs['id']}"), upd):
+        assert SECRET not in resp.text and '"root_password"' not in resp.text
+
+    assert api.delete(f"/api/v1/config-sets/{cs['id']}").status_code == 204
+    assert api.get(f"/api/v1/config-sets/{cs['id']}").status_code == 404
+
+
+def test_settings_are_validated_with_field_locations(api: TestClient) -> None:
+    bad = {**LAB, "gateway": "nope", "install_disk": {"mode": "exact"}}
+    resp = api.post("/api/v1/config-sets", json={"name": "bad", "os_family": "esxi", "settings": bad})
+    assert resp.status_code == 422
+    locs = {tuple(e["loc"]) for e in resp.json()["errors"]}
+    assert ("settings", "gateway") in locs and ("settings", "install_disk") in locs
+    unknown = api.post("/api/v1/config-sets", json={"name": "w", "os_family": "windows", "settings": {}})
+    assert unknown.status_code == 422 and "Unknown OS family" in unknown.json()["detail"]
+
+
+def test_capture_creates_a_set_and_per_server_values(api: TestClient) -> None:
+    host_id = _host(api)
+    job = _wait(
+        api, api.post(f"/api/v1/hosts/{host_id}/os/capture", json={"name": "from-esxi1"}).json()["id"]
+    )
+    assert job["status"] == "succeeded", job
+    cs = api.get(f"/api/v1/config-sets/{job['result']['config_set_id']}").json()
+    assert cs["source"].startswith("captured from esxi1") and cs["has_root_password"]
+    assert cs["settings"]["vlan_id"] == 100 and cs["settings"]["extra_uplinks"] == ["vmnic1"]
+    values = api.get(f"/api/v1/hosts/{host_id}/host-values/esxi").json()
+    assert values["hostname"] == "esxi1"
+    assert api.post(f"/api/v1/hosts/{host_id}/os/capture", json={"name": "from-esxi1"}).status_code == 409
+
+
+def test_host_values_are_validated(api: TestClient) -> None:
+    host_id = _host(api, with_os=False)
+    assert api.get(f"/api/v1/hosts/{host_id}/host-values/esxi").status_code == 404
+    bad = api.put(f"/api/v1/hosts/{host_id}/host-values/esxi", json={"hostname": "esxi1", "ip": "999.1.1.1"})
+    assert bad.status_code == 422
+    ok = api.put(
+        f"/api/v1/hosts/{host_id}/host-values/esxi", json={"hostname": "esxi9", "ip": "192.0.2.109"}
+    )
+    assert ok.status_code == 200 and ok.json()["install_nic"] is None
+
+
+def test_iso_repository_lists_detected_isos(api: TestClient) -> None:
+    isos = api.post("/api/v1/isos/rescan").json()
+    by_name = {i["filename"]: i for i in isos}
+    esxi = by_name["VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso"]
+    assert (esxi["os_family"], esxi["version"], esxi["build"]) == ("esxi", "9.1.1", "25714478")
+    assert len(esxi["sha256"]) == 64 and esxi["id"] == esxi["sha256"][:12]
+    assert by_name["notes.iso"]["os_family"] is None
+    assert api.get("/api/v1/isos").json() == isos
+
+
+def test_preview_shows_the_kickstart_without_secrets(api: TestClient) -> None:
+    host_id = _host(api, with_os=False)
+    iso = next(i for i in api.post("/api/v1/isos/rescan").json() if i["os_family"] == "esxi")
+    cs = api.post(
+        "/api/v1/config-sets",
+        json={"name": "lab", "os_family": "esxi", "settings": LAB, "root_password": SECRET},
+    ).json()
+    body = {
+        "confirm": "-",
+        "iso_id": iso["id"],
+        "config_set_id": cs["id"],
+        "host_values": {"hostname": "esxi7", "ip": "192.0.2.107"},
+    }
+    resp = api.post(f"/api/v1/hosts/{host_id}/install/preview", json=body)
+    assert resp.status_code == 200, resp.text
+    preview = resp.json()
+    ks = preview["kickstart"]
+    assert "install --firstdisk=DELLBOSS --preservevmfs" in ks
+    assert "--ip=192.0.2.107" in ks and "--hostname=esxi7" in ks and "--vlanid=100" in ks
+    assert "$6$<hidden>" in ks and SECRET not in resp.text and "root_password_hash" not in preview["spec"]
+    assert preview["config_set"] == "lab" and preview["iso"]["build"] == "25714478"
+
+
+def test_install_with_a_set_needs_per_server_values(api: TestClient) -> None:
+    host_id = _host(api, with_os=False)
+    iso = next(i for i in api.post("/api/v1/isos/rescan").json() if i["os_family"] == "esxi")
+    cs = api.post(
+        "/api/v1/config-sets",
+        json={"name": "lab", "os_family": "esxi", "settings": LAB, "root_password": SECRET},
+    ).json()
+    resp = api.post(
+        f"/api/v1/hosts/{host_id}/install",
+        json={"confirm": "install esxi1", "iso_id": iso["id"], "config_set_id": cs["id"]},
+    )
+    assert resp.status_code == 422 and "Per-server values" in resp.json()["detail"]
+    assert api.get("/api/v1/jobs").json() == []  # rejected before queuing

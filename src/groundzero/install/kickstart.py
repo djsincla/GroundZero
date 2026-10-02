@@ -23,7 +23,8 @@ done
 
 def render_kickstart(spec: InstallSpec) -> str:
     net = spec.network
-    install = [f"install --disk={spec.install_disk}"]
+    target = f"--disk={spec.install_disk}" if spec.install_disk else f"--firstdisk={spec.install_firstdisk}"
+    install = [f"install {target}"]
     install.append("--preservevmfs" if spec.preserve_vmfs else "--overwritevmfs")
     if spec.allow_legacy_cpu:
         # --forceunsupportedinstall accepts the CPU_SUPPORT OVERRIDEWARNING; without it the 9.1.1

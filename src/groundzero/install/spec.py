@@ -5,11 +5,12 @@ from __future__ import annotations
 import ipaddress
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 _HOSTNAME = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 _VMNIC = re.compile(r"^vmnic\d+$")
 _DISK = re.compile(r"^[A-Za-z0-9._:-]+$")  # canonical device names (t10..., naa..., mpx...)
+_FIRSTDISK = re.compile(r"^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$")  # e.g. DELLBOSS,local
 
 
 class ManagementNetwork(BaseModel):
@@ -60,7 +61,14 @@ class ManagementNetwork(BaseModel):
 
 
 class InstallSpec(BaseModel):
-    install_disk: str = Field(description="Canonical device name of the target disk (e.g. the BOSS VD)")
+    install_disk: str | None = Field(
+        default=None, description="Canonical device name of the target disk (kickstart --disk)"
+    )
+    install_firstdisk: str | None = Field(
+        default=None,
+        description="Comma-separated vendor/model/driver matches, first hit wins (kickstart --firstdisk), "
+        "e.g. 'DELLBOSS' or 'DELLBOSS,local'",
+    )
     preserve_vmfs: bool = Field(
         default=True, description="Keep an existing VMFS datastore on the install disk"
     )
@@ -71,10 +79,23 @@ class InstallSpec(BaseModel):
 
     @field_validator("install_disk")
     @classmethod
-    def _disk(cls, v: str) -> str:
-        if not _DISK.match(v):
+    def _disk(cls, v: str | None) -> str | None:
+        if v is not None and not _DISK.match(v):
             raise ValueError(f"invalid disk name: {v!r}")
         return v
+
+    @field_validator("install_firstdisk")
+    @classmethod
+    def _firstdisk(cls, v: str | None) -> str | None:
+        if v is not None and not _FIRSTDISK.match(v):
+            raise ValueError(f"invalid --firstdisk match list: {v!r}")
+        return v
+
+    @model_validator(mode="after")
+    def _one_disk_target(self) -> InstallSpec:
+        if (self.install_disk is None) == (self.install_firstdisk is None):
+            raise ValueError("set exactly one of install_disk or install_firstdisk")
+        return self
 
     @field_validator("root_password_hash")
     @classmethod

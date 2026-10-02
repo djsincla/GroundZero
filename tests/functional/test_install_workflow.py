@@ -82,6 +82,10 @@ def test_install_reinstalls_and_validates(simulated_r740xd: GroundZero) -> None:
         assert api.get("/api/v1/jobs").json()[0]["params"]["timeout_minutes"] == 240
     assert any(f["at"] > report["reset_at"] for f in fetches)  # the "installer" read the ISO after the reset
     assert not list((gz.home / "media").glob("*.iso"))  # built ISO cleaned up
+    with gz.api() as api:  # regression (user report): the host's OS view must reflect the new build
+        host_id = api.get("/api/v1/hosts").json()[0]["id"]
+        os_now = api.get(f"/api/v1/hosts/{host_id}/os/network").json()
+    assert os_now["build"] == "25714478" and os_now["product"] == "VMware ESXi 9.1.1"
 
 
 def test_install_requires_exact_confirmation(simulated_r740xd: GroundZero) -> None:

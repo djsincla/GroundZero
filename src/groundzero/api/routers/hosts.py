@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel, Field
 
 from groundzero.api.deps import ServicesDep
-from groundzero.core.models import Host, HostCreate, Job, JobKind, OsAccess, OsAccessSet
+from groundzero.core.models import Host, HostCreate, Job, JobKind, OsAccess, OsAccessSet, OsCaptureRequest
+from groundzero.core.services import InstallPreview
 from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.install.job import InstallReport, InstallRequest
 from groundzero.inventory.models import HostInventory
@@ -103,3 +106,28 @@ async def start_install(host_id: str, body: InstallRequest, services: ServicesDe
 @router.get("/{host_id}/install", response_model=InstallReport)
 def latest_install(host_id: str, services: ServicesDep) -> InstallReport:
     return InstallReport.model_validate(services.latest_result(host_id, JobKind.INSTALL))
+
+
+@router.post("/{host_id}/os/capture", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
+async def capture_config_set(
+    host_id: str, body: OsCaptureRequest, services: ServicesDep, response: Response
+) -> Job:
+    """Create a config set (and this host's per-server values) from the running OS. Read-only."""
+    return _accepted(response, services.start_os_capture(host_id, body.name))
+
+
+@router.get("/{host_id}/host-values/{family}", response_model=dict[str, Any])
+def get_host_values(host_id: str, family: str, services: ServicesDep) -> dict[str, Any]:
+    return services.get_host_values(host_id, family)
+
+
+@router.put("/{host_id}/host-values/{family}", response_model=dict[str, Any])
+def set_host_values(host_id: str, family: str, body: dict[str, Any], services: ServicesDep) -> dict[str, Any]:
+    """Per-server values (e.g. hostname, ip) validated against the OS family's schema."""
+    return services.set_host_values(host_id, family, body)
+
+
+@router.post("/{host_id}/install/preview", response_model=InstallPreview)
+def preview_install(host_id: str, body: InstallRequest, services: ServicesDep) -> InstallPreview:
+    """Show the spec and kickstart a deployment would use (password hidden). Touches nothing."""
+    return services.preview_install(host_id, body)

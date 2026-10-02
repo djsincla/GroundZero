@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from groundzero.core.models import Host, Job, JobError, JobKind, JobStatus, OsAccess
+from groundzero.core.models import ConfigSet, Host, Job, JobError, JobKind, JobStatus, OsAccess
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS hosts (
@@ -55,6 +55,23 @@ CREATE TABLE IF NOT EXISTS os_access (
     username TEXT NOT NULL,
     secret BLOB NOT NULL,
     verify_tls INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS config_sets (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    os_family TEXT NOT NULL,
+    settings TEXT NOT NULL,
+    secrets BLOB,
+    source TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS host_values (
+    host_id TEXT NOT NULL,
+    os_family TEXT NOT NULL,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (host_id, os_family)
 );
 """
 
@@ -133,6 +150,7 @@ class Store:
         with self._tx() as cur:
             cur.execute("DELETE FROM results WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM os_access WHERE host_id = ?", (host_id,))
+            cur.execute("DELETE FROM host_values WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM jobs WHERE host_id = ?", (host_id,))
             deleted = cur.execute("DELETE FROM hosts WHERE id = ?", (host_id,)).rowcount
         return deleted > 0
@@ -157,6 +175,92 @@ class Store:
             address=row["address"], username=row["username"], verify_tls=bool(row["verify_tls"])
         )
         return access, bytes(row["secret"])
+
+    # ── config sets ──────────────────────────────────────────────────────
+    def add_config_set(
+        self, *, name: str, os_family: str, settings: dict[str, Any], secrets: bytes | None, source: str
+    ) -> ConfigSet:
+        now = utcnow()
+        cs = ConfigSet(
+            id=new_id(),
+            name=name,
+            os_family=os_family,
+            settings=settings,
+            has_root_password=secrets is not None,
+            source=source,
+            created_at=now,
+            updated_at=now,
+        )
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO config_sets"
+                " (id, name, os_family, settings, secrets, source, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    cs.id,
+                    name,
+                    os_family,
+                    json.dumps(settings),
+                    secrets,
+                    source,
+                    now.isoformat(),
+                    now.isoformat(),
+                ),
+            )
+        return cs
+
+    def update_config_set(
+        self, set_id: str, *, name: str, settings: dict[str, Any], secrets: bytes | None, keep_secrets: bool
+    ) -> None:
+        with self._tx() as cur:
+            if keep_secrets:
+                cur.execute(
+                    "UPDATE config_sets SET name = ?, settings = ?, updated_at = ? WHERE id = ?",
+                    (name, json.dumps(settings), utcnow().isoformat(), set_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE config_sets SET name = ?, settings = ?, secrets = ?, updated_at = ? WHERE id = ?",
+                    (name, json.dumps(settings), secrets, utcnow().isoformat(), set_id),
+                )
+
+    def get_config_set(self, set_id: str) -> tuple[ConfigSet, bytes | None] | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM config_sets WHERE id = ?", (set_id,)).fetchone()
+        return (_row_to_config_set(row), row["secrets"]) if row else None
+
+    def find_config_set_by_name(self, name: str) -> ConfigSet | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM config_sets WHERE name = ?", (name,)).fetchone()
+        return _row_to_config_set(row) if row else None
+
+    def list_config_sets(self) -> list[ConfigSet]:
+        with self._tx() as cur:
+            rows = cur.execute("SELECT * FROM config_sets ORDER BY name").fetchall()
+        return [_row_to_config_set(r) for r in rows]
+
+    def delete_config_set(self, set_id: str) -> bool:
+        with self._tx() as cur:
+            return cur.execute("DELETE FROM config_sets WHERE id = ?", (set_id,)).rowcount > 0
+
+    def set_host_values(self, host_id: str, os_family: str, data: dict[str, Any]) -> None:
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO host_values (host_id, os_family, data, updated_at) VALUES (?, ?, ?, ?)"
+                " ON CONFLICT(host_id, os_family)"
+                " DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
+                (host_id, os_family, json.dumps(data), utcnow().isoformat()),
+            )
+
+    def get_host_values(self, host_id: str, os_family: str) -> dict[str, Any] | None:
+        with self._tx() as cur:
+            row = cur.execute(
+                "SELECT data FROM host_values WHERE host_id = ? AND os_family = ?", (host_id, os_family)
+            ).fetchone()
+        if not row:
+            return None
+        data: dict[str, Any] = json.loads(row["data"])
+        return data
 
     # ── jobs ─────────────────────────────────────────────────────────────
     def create_job(self, *, kind: JobKind, host_id: str, params: dict[str, Any]) -> Job:
@@ -283,4 +387,17 @@ def _row_to_job(row: sqlite3.Row) -> Job:
         created_at=datetime.fromisoformat(row["created_at"]),
         started_at=_dt(row["started_at"]),
         finished_at=_dt(row["finished_at"]),
+    )
+
+
+def _row_to_config_set(row: sqlite3.Row) -> ConfigSet:
+    return ConfigSet(
+        id=row["id"],
+        name=row["name"],
+        os_family=row["os_family"],
+        settings=json.loads(row["settings"]),
+        has_root_password=row["secrets"] is not None,
+        source=row["source"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        updated_at=datetime.fromisoformat(row["updated_at"]),
     )

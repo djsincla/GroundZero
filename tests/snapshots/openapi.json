@@ -318,6 +318,100 @@
         "title": "CheckStatus",
         "type": "string"
       },
+      "ConfigSet": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "has_root_password": {
+            "title": "Has Root Password",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "os_family": {
+            "title": "Os Family",
+            "type": "string"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "title": "Settings",
+            "type": "object"
+          },
+          "source": {
+            "description": "\"manual\" or \"captured from <host> (<address>)\"",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "os_family",
+          "settings",
+          "has_root_password",
+          "source",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ConfigSet",
+        "type": "object"
+      },
+      "ConfigSetWrite": {
+        "description": "Create or replace a config set. ``settings`` is validated against the OS family's schema.",
+        "properties": {
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "os_family": {
+            "description": "OS family, see GET /os-families",
+            "title": "Os Family",
+            "type": "string"
+          },
+          "root_password": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Root/admin password set by the install. On update, omit to keep the stored one.",
+            "title": "Root Password"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "title": "Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "os_family",
+          "settings"
+        ],
+        "title": "ConfigSetWrite",
+        "type": "object"
+      },
       "Drive": {
         "properties": {
           "capacity_bytes": {
@@ -718,6 +812,57 @@
         "title": "HostInventory",
         "type": "object"
       },
+      "InstallPreview": {
+        "description": "What a deployment would do, without touching the BMC or the server.",
+        "properties": {
+          "config_set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Set"
+          },
+          "iso": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoImage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kickstart": {
+            "title": "Kickstart",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          }
+        },
+        "required": [
+          "iso",
+          "config_set",
+          "spec",
+          "kickstart",
+          "notes"
+        ],
+        "title": "InstallPreview",
+        "type": "object"
+      },
       "InstallReport": {
         "properties": {
           "bmc_audit": {
@@ -885,15 +1030,59 @@
             "title": "Boot Method",
             "type": "string"
           },
+          "config_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Config set to apply. Without one, settings are captured from the running OS (and ntp_servers / wipe_install_disk_vmfs / allow_legacy_cpu below apply).",
+            "title": "Config Set Id"
+          },
           "confirm": {
             "description": "Must be exactly \"install <host name>\"",
             "title": "Confirm",
             "type": "string"
           },
+          "host_values": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-server values (hostname, ip, ...); default: remembered for this host",
+            "title": "Host Values"
+          },
+          "iso_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stock ISO from the repository (GET /isos)",
+            "title": "Iso Id"
+          },
           "iso_path": {
-            "description": "Stock ESXi installer ISO on the GroundZero host",
-            "title": "Iso Path",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Alternative to iso_id: a path on the GroundZero host",
+            "title": "Iso Path"
           },
           "ntp_servers": {
             "items": {
@@ -933,10 +1122,79 @@
           }
         },
         "required": [
-          "iso_path",
           "confirm"
         ],
         "title": "InstallRequest",
+        "type": "object"
+      },
+      "IsoImage": {
+        "properties": {
+          "build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "title": "Modified At",
+            "type": "string"
+          },
+          "os_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Os Family"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "os_family",
+          "version",
+          "build",
+          "size",
+          "sha256",
+          "modified_at"
+        ],
+        "title": "IsoImage",
         "type": "object"
       },
       "Job": {
@@ -1057,7 +1315,8 @@
           "inventory",
           "preflight",
           "os_network",
-          "install"
+          "install",
+          "os_capture"
         ],
         "title": "JobKind",
         "type": "string"
@@ -1272,6 +1531,65 @@
           "password"
         ],
         "title": "OsAccessSet",
+        "type": "object"
+      },
+      "OsCaptureRequest": {
+        "properties": {
+          "name": {
+            "description": "Name for the new config set",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OsCaptureRequest",
+        "type": "object"
+      },
+      "OsFamily": {
+        "properties": {
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "host_values_schema": {
+            "additionalProperties": true,
+            "title": "Host Values Schema",
+            "type": "object"
+          },
+          "install_supported": {
+            "title": "Install Supported",
+            "type": "boolean"
+          },
+          "secret_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Secret Fields",
+            "type": "array"
+          },
+          "settings_schema": {
+            "additionalProperties": true,
+            "title": "Settings Schema",
+            "type": "object"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "title",
+          "install_supported",
+          "settings_schema",
+          "host_values_schema",
+          "secret_fields"
+        ],
+        "title": "OsFamily",
         "type": "object"
       },
       "PhysicalNic": {
@@ -2051,6 +2369,221 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/config-sets": {
+      "get": {
+        "operationId": "list_config_sets_api_v1_config_sets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConfigSet"
+                  },
+                  "title": "Response List Config Sets Api V1 Config Sets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Config Sets",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "operationId": "create_config_set_api_v1_config_sets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigSetWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Config Set",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/config-sets/{set_id}": {
+      "delete": {
+        "operationId": "delete_config_set_api_v1_config_sets__set_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Config Set",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "get": {
+        "operationId": "get_config_set_api_v1_config_sets__set_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Config Set",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "put": {
+        "description": "Replace a config set. Omit root_password to keep the stored one.",
+        "operationId": "update_config_set_api_v1_config_sets__set_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigSetWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Config Set",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/v1/hosts": {
       "get": {
         "operationId": "list_hosts_api_v1_hosts_get",
@@ -2210,6 +2743,133 @@
         ]
       }
     },
+    "/api/v1/hosts/{host_id}/host-values/{family}": {
+      "get": {
+        "operationId": "get_host_values_api_v1_hosts__host_id__host_values__family__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "family",
+            "required": true,
+            "schema": {
+              "title": "Family",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Host Values Api V1 Hosts  Host Id  Host Values  Family  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Host Values",
+        "tags": [
+          "hosts"
+        ]
+      },
+      "put": {
+        "description": "Per-server values (e.g. hostname, ip) validated against the OS family's schema.",
+        "operationId": "set_host_values_api_v1_hosts__host_id__host_values__family__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "family",
+            "required": true,
+            "schema": {
+              "title": "Family",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Host Values Api V1 Hosts  Host Id  Host Values  Family  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Host Values",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
     "/api/v1/hosts/{host_id}/install": {
       "get": {
         "operationId": "latest_install_api_v1_hosts__host_id__install_get",
@@ -2308,6 +2968,64 @@
           }
         ],
         "summary": "Start Install",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/install/preview": {
+      "post": {
+        "description": "Show the spec and kickstart a deployment would use (password hidden). Touches nothing.",
+        "operationId": "preview_install_api_v1_hosts__host_id__install_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Install",
         "tags": [
           "hosts"
         ]
@@ -2503,6 +3221,64 @@
           }
         ],
         "summary": "Set Os Access",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/os/capture": {
+      "post": {
+        "description": "Create a config set (and this host's per-server values) from the running OS. Read-only.",
+        "operationId": "capture_config_set_api_v1_hosts__host_id__os_capture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OsCaptureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Capture Config Set",
         "tags": [
           "hosts"
         ]
@@ -2710,6 +3486,67 @@
         ]
       }
     },
+    "/api/v1/isos": {
+      "get": {
+        "description": "Stock installer ISOs found in the repository folder (you add/remove files there).",
+        "operationId": "list_isos_api_v1_isos_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IsoImage"
+                  },
+                  "title": "Response List Isos Api V1 Isos Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Isos",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/isos/rescan": {
+      "post": {
+        "operationId": "rescan_isos_api_v1_isos_rescan_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IsoImage"
+                  },
+                  "title": "Response Rescan Isos Api V1 Isos Rescan Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rescan Isos",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/v1/jobs": {
       "get": {
         "operationId": "list_jobs_api_v1_jobs_get",
@@ -2914,6 +3751,37 @@
         "summary": "Job Events",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/api/v1/os-families": {
+      "get": {
+        "description": "OS families with the JSON schemas the UI renders config-set and per-server forms from.",
+        "operationId": "list_os_families_api_v1_os_families_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OsFamily"
+                  },
+                  "title": "Response List Os Families Api V1 Os Families Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Os Families",
+        "tags": [
+          "catalog"
         ]
       }
     },
