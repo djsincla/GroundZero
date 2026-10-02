@@ -86,14 +86,28 @@ async def _wait_for_image(
     return False
 
 
-async def eject_if_ours(client: RedfishClient, slot: VirtualMediaSlot, url: str) -> None:
-    """Best-effort cleanup that never ejects media someone else mounted."""
-    try:
-        inserted, image = await slot_state(client, slot)
-        if inserted and image == url:
-            await eject(client, slot)
-    except Exception:
-        logger.exception("Could not clean up media on %s", slot.path)
+async def eject_if_ours(
+    client: RedfishClient, slot: VirtualMediaSlot, url: str, *, watch_seconds: float = 0.0, poll: float = 5.0
+) -> bool:
+    """Best-effort cleanup that never ejects media someone else mounted. Returns True if it ejected.
+
+    ``watch_seconds``: keep watching that long for our image to attach late. Seen live: iDRAC answered
+    InsertMedia with RAC0720 ("unable to locate the ISO"), then attached the same image a minute later.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + watch_seconds
+    while True:
+        try:
+            inserted, image = await slot_state(client, slot)
+            if inserted and image == url:
+                await eject(client, slot)
+                return True
+        except Exception:
+            logger.exception("Could not clean up media on %s", slot.path)
+            return False
+        if loop.time() >= deadline:
+            return False
+        await asyncio.sleep(poll)
 
 
 async def power_state(client: RedfishClient, identity: BmcIdentity) -> str:
@@ -122,6 +136,8 @@ async def boot_once_from_virtual_cd(
     action_timeout: float = 180.0,
     boot_method: str = "auto",
     settle_seconds: float = 0.0,
+    cleanup_watch_seconds: float = 90.0,
+    attach_timeout: float = 180.0,
 ) -> tuple[VirtualMediaSlot, str]:
     """Mount ``url`` and arrange for the next boot (only) to use it. Returns (slot, boot method)."""
     slot = profile.choose_cd_slot(caps)
@@ -129,12 +145,14 @@ async def boot_once_from_virtual_cd(
         raise BmcActionError("No virtual CD slot with InsertMedia on this BMC")
     try:
         await insert(client, slot, url, action_timeout=action_timeout)
+        await profile.wait_for_media_ready(client, identity, slot, attach_timeout)
         if settle_seconds:  # let the virtual USB optical device attach before POST enumerates USB
             await asyncio.sleep(settle_seconds)
         method = await profile.set_one_time_cd_boot(client, identity, caps, boot_method)
         logger.info("One-time boot to virtual CD via %s", method)
     except BaseException:
-        await eject_if_ours(client, slot, url)  # leave the BMC as we found it, even if the mount half-worked
+        # leave the BMC as we found it, even if the mount half-worked or attaches after reporting failure
+        await eject_if_ours(client, slot, url, watch_seconds=cleanup_watch_seconds)
         raise
     return slot, method
 

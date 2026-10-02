@@ -33,6 +33,7 @@ class SimulatedBmc:
 
         - "ignore-boot-once": the one-time boot override is accepted but not honoured
         - "slow-insert": InsertMedia takes effect but its response times out
+        - "late-attach": InsertMedia fails (RAC0720) but the image attaches a moment later
         """
         self.responses = copy.deepcopy(responses)
         self.esxi = esxi
@@ -40,7 +41,10 @@ class SimulatedBmc:
         self.attributes: dict[str, str] = {
             "ServerBoot.1.BootOnce": "Disabled",
             "ServerBoot.1.FirstBootDevice": "Normal",
+            "RFS.1.MediaAttachState": "Detached",
+            "RFS.1.Status": "Done",
         }
+        self.attach_delay = 0.5  # the real iDRAC took ~55 s
         self.media: dict[str, str | None] = {}  # slot path -> image URL
         self.writes: list[str] = []
         self._tasks: set[asyncio.Task[None]] = set()
@@ -75,6 +79,7 @@ class SimulatedBmc:
             if not self.media.get(slot):
                 return _error(500, "No Virtual Media devices are currently connected.")
             self.media[slot] = None
+            self.attributes.update({"RFS.1.MediaAttachState": "Detached", "RFS.1.Status": "Done"})
             return httpx.Response(204)
         if request.method == "POST" and path.endswith("ComputerSystem.Reset"):
             return self._reset(body.get("ResetType", ""))
@@ -116,19 +121,38 @@ class SimulatedBmc:
             return _error(
                 500, "Unable to locate the ISO or IMG image file or folder in the network share location"
             )
+        if "late-attach" in self.faults:
+            # Seen live: RAC0720 returned, then the same image attached about a minute later.
+            self._spawn(self._attach_later(slot, url))
+            return _error(
+                500, "Unable to locate the ISO or IMG image file or folder in the network share location"
+            )
         self.media[slot] = url
-        if (
-            "slow-insert" in self.faults
-        ):  # seen on a real iDRAC: mount completes, the response never arrives in time
+        self.attributes.update({"RFS.1.MediaAttachState": "Detached", "RFS.1.Status": "Pending"})
+        self._spawn(self._finish_attach())
+        if "slow-insert" in self.faults:
+            # Seen live: the mount completes but the response never arrives in time.
             raise httpx.ReadTimeout("simulated slow InsertMedia", request=None)
         return httpx.Response(204)
+
+    async def _attach_later(self, slot: str, url: str) -> None:
+        await asyncio.sleep(1.0)
+        self.media[slot] = url
+        self.attributes.update({"RFS.1.MediaAttachState": "Attached", "RFS.1.Status": "Done"})
+
+    async def _finish_attach(self) -> None:
+        await asyncio.sleep(self.attach_delay)
+        if any(self.media.values()):
+            self.attributes.update({"RFS.1.MediaAttachState": "Attached", "RFS.1.Status": "Done"})
 
     def _reset(self, reset_type: str) -> httpx.Response:
         system = self.responses[self._system_path()]
         if reset_type not in ("On", "ForceRestart", "GracefulRestart", "PowerCycle"):
             return _error(400, f"Unsupported ResetType {reset_type}")
         system["PowerState"] = "On"
-        boot_cd = self._consume_one_time_cd_boot() and "ignore-boot-once" not in self.faults
+        # Like the real iDRAC: an RFS that has not finished attaching is an empty drive at POST.
+        attached = self.attributes.get("RFS.1.MediaAttachState") == "Attached"
+        boot_cd = self._consume_one_time_cd_boot() and attached and "ignore-boot-once" not in self.faults
         image = next((url for url in self.media.values() if url), None)
         if self.esxi is not None:
             previous = self.esxi.about

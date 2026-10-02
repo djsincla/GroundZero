@@ -65,6 +65,9 @@ def test_install_reinstalls_and_validates(simulated_r740xd: GroundZero) -> None:
     assert writes[-1].endswith("VirtualMedia.EjectMedia")  # media ejected last
     assert report["reset_type"] == "ForceRestart"
     assert report["media_bytes_served"] > 0
+    fetches = report["media_fetches"]
+    assert fetches and {f["method"] for f in fetches} >= {"HEAD", "GET"}
+    assert any(f["at"] > report["reset_at"] for f in fetches)  # the "installer" read the ISO after the reset
     assert not list((gz.home / "media").glob("*.iso"))  # built ISO cleaned up
 
 
@@ -136,3 +139,16 @@ def test_boot_method_can_be_chosen_per_install(simulated_r740xd: GroundZero) -> 
         assert job["status"] == "succeeded", job
         report = api.get(f"/api/v1/hosts/{host_id}/install").json()
     assert report["boot_method"].startswith("UefiTarget PciRoot(0x0)/Pci(0x14,0x0)/USB(0xD,0x0)")
+
+
+def test_media_that_attaches_after_a_failed_mount_is_ejected(
+    simulated_r740xd_late_attach: GroundZero,
+) -> None:
+    """Regression (live run 5): RAC0720 returned, the image attached a minute later and was left mounted."""
+    gz = simulated_r740xd_late_attach
+    iso = _prepare(gz)
+    result = gz.cli("install", "esxi1", "--iso", str(iso), "--confirm", "install esxi1", timeout=180)
+    assert result.code == 1 and "Unable to locate the ISO" in result.output
+    writes = _report(gz)["bmc_audit"]["non_get"]
+    assert writes[-1].endswith("VirtualMedia.EjectMedia")  # the late attach was found and ejected
+    assert not any(w.endswith("ComputerSystem.Reset") for w in writes)  # never reset after a failed mount

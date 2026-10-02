@@ -31,7 +31,9 @@ class Settings(BaseSettings):
     simulate_esxi_dir: Path | None = None
     simulate_faults: list[str] = []  # simulator fault injection, e.g. ["ignore-boot-once"]
     install_poll_seconds: float = 20.0
-    media_settle_seconds: float = 20.0  # pause between mounting media and resetting the host
+    media_settle_seconds: float = 10.0  # extra pause after the media reports attached, before reset
+    media_attach_seconds: float = 180.0  # max wait for mounted media to attach to the host
+    media_cleanup_watch_seconds: float = 90.0  # after a failed mount, watch for a late attach to eject
     installer_boot_minutes: float = 20.0
     # HTTPS listener BMCs download installer ISOs from (must be reachable from the BMC network).
     media_bind_host: str = "0.0.0.0"

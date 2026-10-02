@@ -89,7 +89,9 @@ def test_install_needs_exact_phrase_then_shows_live_progress(
     expect(page.get_by_role("heading", name="Running")).to_be_visible()
     install = page.locator('[data-panel="install"]')
     expect(install.locator('[data-status="pass"]').first).to_be_visible(timeout=60_000)
-    expect(install).to_contain_text("ESXi 9.1.1 build 25714478 (was 24957456)")
+    expect(install.locator('[data-role="install-summary"]')).to_contain_text(
+        "Installed ESXi 9.1.1 build 25714478 (was 24957456) and validated"
+    )
     expect(install).to_contain_text("datastores")
 
 
@@ -109,3 +111,21 @@ def test_no_token_shows_sign_in(page: Page, simulated_r740xd: GroundZero) -> Non
     page.get_by_label("API token").fill("wrong-token")
     page.get_by_role("button", name="Sign in").click()
     expect(page.get_by_role("heading", name="Sign in")).to_be_visible()  # rejected, still signed out
+
+
+def test_failed_install_is_never_shown_as_installed(
+    page: Page, simulated_r740xd_ignoring_boot_once: GroundZero
+) -> None:
+    """Regression (user report): a failed attempt's target version read like the installed version."""
+    gz = simulated_r740xd_ignoring_boot_once
+    iso = make_stock_iso(gz.home / "VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso")
+    assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+    assert gz.cli("os", "set", "esxi1", "--address", "192.0.2.101").code == 0
+    assert gz.cli("install", "esxi1", "--iso", str(iso), "--confirm", "install esxi1", timeout=180).code == 1
+    _open(page, gz)
+    page.get_by_role("link", name="esxi1").click()
+    summary = page.locator('[data-panel="install"] [data-role="install-summary"]')
+    expect(summary).to_contain_text("did not complete. Nothing was installed")
+    expect(summary).to_contain_text("still on build 24957456")
+    expect(summary).to_contain_text("instead of the installer")  # the job's own error message
+    expect(summary).not_to_contain_text("Installed ESXi")

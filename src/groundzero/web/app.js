@@ -172,7 +172,7 @@ async function viewHost(id) {
     active ? h("div", { class: "panel" }, h("h2", {}, "Running"), jobCard(active, { onDone: route })) : null,
     preflightPanel(pre, start("/preflight", { profile: "holodeck-9" }), !!active),
     networkPanel(id, osAccess, net, start("/os/network"), !!active),
-    installPanel(host, osAccess, install, !!active),
+    installPanel(host, osAccess, install, !!active, jobs.find((j) => j.kind === "install")),
     h("div", { class: "panel" }, h("h2", {}, "Recent jobs"),
       jobs.length ? jobs.map((j) => jobCard(j)) : h("p", { class: "muted" }, "No jobs yet.")));
 }
@@ -239,15 +239,31 @@ function osAccessDialog(id, current) {
   dialog.showModal();
 }
 
-function installPanel(host, osAccess, report, busy) {
+function installPanel(host, osAccess, report, busy, lastInstallJob) {
   const header = h("div", { class: "row" }, h("h2", {}, "ESXi install"), h("span", { class: "spacer" }),
     h("button", { class: "danger", disabled: busy || !osAccess, title: osAccess ? "" : "Set OS access first",
       onclick: () => installDialog(host) }, "Reinstall ESXi…"));
   if (!report) return h("div", { class: "panel" }, header, h("p", { class: "muted" }, "No install has run on this host."));
-  const ok = report.validation.length && report.validation.every((c) => c.ok);
-  return h("div", { class: "panel", "data-panel": "install" }, header,
-    h("p", {}, ok ? badge("pass", "validated") : badge("fail", "not validated"), " ",
-      `ESXi ${report.iso_version} build ${report.iso_build} (was ${report.previous_build || "?"}) · media read ${Math.round(report.media_bytes_served / 2 ** 20)} MiB`),
+  const target = `ESXi ${report.iso_version} build ${report.iso_build}`;
+  const installed = Boolean(report.installed_build) && report.validation.length > 0;
+  const valid = installed && report.validation.every((c) => c.ok);
+  const media = `${report.media_fetches.length} ISO requests, ${Math.round(report.media_bytes_served / 2 ** 20)} MiB read`;
+  let summary;
+  if (valid) {
+    summary = h("p", { "data-role": "install-summary" }, badge("pass", "installed"), " ",
+      `Installed ${target} (was ${report.previous_build || "?"}) and validated · ${media}`);
+  } else if (installed) {
+    summary = h("p", { "data-role": "install-summary" }, badge("warn", "check"), " ",
+      `Installed ${target}, but some validation checks failed · ${media}`);
+  } else {
+    // A failed attempt only tells us what was *targeted*; never present it as the installed version.
+    summary = h("div", { "data-role": "install-summary" },
+      h("p", {}, badge("fail", "failed"), " ", `Install of ${target} did not complete. Nothing was installed; `,
+        `the host is still on build ${report.previous_build || "?"}.`),
+      lastInstallJob?.error ? h("p", { class: "error" }, lastInstallJob.error.message) : null,
+      h("p", { class: "muted" }, `Boot method ${report.boot_method || "—"} · ${media}`));
+  }
+  return h("div", { class: "panel", "data-panel": "install" }, header, summary,
     report.validation.length ? table(["", "Check", "Expected", "Observed"], report.validation.map((c) =>
       h("tr", {}, h("td", {}, badge(c.ok ? "pass" : "fail", c.ok ? "ok" : "failed")), h("td", {}, c.name),
         h("td", { class: "muted" }, c.expected), h("td", {}, c.observed)))) : null);

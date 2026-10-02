@@ -19,6 +19,7 @@ def _simulated(tmp_path: Path, **extra: str) -> GroundZero:
             "GROUNDZERO_INSTALL_POLL_SECONDS": "0.2",
             "GROUNDZERO_INSTALLER_BOOT_MINUTES": "0.5",
             "GROUNDZERO_MEDIA_SETTLE_SECONDS": "0",
+            "GROUNDZERO_MEDIA_CLEANUP_WATCH_SECONDS": "8",
             **extra,
         },
     )
@@ -48,6 +49,15 @@ def simulated_r740xd_ignoring_boot_once(tmp_path: Path) -> Iterator[GroundZero]:
 def simulated_r740xd_slow_insert(tmp_path: Path) -> Iterator[GroundZero]:
     """The simulated iDRAC completes InsertMedia but its HTTP response times out (seen live)."""
     gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_FAULTS='["slow-insert"]')
+    gz.start()
+    yield gz
+    gz.stop()
+
+
+@pytest.fixture
+def simulated_r740xd_late_attach(tmp_path: Path) -> Iterator[GroundZero]:
+    """The simulated iDRAC rejects InsertMedia (RAC0720) but attaches the image a second later (seen live)."""
+    gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_FAULTS='["late-attach"]')
     gz.start()
     yield gz
     gz.stop()

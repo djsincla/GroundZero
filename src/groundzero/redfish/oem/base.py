@@ -85,6 +85,13 @@ class VendorProfile:
 
     default_boot_method: ClassVar[str] = "uefi-target"
 
+    async def wait_for_media_ready(
+        self, client: RedfishClient, identity: BmcIdentity, slot: VirtualMediaSlot, timeout: float
+    ) -> None:
+        """Block until mounted media is actually presented to the host. Standard Redfish has no signal
+        beyond Inserted=True, so the default returns immediately; vendors with a real state override it."""
+        return
+
     async def set_one_time_cd_boot(
         self, client: RedfishClient, identity: BmcIdentity, caps: BmcCapabilities, method: str = "auto"
     ) -> str:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, ClassVar
 
@@ -60,8 +61,39 @@ class DellProfile(VendorProfile):
     # - ServerBoot.1.FirstBootDevice=VCD-DVD is consumed but does not boot that media (run 2).
     # - UefiTarget is applied through a BIOS config job (JCP027) with an extra reboot, after which the
     #   host booted its disk (run 3).
-    # So Dell defaults to the plain Cd override with the System-scoped (RFS) slot.
+    # - The RFS attaches to the host ~1 minute after Redfish reports Inserted=True; runs 2-4 reset
+    #   before that (firewall showed no iDRAC fetches during POST). wait_for_media_ready() covers it.
+    # Dell defaults to the plain Cd override on the System-scoped (RFS) slot, after the RFS attaches.
     default_boot_method: ClassVar[str] = "cd"
+
+    async def wait_for_media_ready(
+        self, client: RedfishClient, identity: BmcIdentity, slot: VirtualMediaSlot, timeout: float
+    ) -> None:
+        """Wait for the Remote File Share to attach: RFS.n.MediaAttachState=Attached, RFS.n.Status=Done.
+
+        Learned live: Redfish reports Inserted=True immediately, but the RFS attaches ~1 minute later.
+        Resetting before that (runs 2-4) left the host with an empty virtual drive, so it booted its disk.
+        """
+        if not identity.manager_path:
+            return
+        index = "2" if slot.path.rstrip("/").endswith("/VirtualMedia/2") else "1"
+        state_key, status_key = f"RFS.{index}.MediaAttachState", f"RFS.{index}.Status"
+        attrs_path = identity.manager_path + "/Attributes"
+        deadline = asyncio.get_running_loop().time() + timeout
+        attrs: dict[str, Any] = {}
+        while asyncio.get_running_loop().time() < deadline:
+            attrs = (await client.get_json(attrs_path)).get("Attributes", {})
+            if state_key not in attrs:  # firmware without RFS attributes: nothing to wait for
+                return
+            if attrs.get(state_key) == "Attached" and attrs.get(status_key) == "Done":
+                return
+            if str(attrs.get(status_key, "")).lower() in ("failed", "error"):
+                raise RedfishError(f"Remote File Share failed to attach ({status_key}={attrs[status_key]})")
+            await asyncio.sleep(self.media_poll_seconds)
+        got = {k: attrs.get(k) for k in (state_key, status_key)}
+        raise RedfishError(f"Remote File Share did not attach within {timeout:.0f}s: {got}", path=attrs_path)
+
+    media_poll_seconds: ClassVar[float] = 5.0
 
     def choose_cd_slot(self, caps: BmcCapabilities) -> VirtualMediaSlot | None:
         """Dell: the System-scoped Remote File Share slot, else the classic Managers/.../VirtualMedia/CD."""

@@ -79,6 +79,11 @@ class MediaRegistry:
             if entry is not None:
                 entry.fetches.append(fetch)
 
+    def fetches(self, token: str) -> list[MediaFetch]:
+        with self._lock:
+            entry = self._entries.get(token)
+            return list(entry.fetches) if entry else []
+
     def stats(self, token: str) -> MediaStats | None:
         with self._lock:
             entry = self._entries.get(token)

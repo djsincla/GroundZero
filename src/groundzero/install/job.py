@@ -15,7 +15,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from groundzero.core.jobs import JobContext
 from groundzero.core.models import BmcAudit, Host, OsAccess
+from groundzero.core.store import utcnow
 from groundzero.esxi.models import EsxiAbout, EsxiNetworkConfig, EsxiStorage
 from groundzero.esxi.ops import EsxiOps
 from groundzero.install.crypt import sha512_crypt
@@ -30,7 +31,7 @@ from groundzero.install.iso import build_install_iso, inspect_iso
 from groundzero.install.kickstart import render_kickstart
 from groundzero.install.spec import InstallSpec, ManagementNetwork
 from groundzero.inventory.collect import collect_inventory
-from groundzero.media.registry import MediaRegistry, media_url, source_address_towards
+from groundzero.media.registry import MediaFetch, MediaRegistry, media_url, source_address_towards
 from groundzero.preflight.evaluate import CheckStatus, evaluate
 from groundzero.redfish import actions
 from groundzero.redfish.capabilities import VirtualMediaSlot, discover_capabilities
@@ -71,6 +72,8 @@ class InstallTimings(BaseModel):
     poll_seconds: float = 20.0
     action_timeout: float = 180.0
     media_settle_seconds: float = 20.0
+    cleanup_watch_seconds: float = 90.0
+    media_attach_seconds: float = 180.0
     installer_boot_minutes: float = 20.0
 
 
@@ -90,6 +93,10 @@ class InstallReport(BaseModel):
     spec: dict[str, Any]
     media_url_host: str
     media_bytes_served: int = 0
+    media_fetches: list[MediaFetch] = Field(
+        default_factory=list, description="Every BMC request for the ISO (diagnoses boots that never read it)"
+    )
+    reset_at: datetime | None = None
     reset_type: str | None = None
     boot_method: str | None = None
     validation: list[ValidationCheck] = Field(default_factory=list)
@@ -263,7 +270,7 @@ class Installer:
                 caps = await discover_capabilities(client, system, manager)
                 profile = profile_for(identity.vendor)
 
-                ctx.progress(0.12, "Mounting installer ISO and setting one-time boot")
+                ctx.progress(0.12, "Mounting installer ISO, waiting for it to attach, setting one-time boot")
                 slot, report.boot_method = await actions.boot_once_from_virtual_cd(
                     client,
                     identity,
@@ -273,9 +280,12 @@ class Installer:
                     action_timeout=self.t.action_timeout,
                     boot_method=self.req.boot_method,
                     settle_seconds=self.t.media_settle_seconds,
+                    cleanup_watch_seconds=self.t.cleanup_watch_seconds,
+                    attach_timeout=self.t.media_attach_seconds,
                 )
                 ctx.progress(0.15, "Restarting the host into the installer")
                 report.reset_type = await actions.restart(client, identity, caps)
+                report.reset_at = utcnow()
                 mark("reset")
 
                 threshold = installer_boot_threshold(built.stat().st_size)
@@ -286,6 +296,7 @@ class Installer:
             finally:
                 stats = self.media.stats(token)
                 report.media_bytes_served = stats.bytes_served if stats else 0
+                report.media_fetches = self.media.fetches(token)[:2000]
                 if slot is not None:
                     try:
                         await actions.eject(client, slot)
@@ -332,7 +343,12 @@ class Installer:
                     "(one-time virtual CD boot did not take). Nothing was installed."
                 )
             state = "down, booting" if about is None else f"answering as build {about.build}"
-            ctx.progress(0.2, f"Waiting for the installer to load: host {state}, {served // 2**20} MiB read")
+            requests = len(self.media.fetches(token))
+            ctx.progress(
+                0.2,
+                f"Waiting for the installer to load: host {state}, {requests} ISO requests, "
+                f"{served // 2**20} MiB read",
+            )
             await asyncio.sleep(self.t.poll_seconds)
         raise InstallError("Host did not boot the installer ISO in time. Nothing was installed.")
 

@@ -163,6 +163,8 @@ class Services:
                 poll_seconds=self.settings.install_poll_seconds,
                 action_timeout=self.settings.redfish_action_timeout,
                 media_settle_seconds=self.settings.media_settle_seconds,
+                cleanup_watch_seconds=self.settings.media_cleanup_watch_seconds,
+                media_attach_seconds=self.settings.media_attach_seconds,
                 installer_boot_minutes=self.settings.installer_boot_minutes,
             ),
         )

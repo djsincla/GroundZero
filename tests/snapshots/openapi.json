@@ -790,6 +790,14 @@
             "title": "Media Bytes Served",
             "type": "integer"
           },
+          "media_fetches": {
+            "description": "Every BMC request for the ISO (diagnoses boots that never read it)",
+            "items": {
+              "$ref": "#/components/schemas/MediaFetch"
+            },
+            "title": "Media Fetches",
+            "type": "array"
+          },
           "media_url_host": {
             "title": "Media Url Host",
             "type": "string"
@@ -804,6 +812,18 @@
               }
             ],
             "title": "Previous Build"
+          },
+          "reset_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reset At"
           },
           "reset_type": {
             "anyOf": [
@@ -1081,6 +1101,47 @@
           "supports_virtual_media"
         ],
         "title": "LicenseInfo",
+        "type": "object"
+      },
+      "MediaFetch": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "byte_range": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Byte Range"
+          },
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "client": {
+            "title": "Client",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client",
+          "method",
+          "byte_range",
+          "bytes",
+          "at"
+        ],
+        "title": "MediaFetch",
         "type": "object"
       },
       "MemoryInfo": {
