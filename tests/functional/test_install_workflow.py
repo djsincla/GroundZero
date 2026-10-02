@@ -110,6 +110,7 @@ def test_failed_one_time_boot_stops_safely(simulated_r740xd_ignoring_boot_once: 
     report = _report(gz)
     assert report["installed_build"] is None and report["validation"] == []
     assert report["bmc_audit"]["non_get"][-1].endswith("VirtualMedia.EjectMedia")  # media still ejected
+    assert not list((gz.home / "media").glob("*.iso*"))  # built ISO removed even on failure
 
 
 def test_slow_insert_media_is_verified_not_retried(simulated_r740xd_slow_insert: GroundZero) -> None:
@@ -152,3 +153,4 @@ def test_media_that_attaches_after_a_failed_mount_is_ejected(
     writes = _report(gz)["bmc_audit"]["non_get"]
     assert writes[-1].endswith("VirtualMedia.EjectMedia")  # the late attach was found and ejected
     assert not any(w.endswith("ComputerSystem.Reset") for w in writes)  # never reset after a failed mount
+    assert not list((gz.home / "media").glob("*.iso*"))  # built ISO removed even on failure

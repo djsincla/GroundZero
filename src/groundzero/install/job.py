@@ -73,7 +73,7 @@ class InstallTimings(BaseModel):
     action_timeout: float = 180.0
     media_settle_seconds: float = 20.0
     cleanup_watch_seconds: float = 90.0
-    media_attach_seconds: float = 180.0
+    media_attach_seconds: float = 600.0
     installer_boot_minutes: float = 20.0
 
 
@@ -215,6 +215,14 @@ class Installer:
         self.last_report: InstallReport | None = None
 
     async def run(self, ctx: JobContext) -> dict[str, Any]:
+        try:
+            return await self._run(ctx)
+        finally:
+            # Built ISOs are ~700 MB each; never leave one behind, whatever happened.
+            for leftover in self.media_dir.glob(f"{ctx.job.id}-*.iso*"):
+                leftover.unlink(missing_ok=True)
+
+    async def _run(self, ctx: JobContext) -> dict[str, Any]:
         started = time.monotonic()
         marks: dict[str, float] = {}
 
@@ -313,7 +321,6 @@ class Installer:
         report.installed_build = next((c.observed for c in report.validation if c.name == "esxi.build"), None)
         mark("validated")
         report.durations_s = marks
-        built.unlink(missing_ok=True)
         if not report.valid:
             failed = [c.name for c in report.validation if not c.ok]
             raise InstallError(f"ESXi installed but validation failed: {', '.join(failed)}")
