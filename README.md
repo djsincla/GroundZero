@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="../../actions"><img alt="CI" src="../../actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/djsincla/GroundZero/actions"><img alt="CI" src="https://github.com/djsincla/GroundZero/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white">
   <img alt="Redfish" src="https://img.shields.io/badge/BMC-Redfish-6d28d9">
