@@ -199,3 +199,9 @@ def test_certificate_routes(api: TestClient) -> None:
     assert api.get(f"/api/v1/hosts/{host_id}/certificates").json() == []
     resp = api.post(f"/api/v1/hosts/{host_id}/certificates/printer/trust")
     assert resp.status_code == 404 and "bmc or os" in resp.json()["detail"]
+
+
+def test_isos_are_listed_after_a_restart_without_a_rescan(api: TestClient) -> None:
+    """Regression: GET /isos was empty after every server start until someone pressed Rescan."""
+    names = [i["filename"] for i in api.get("/api/v1/isos").json()]
+    assert "VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso" in names

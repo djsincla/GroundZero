@@ -1,0 +1,190 @@
+// Config sets (list, create, edit, duplicate, delete) and the ISO repository.
+import {
+  api, badge, card, empty, fmtBytes, fmtTime, h, maybe, mount, openDialog, pageHeader, showJobDrawer, table, toast,
+} from "../core.js";
+import { schemaForm } from "../forms.js";
+
+// ── config sets ──
+export async function viewConfigSets(app) {
+  const [sets, families] = await Promise.all([api("GET", "/config-sets"), api("GET", "/os-families")]);
+  const title = Object.fromEntries(families.map((f) => [f.family, f.title]));
+  mount(app, 
+    pageHeader("Config sets", "Reusable OS settings. Choose one per server at deploy time; hostname and IP stay per server.",
+      h("button", { onclick: captureFromServerDialog }, "From a running server…"),
+      h("a", { class: "button primary", href: "#/config-sets/new" }, "New config set")),
+    card({}, sets.length
+      ? table(["Name", "OS", "Source", "Root password", "Updated"], sets.map((s) =>
+          h("tr", { "data-config-set": s.name },
+            h("td", {}, h("a", { href: `#/config-sets/${s.id}` }, s.name)),
+            h("td", {}, title[s.os_family] || s.os_family),
+            h("td", { class: "muted" }, s.source),
+            h("td", {}, s.has_root_password ? badge("pass", "stored") : badge("none", "not set")),
+            h("td", { class: "muted" }, fmtTime(s.updated_at)))))
+      : empty("No config sets yet. Build one from a running server, or create one from scratch.",
+          h("button", { onclick: captureFromServerDialog }, "From a running server…"),
+          h("a", { class: "button primary", href: "#/config-sets/new" }, "New config set"))));
+}
+
+// Build a config set by reading a running server (read-only). If GroundZero can't log in to its OS yet,
+// the address and credentials are asked for here and saved as the host's OS access first.
+async function captureFromServerDialog() {
+  const hosts = await api("GET", "/hosts");
+  if (!hosts.length) {
+    openDialog("Build from a running server", [
+      h("p", {}, "Add the server as a host first (Hosts → Add host), then come back here."),
+    ], { submitLabel: "Go to Hosts", onSubmit: async () => { location.hash = "#/"; } });
+    return;
+  }
+  const access = Object.fromEntries(await Promise.all(hosts.map(async (x) => [x.id, await maybe(api("GET", `/hosts/${x.id}/os`))])));
+  const select = h("select", { id: "cap-host", name: "host" }, hosts.map((x) => h("option", { value: x.id }, x.name)));
+  const name = h("input", { id: "cap-name", name: "name", required: true });
+  const addr = h("input", { id: "cap-addr", name: "address" });
+  const user = h("input", { id: "cap-user", name: "user", value: "root" });
+  const pass = h("input", { id: "cap-pass", name: "pass", type: "password", autocomplete: "off" });
+  const known = h("p", { class: "help" });
+  const creds = h("div", {},
+    h("p", { class: "help" }, "GroundZero doesn't know how to log in to this server's OS yet. These are saved as its OS access."),
+    h("label", { for: "cap-addr" }, "OS management address"), addr,
+    h("label", { for: "cap-user" }, "OS username"), user,
+    h("label", { for: "cap-pass" }, "OS password"), pass);
+  let nameTouched = false;
+  name.addEventListener("input", () => { nameTouched = true; });
+  const sync = () => {
+    const host = hosts.find((x) => x.id === select.value);
+    const a = access[host.id];
+    creds.hidden = Boolean(a);
+    for (const el of [addr, pass]) el.required = !a;
+    known.textContent = a ? `Reads ${a.address} as ${a.username} (read-only).` : "";
+    if (!nameTouched) name.value = `${host.name}-captured`;
+  };
+  select.addEventListener("change", sync);
+  openDialog("Build a config set from a running server", [
+    h("p", { class: "muted" }, "Reads the running hypervisor's network, DNS, NTP, uplinks and boot disk, and saves them as a reusable config set. ",
+      "Nothing on the server changes. Its hostname and IP are kept as that server's own values."),
+    h("label", { for: "cap-host" }, "Server"), select, known, creds,
+    h("label", { for: "cap-name" }, "Config set name"), name,
+  ], {
+    submitLabel: "Capture",
+    onSubmit: async (f) => {
+      const id = f.get("host");
+      if (!access[id]) {
+        await api("PUT", `/hosts/${id}/os`, { address: f.get("address"), username: f.get("user"), password: f.get("pass") });
+      }
+      const job = await api("POST", `/hosts/${id}/os/capture`, { name: f.get("name") });  // errors stay in the dialog
+      showJobDrawer(job, {
+        title: "Capture config set",
+        onDone: (j) => { if (j.status === "succeeded") location.hash = `#/config-sets/${j.result.config_set_id}`; },
+      });
+    },
+  });
+  sync();
+}
+
+export async function viewConfigSet(app, id, query) {
+  const families = await api("GET", "/os-families");
+  const isNew = id === "new";
+  const from = isNew && query.get("from") ? await api("GET", `/config-sets/${query.get("from")}`) : null;
+  const existing = isNew ? null : await api("GET", `/config-sets/${id}`);
+  const base = existing || from;
+  let family = families.find((f) => f.family === (base?.os_family || query.get("family") || "esxi")) || families[0];
+
+  const name = h("input", { id: "cs-name", required: true, value: existing?.name || (from ? `${from.name}-copy` : "") });
+  const nameError = h("p", { class: "field-error", role: "alert" });
+  const familySelect = h("select", { id: "cs-family", disabled: !isNew },
+    families.map((f) => h("option", { value: f.family, selected: f.family === family.family }, f.title)));
+  const password = h("input", { id: "cs-password", type: "password", autocomplete: "new-password",
+    placeholder: existing?.has_root_password ? "stored: leave blank to keep" : "" });
+  const formSlot = h("div");
+  let form;
+  const renderForm = () => {
+    form = schemaForm(family.settings_schema, base?.os_family === family.family ? base.settings : {},
+      { idPrefix: "cs", where: "settings" });
+    formSlot.replaceChildren(form.el);
+  };
+  familySelect.addEventListener("change", () => {
+    family = families.find((f) => f.family === familySelect.value);
+    renderForm();
+  });
+  renderForm();
+
+  const status = h("div");
+  const save = async () => {
+    form.clearErrors();
+    nameError.textContent = "";
+    status.replaceChildren();
+    const body = { name: name.value.trim(), os_family: family.family, settings: form.value(),
+      root_password: password.value || null };
+    try {
+      const saved = await api(isNew ? "POST" : "PUT", isNew ? "/config-sets" : `/config-sets/${id}`, body);
+      toast(`Saved ${saved.name}`, "success");
+      location.hash = "#/config-sets";
+    } catch (e) {
+      const errors = e.problem?.errors || [];
+      for (const err of errors) if (err.loc?.includes("name")) nameError.textContent = err.msg;
+      const placed = errors.length && form.setErrors(errors.filter((x) => !x.loc?.includes("name")));
+      status.replaceChildren(h("p", { class: "error", role: "alert" },
+        placed || errors.length ? "Fix the highlighted fields." : e.message));
+    }
+  };
+  const remove = () => openDialog(`Delete ${existing.name}?`, [
+    h("p", {}, "Hosts keep their own per-server values. Installs already done are not affected."),
+  ], {
+    submitLabel: "Delete", submitClass: "danger",
+    onSubmit: async () => {
+      await api("DELETE", `/config-sets/${id}`);
+      toast(`Deleted ${existing.name}`, "success");
+      location.hash = "#/config-sets";
+    },
+  });
+
+  const secrets = family.secret_fields.includes("root_password");
+  mount(app, 
+    pageHeader(isNew ? "New config set" : existing.name,
+      existing ? `${family.title} · ${existing.source} · updated ${fmtTime(existing.updated_at)}` : family.title,
+      existing ? h("a", { class: "button", href: `#/config-sets/new?from=${id}` }, "Duplicate") : null,
+      existing ? h("button", { class: "danger-outline", onclick: remove }, "Delete…") : null),
+    from ? h("p", { class: "notice" }, `Copy of ${from.name}. The root password is not copied; set one below or it falls back to the host's OS access password.`) : null,
+    card({ class: "panel form-card" },
+      h("div", { class: "grid two" },
+        h("div", { class: "field" }, h("label", { for: "cs-name" }, "Name", h("span", { class: "req" }, " *")), name, nameError),
+        h("div", { class: "field" }, h("label", { for: "cs-family" }, "OS family"), familySelect)),
+      formSlot,
+      secrets ? h("div", { class: "field" },
+        h("label", { for: "cs-password" }, "Root password"), password,
+        h("p", { class: "help" }, "Set on the installed OS. Encrypted at rest and never shown again.")) : null,
+      status,
+      h("div", { class: "actions" }, h("a", { class: "button", href: "#/config-sets" }, "Back"),
+        h("button", { class: "primary", onclick: save }, isNew ? "Create" : "Save"))));
+}
+
+// ── ISO repository ──
+export async function viewIsos(app) {
+  const isos = await api("GET", "/isos");
+  const render = (list) => mount(app, 
+    pageHeader("ISO repository", "Stock installer images. Download them yourself and drop them into the repository folder.",
+      h("button", { onclick: rescan, id: "rescan" }, "Rescan folder")),
+    card({}, list.length
+      ? table(["Image", "OS", "Version", "Build", "Size", "SHA-256", "Modified"], list.map((i) =>
+          h("tr", { "data-iso": i.filename },
+            h("td", { class: "mono" }, i.filename),
+            h("td", {}, i.os_family ? badge("pass", i.os_family) : badge("none", "unrecognised")),
+            h("td", {}, i.version || "—"), h("td", {}, i.build || "—"), h("td", {}, fmtBytes(i.size)),
+            h("td", { class: "mono small-text", title: i.sha256 }, `${i.sha256.slice(0, 12)}…`),
+            h("td", { class: "muted" }, fmtTime(i.modified_at)))))
+      : empty("No ISOs found. Put stock installer ISOs in the repository folder (./images by default, or GROUNDZERO_ISO_REPOSITORY), then rescan.")),
+    h("p", { class: "help" }, "GroundZero never downloads or changes these files. At deploy time it builds a temporary copy with the kickstart, serves it to the BMC and deletes it."));
+  async function rescan(ev) {
+    ev.target.disabled = true;
+    ev.target.textContent = "Scanning…";
+    try {
+      const list = await api("POST", "/isos/rescan");
+      render(list);
+      toast(`Found ${list.length} image${list.length === 1 ? "" : "s"}`, "success");
+    } catch (e) {
+      toast(e.message, "error");
+      ev.target.disabled = false;
+      ev.target.textContent = "Rescan folder";
+    }
+  }
+  render(isos);
+}

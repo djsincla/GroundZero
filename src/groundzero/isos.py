@@ -47,6 +47,7 @@ class IsoRepository:
         self._cache_file = cache_file
         self._lock = threading.Lock()
         self._images: dict[str, tuple[IsoImage, Path]] = {}
+        self._scanned = False
 
     def scan(self) -> list[IsoImage]:
         """Rescan the folder. Blocking (hashes new files); call via a thread from async code."""
@@ -65,13 +66,19 @@ class IsoRepository:
         )
         with self._lock:
             self._images = found
+            self._scanned = True
         return self.list()
 
     def list(self) -> list[IsoImage]:
+        """Known images; the first call scans the folder (after a restart nothing is known yet)."""
+        if not self._scanned:
+            return self.scan()
         with self._lock:
             return sorted((img for img, _ in self._images.values()), key=lambda i: i.filename)
 
     def resolve(self, iso_id: str) -> tuple[IsoImage, Path] | None:
+        if not self._scanned:
+            self.scan()
         with self._lock:
             return self._images.get(iso_id)
 

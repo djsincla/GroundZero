@@ -24,12 +24,15 @@ class DiskRule(BaseModel):
     """Which disk ESXi is installed on; rules keep a config set reusable across servers."""
 
     mode: Literal["current-boot-disk", "first-match", "exact"] = Field(
+        title="Rule",
         default="current-boot-disk",
         description="current-boot-disk: the disk the running OS boots from (needs the OS reachable); "
         "first-match: first disk whose vendor/model/driver matches (kickstart --firstdisk, e.g. DELLBOSS); "
         "exact: a canonical device name",
     )
-    value: str | None = Field(default=None, description="Match list for first-match, device name for exact")
+    value: str | None = Field(
+        default=None, title="Match / device", description="Match list for first-match, device name for exact"
+    )
 
     @model_validator(mode="after")
     def _value_required(self) -> DiskRule:
@@ -41,21 +44,31 @@ class DiskRule(BaseModel):
 class EsxiSettings(BaseModel):
     """Shared ESXi settings stored in a config set."""
 
-    netmask: str = Field(description="Management network mask, e.g. 255.255.255.0")
-    gateway: str = Field(description="Default gateway")
-    nameservers: list[str] = Field(min_length=1, description="DNS servers")
-    vlan_id: int = Field(default=0, ge=0, le=4094, description="Management VLAN (0 = untagged)")
-    install_nic: str = Field(default="vmnic0", description="vmnic the installer configures for management")
-    extra_uplinks: list[str] = Field(
-        default_factory=list, description="Added as active uplinks on first boot"
+    netmask: str = Field(title="Netmask", description="Management network mask, e.g. 255.255.255.0")
+    gateway: str = Field(title="Gateway", description="Default gateway")
+    nameservers: list[str] = Field(title="DNS servers", min_length=1, description="DNS servers")
+    vlan_id: int = Field(
+        title="Management VLAN", default=0, ge=0, le=4094, description="Management VLAN (0 = untagged)"
     )
-    ntp_servers: list[str] = Field(default_factory=lambda: ["pool.ntp.org"], description="NTP servers")
-    install_disk: DiskRule = Field(default_factory=DiskRule, description="Install target")
+    install_nic: str = Field(
+        title="Install NIC", default="vmnic0", description="vmnic the installer configures for management"
+    )
+    extra_uplinks: list[str] = Field(
+        title="Extra uplinks", default_factory=list, description="Added as active uplinks on first boot"
+    )
+    ntp_servers: list[str] = Field(
+        title="NTP servers", default_factory=lambda: ["pool.ntp.org"], description="NTP servers"
+    )
+    install_disk: DiskRule = Field(
+        title="Install disk", default_factory=DiskRule, description="Install target"
+    )
     preserve_vmfs: bool = Field(
-        default=True, description="Keep an existing VMFS datastore on the install disk"
+        title="Preserve VMFS", default=True, description="Keep an existing VMFS datastore on the install disk"
     )
     cpu_override: Literal["auto", "on", "off"] = Field(
-        default="auto", description="allowLegacyCPU for deprecated CPUs (auto: from preflight)"
+        title="CPU override",
+        default="auto",
+        description="allowLegacyCPU for deprecated CPUs (auto: from preflight)",
     )
 
     @field_validator("netmask", "gateway")
@@ -68,11 +81,13 @@ class EsxiSettings(BaseModel):
 class EsxiHostValues(BaseModel):
     """Per-server values (prefilled from capture or the last install; editable at install time)."""
 
-    hostname: str = Field(description="Short hostname")
-    ip: str = Field(description="Management IPv4 address")
-    install_nic: str | None = Field(default=None, description="Override the config set's install NIC")
+    hostname: str = Field(title="Hostname", description="Short hostname")
+    ip: str = Field(title="Management IP", description="Management IPv4 address")
+    install_nic: str | None = Field(
+        title="Install NIC override", default=None, description="Override the config set's install NIC"
+    )
     extra_uplinks: list[str] | None = Field(
-        default=None, description="Override the config set's extra uplinks"
+        title="Extra uplinks override", default=None, description="Override the config set's extra uplinks"
     )
 
     @field_validator("ip")

@@ -1,0 +1,201 @@
+// Shared plumbing for the GroundZero UI: API client, DOM helper, toasts, dialogs and the job drawer.
+// All server data is rendered with textContent (never innerHTML), so BMC/OS strings cannot inject markup.
+
+export const API = "/api/v1";
+
+// ── auth: the token arrives once in the URL fragment (never sent to the server), then lives in the session ──
+const fromHash = new URLSearchParams(location.hash.slice(1)).get("token");
+if (fromHash) {
+  sessionStorage.setItem("gz-token", fromHash);
+  history.replaceState(null, "", location.pathname + "#/");
+}
+export const token = () => sessionStorage.getItem("gz-token");
+export const signOut = () => sessionStorage.removeItem("gz-token");
+
+export class ApiError extends Error {
+  constructor(status, problem) {
+    super(problem?.detail || problem?.title || `HTTP ${status}`);
+    this.status = status;
+    this.problem = problem;
+  }
+}
+
+let onUnauthorized = () => {};
+export const setUnauthorizedHandler = (fn) => { onUnauthorized = fn; };
+
+export async function api(method, path, body) {
+  const res = await fetch(API + path, {
+    method,
+    headers: { Authorization: `Bearer ${token()}`, ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 401) { signOut(); onUnauthorized(); throw new ApiError(401); }
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data;
+}
+export const maybe = (p) => p.catch((e) => { if (e.status === 404) return null; throw e; });
+
+// ── tiny DOM helper ──
+export function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "class") el.className = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat(Infinity)) {
+    if (c === null || c === undefined || c === false) continue;
+    el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return el;
+}
+
+// Replace a container's content; optional sections may be null/false (replaceChildren would print "null").
+export const mount = (el, ...nodes) => el.replaceChildren(...nodes.flat().filter((n) => n !== null && n !== undefined && n !== false));
+export const badge = (status, label) => h("span", { class: `badge ${status}`, "data-status": status }, label ?? status);
+export const table = (headers, rows) =>
+  h("div", { class: "table-wrap" },
+    h("table", {}, h("thead", {}, h("tr", {}, headers.map((x) => h("th", {}, x)))), h("tbody", {}, rows)));
+export const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString() : "—");
+export const fmtBytes = (n) => {
+  if (n == null) return "—";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(i ? 1 : 0)} ${units[i]}`;
+};
+export const errorBox = (e) => h("p", { class: "error", role: "alert" }, e.message || String(e));
+export const empty = (text, ...actions) => h("div", { class: "empty" }, h("p", {}, text), actions.length ? h("div", { class: "row center" }, actions) : null);
+export const pageHeader = (title, subtitle, ...actions) =>
+  h("div", { class: "page-header" },
+    h("div", {}, h("h1", {}, title), subtitle ? h("p", { class: "muted subtitle" }, subtitle) : null),
+    h("div", { class: "row" }, actions));
+export const card = (attrs, ...children) => h("section", { class: "panel", ...attrs }, children);
+
+// ── toasts ──
+export function toast(message, kind = "info") {
+  const region = document.getElementById("toasts");
+  const el = h("div", { class: `toast ${kind}`, role: kind === "error" ? "alert" : "status" }, message);
+  region.append(el);
+  setTimeout(() => { el.classList.add("leaving"); setTimeout(() => el.remove(), 300); }, kind === "error" ? 8000 : 4000);
+}
+
+// ── modal dialogs: build a form, resolve on submit, map API errors back onto the form ──
+const dialog = () => document.getElementById("dialog");
+
+export function openDialog(title, body, { submitLabel = "Save", submitClass = "primary", onSubmit, wide = false } = {}) {
+  const err = h("div");
+  const submit = h("button", { class: submitClass, value: "ok" }, submitLabel);
+  const form = h("form", { method: "dialog", novalidate: false },
+    h("h2", {}, title), body, err,
+    h("div", { class: "actions" }, h("button", { value: "cancel", formnovalidate: true }, "Cancel"), submit));
+  form.addEventListener("submit", async (ev) => {
+    if (ev.submitter?.value !== "ok") return;
+    ev.preventDefault();
+    submit.disabled = true;
+    try {
+      await onSubmit(new FormData(form), form);
+      dialog().close();
+    } catch (e) {
+      err.replaceChildren(errorBox(e));
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  const d = dialog();
+  d.classList.toggle("wide", wide);
+  d.replaceChildren(form);
+  d.showModal();
+  return { form, submit };
+}
+
+// ── job progress: reads the per-job server-sent events stream (fetch, so the bearer header is sent) ──
+export async function followJob(jobId, onEvent, signal) {
+  const res = await fetch(`${API}/jobs/${jobId}/events`, { headers: { Authorization: `Bearer ${token()}` }, signal });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buffer += decoder.decode(value, { stream: true });
+    let i;
+    while ((i = buffer.indexOf("\n\n")) >= 0) {
+      const chunk = buffer.slice(0, i);
+      buffer = buffer.slice(i + 2);
+      const data = chunk.split("\n").find((l) => l.startsWith("data: "));
+      if (data) onEvent(JSON.parse(data.slice(6)));
+    }
+  }
+}
+
+export const JOB_LABELS = {
+  inventory: "Inventory", preflight: "Preflight", os_network: "Read ESXi network", install: "Install",
+  os_capture: "Capture config set",
+};
+const FINAL = ["succeeded", "failed", "cancelled"];
+export const isActive = (job) => job.status === "queued" || job.status === "running";
+
+export function jobCard(job, { onDone, hostName } = {}) {
+  const bar = h("div", { style: `width:${Math.round((job.progress || 0) * 100)}%` });
+  let status = badge(job.status);
+  const msg = h("span", { class: "muted", "data-role": "message" }, job.message || "");
+  const err = h("div", { class: "error" }, job.error ? job.error.message : "");
+  const cancel = isActive(job)
+    ? h("button", { class: "small", onclick: async () => {
+        try { await api("POST", `/jobs/${job.id}/cancel`); toast("Cancel requested"); } catch (e) { toast(e.message, "error"); }
+      } }, "Cancel")
+    : null;
+  const el = h("div", { class: "job", "data-job": job.id },
+    h("div", { class: "row" }, status, h("strong", {}, JOB_LABELS[job.kind] || job.kind),
+      hostName ? h("span", {}, hostName) : null,
+      h("span", { class: "mono muted" }, job.id), h("span", { class: "spacer" }),
+      h("span", { class: "muted small-text" }, fmtTime(job.created_at)), cancel),
+    h("div", { class: "progress" }, bar), msg, err);
+  if (isActive(job)) {
+    followJob(job.id, (ev) => {
+      bar.style.width = `${Math.round(ev.progress * 100)}%`;
+      status.replaceWith((status = badge(ev.status)));
+      msg.textContent = ev.message;
+      if (FINAL.includes(ev.status)) {
+        cancel?.remove();
+        api("GET", `/jobs/${job.id}`).then((j) => { err.textContent = j.error ? j.error.message : ""; onDone?.(j); });
+      }
+    }).catch(() => {});
+  }
+  return el;
+}
+
+// ── job drawer: a slide-over showing one job's live progress; stays open across page changes ──
+export function showJobDrawer(job, { onDone, title } = {}) {
+  const drawer = document.getElementById("drawer");
+  const close = h("button", { class: "icon", "aria-label": "Close", onclick: () => { drawer.hidden = true; } }, "✕");
+  drawer.replaceChildren(
+    h("div", { class: "drawer-head" }, h("h2", {}, title || JOB_LABELS[job.kind] || "Job"), close),
+    jobCard(job, {
+      onDone: (j) => {
+        const ok = j.status === "succeeded";
+        toast(`${JOB_LABELS[j.kind] || j.kind} ${j.status}`, ok ? "success" : "error");
+        // Success: get out of the way (the toast confirms it). Failure: stay open so the error can be read.
+        if (ok) setTimeout(() => { if (drawer.dataset.job === j.id) drawer.hidden = true; }, 2500);
+        onDone?.(j);
+      },
+    }),
+    h("p", { class: "muted small-text" }, "You can close this panel; the job keeps running. ", h("a", { href: "#/jobs" }, "All jobs")));
+  drawer.dataset.job = job.id;
+  drawer.hidden = false;
+}
+
+// Start a job through the API and follow it in the drawer.
+export async function startJob(method, path, body, opts = {}) {
+  try {
+    const job = await api(method, path, body);
+    showJobDrawer(job, opts);
+    return job;
+  } catch (e) {
+    toast(e.message, "error");
+    return null;
+  }
+}

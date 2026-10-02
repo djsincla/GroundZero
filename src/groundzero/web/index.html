@@ -4,20 +4,67 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GroundZero</title>
+  <script>
+    // Apply the saved theme before first paint (no flash). "system" = follow the OS.
+    try { const t = localStorage.getItem("gz-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+  </script>
+  <link rel="icon" href="/ui/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/ui/app.css">
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="#/">GroundZero</a>
-    <nav>
-      <a href="#/" data-nav="hosts">Hosts</a>
-      <a href="#/jobs" data-nav="jobs">Jobs</a>
-      <a href="#/info" data-nav="info">Info</a>
-      <a href="/docs" target="_blank" rel="noopener">API</a>
-    </nav>
-    <span id="mode" class="mode" hidden></span>
-  </header>
-  <main id="app" aria-live="polite"></main>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#/">
+        <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
+          <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.5" opacity=".35"/>
+          <circle cx="16" cy="16" r="8.5" fill="none" stroke="currentColor" stroke-width="2.5" opacity=".7"/>
+          <circle cx="16" cy="16" r="4" fill="var(--brand)"/>
+        </svg>
+        <span>GroundZero</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="#/" data-nav="hosts">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></svg>
+          <span>Hosts</span></a>
+        <a href="#/jobs" data-nav="jobs">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h4l3-8 4 16 3-8h2"/></svg>
+          <span>Jobs</span></a>
+        <a href="#/config-sets" data-nav="config-sets">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+          <span>Config sets</span></a>
+        <a href="#/isos" data-nav="isos">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>
+          <span>ISOs</span></a>
+        <hr>
+        <a href="#/api" data-nav="api">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
+          <span>API</span></a>
+        <a href="#/info" data-nav="info">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></svg>
+          <span>Info</span></a>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="theme" role="group" aria-label="Theme">
+          <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        </div>
+        <button type="button" class="link" id="sign-out">Sign out</button>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+    <div class="content">
+      <header class="topbar">
+        <button type="button" class="icon menu-toggle" id="menu-toggle" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">☰</button>
+        <span class="spacer"></span>
+        <button type="button" class="running-pill" id="running" hidden></button>
+        <span id="mode" class="mode" hidden></span>
+      </header>
+      <main id="app" aria-live="polite"></main>
+    </div>
+  </div>
+  <aside id="drawer" class="drawer" hidden aria-label="Job progress"></aside>
+  <div id="toasts" class="toasts"></div>
   <dialog id="dialog"></dialog>
   <script type="module" src="/ui/app.js"></script>
 </body>
