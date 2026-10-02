@@ -510,8 +510,8 @@ class Services:
         return pem
 
     def os_target(self, host_id: str, access: OsAccess, *, repin: bool = False) -> OsAccess:
-        if self.sim_esxi is not None:
-            return access
+        if not isinstance(self.esxi, LiveEsxiOps):
+            return access  # simulated/injected ESXi: there is no real certificate to pin
         pem = self.pinned_pem(host_id, "os", access.address, verify_tls=access.verify_tls, repin=repin)
         return OsTarget(**access.model_dump(), pinned_pem=pem)
 
