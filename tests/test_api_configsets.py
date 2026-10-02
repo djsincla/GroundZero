@@ -192,3 +192,10 @@ def test_install_with_a_set_needs_per_server_values(api: TestClient) -> None:
     )
     assert resp.status_code == 422 and "Per-server values" in resp.json()["detail"]
     assert api.get("/api/v1/jobs").json() == []  # rejected before queuing
+
+
+def test_certificate_routes(api: TestClient) -> None:
+    host_id = _host(api, with_os=False)
+    assert api.get(f"/api/v1/hosts/{host_id}/certificates").json() == []
+    resp = api.post(f"/api/v1/hosts/{host_id}/certificates/printer/trust")
+    assert resp.status_code == 404 and "bmc or os" in resp.json()["detail"]

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import ssl
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Self
@@ -68,6 +69,7 @@ class RedfishClient:
         password: str,
         *,
         verify_tls: bool = False,
+        ssl_context: ssl.SSLContext | None = None,
         timeout: float = 30.0,
         max_parallel: int = 4,
         retries: int = 3,
@@ -85,7 +87,7 @@ class RedfishClient:
         self._on_response = on_response
         self._http = httpx.AsyncClient(
             base_url=self.base_url,
-            verify=verify_tls,
+            verify=ssl_context if ssl_context is not None else verify_tls,
             timeout=timeout,
             transport=transport,
             follow_redirects=False,

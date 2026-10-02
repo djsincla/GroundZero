@@ -66,6 +66,14 @@ CREATE TABLE IF NOT EXISTS config_sets (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pins (
+    host_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    address TEXT NOT NULL,
+    pem TEXT NOT NULL,
+    pinned_at TEXT NOT NULL,
+    PRIMARY KEY (host_id, role)
+);
 CREATE TABLE IF NOT EXISTS host_values (
     host_id TEXT NOT NULL,
     os_family TEXT NOT NULL,
@@ -151,6 +159,7 @@ class Store:
             cur.execute("DELETE FROM results WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM os_access WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM host_values WHERE host_id = ?", (host_id,))
+            cur.execute("DELETE FROM pins WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM jobs WHERE host_id = ?", (host_id,))
             deleted = cur.execute("DELETE FROM hosts WHERE id = ?", (host_id,)).rowcount
         return deleted > 0
@@ -261,6 +270,26 @@ class Store:
             return None
         data: dict[str, Any] = json.loads(row["data"])
         return data
+
+    # ── certificate pins ────────────────────────────────────────────────
+    def set_pin(self, host_id: str, role: str, address: str, pem: str) -> None:
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO pins (host_id, role, address, pem, pinned_at) VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(host_id, role) DO UPDATE SET address = excluded.address, pem = excluded.pem,"
+                " pinned_at = excluded.pinned_at",
+                (host_id, role, address, pem, utcnow().isoformat()),
+            )
+
+    def get_pin(self, host_id: str, role: str) -> tuple[str, str, datetime] | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM pins WHERE host_id = ? AND role = ?", (host_id, role)).fetchone()
+        return (row["address"], row["pem"], datetime.fromisoformat(row["pinned_at"])) if row else None
+
+    def list_pins(self, host_id: str) -> list[tuple[str, str, str, datetime]]:
+        with self._tx() as cur:
+            rows = cur.execute("SELECT * FROM pins WHERE host_id = ? ORDER BY role", (host_id,)).fetchall()
+        return [(r["role"], r["address"], r["pem"], datetime.fromisoformat(r["pinned_at"])) for r in rows]
 
     # ── jobs ─────────────────────────────────────────────────────────────
     def create_job(self, *, kind: JobKind, host_id: str, params: dict[str, Any]) -> Job:

@@ -244,6 +244,30 @@ def hosts_rm(host: str) -> None:
     console.print(f"Removed {escape(h['name'])}")
 
 
+@hosts_app.command("certs")
+def hosts_certs(host: str) -> None:
+    """Show the pinned BMC/OS certificates (credentials are only ever sent to these)."""
+    h = _resolve_host(host)
+    table = Table("Role", "Address", "SHA-256 fingerprint", "Pinned")
+    for c in _call("GET", f"/hosts/{h['id']}/certificates"):
+        table.add_row(*(Text(v) for v in (c["role"], c["address"], c["fingerprint"], c["pinned_at"][:19])))
+    console.print(table)
+
+
+@hosts_app.command("trust")
+def hosts_trust(
+    host: str,
+    role: Annotated[str, typer.Argument(help="bmc or os")],
+    yes: Annotated[bool, typer.Option("--yes", help="Skip the confirmation")] = False,
+) -> None:
+    """Re-trust the certificate a BMC/OS presents now. Only after a legitimate change (reinstall, renewal)."""
+    h = _resolve_host(host)
+    if not yes:
+        typer.confirm(f"Replace the pinned {role} certificate for {h['name']}?", abort=True)
+    c = _call("POST", f"/hosts/{h['id']}/certificates/{role}/trust")
+    console.print(f"Pinned {escape(c['address'])}: {c['fingerprint']}")
+
+
 # ── inventory / preflight ────────────────────────────────────────────────
 @app.command()
 def inventory(

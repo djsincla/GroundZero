@@ -93,3 +93,16 @@ def test_live_esxi_network_read(tmp_path: Path) -> None:
         assert mgmt["ip"] == esxi.live_esxi
     finally:
         gz.stop()
+
+
+def test_live_bmc_certificate_is_pinned(live: tuple[GroundZero, str]) -> None:
+    gz, bmc = live
+    assert gz.cli("hosts", "add", "--bmc", bmc, "--name", "lab").code == 0
+    assert gz.cli("inventory", "lab", timeout=300).code == 0  # first contact pins, then reads via the pin
+    certs = gz.cli("hosts", "certs", "lab")
+    assert certs.code == 0 and "bmc" in certs.output, certs.output
+    with gz.api() as api:
+        host = api.get("/api/v1/hosts").json()[0]
+        pins = api.get(f"/api/v1/hosts/{host['id']}/certificates").json()
+    assert [p["role"] for p in pins] == ["bmc"] and len(pins[0]["fingerprint"]) == 95
+    assert gz.cli("inventory", "lab", timeout=300).code == 0  # reuse: same cert accepted

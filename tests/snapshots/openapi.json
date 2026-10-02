@@ -1672,6 +1672,35 @@
         "title": "PhysicalNic",
         "type": "object"
       },
+      "PinnedCertificate": {
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "pinned_at": {
+            "format": "date-time",
+            "title": "Pinned At",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "address",
+          "fingerprint",
+          "pinned_at"
+        ],
+        "title": "PinnedCertificate",
+        "type": "object"
+      },
       "PortGroup": {
         "properties": {
           "active_uplinks": {
@@ -2738,6 +2767,115 @@
           }
         ],
         "summary": "Get Host",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/certificates": {
+      "get": {
+        "description": "Pinned BMC/OS certificates (trust on first use). Credentials are only sent to these.",
+        "operationId": "list_certificates_api_v1_hosts__host_id__certificates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PinnedCertificate"
+                  },
+                  "title": "Response List Certificates Api V1 Hosts  Host Id  Certificates Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Certificates",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/certificates/{role}/trust": {
+      "post": {
+        "description": "Accept the certificate the BMC (\"bmc\") or installed OS (\"os\") presents now. Use only after a\nlegitimate change (reinstall, renewed certificate): this replaces the pin.",
+        "operationId": "trust_certificate_api_v1_hosts__host_id__certificates__role__trust_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "title": "Role",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinnedCertificate"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Trust Certificate",
         "tags": [
           "hosts"
         ]

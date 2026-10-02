@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from groundzero.core.jobs import JobContext
 from groundzero.core.models import BmcAudit, Host, OsAccess
 from groundzero.core.store import utcnow
+from groundzero.core.tls import CertificateChangedError
 from groundzero.esxi.models import EsxiAbout, EsxiNetworkConfig, EsxiStorage
 from groundzero.esxi.ops import EsxiOps
 from groundzero.install.crypt import sha512_crypt
@@ -225,6 +226,8 @@ class Installer:
         bmc_password: str,
         os_access: OsAccess | None,
         os_password: str | None,
+        resolve_os: Callable[[OsAccess], OsAccess] | None = None,
+        repin_os: Callable[[OsAccess], OsAccess] | None = None,
         request: InstallRequest,
         config: InstallConfig | None = None,
         client_factory: Callable[[Host, str], RedfishClient],
@@ -239,6 +242,8 @@ class Installer:
         self.bmc_password = bmc_password
         self.access = os_access
         self.os_password = os_password
+        self._resolve_os = resolve_os or (lambda a: a)
+        self._repin_os = repin_os or (lambda a: a)
         self.req = request
         self.config = config
         # The *new* OS is reached at the configured IP with the configured root password.
@@ -356,6 +361,8 @@ class Installer:
                 await self._wait_for_installer(ctx, token, report.previous_build, threshold)
                 mark("installer_booted")
                 await self._wait_for_new_build(ctx, iso_info.build, started, report.previous_build)
+                # A reinstall generates a new host certificate: trust it now that the expected build answers.
+                self.new_access = await asyncio.to_thread(self._repin_os, self.new_access)
                 mark("esxi_up")
             finally:
                 stats = self.media.stats(token)
@@ -448,9 +455,12 @@ class Installer:
             return None, None, None
         ctx.progress(0.02, f"Reading current configuration of {self.access.address}")
         try:
-            network = await self.esxi.read_network(self.access, self.os_password)
-            before = await self.esxi.read_storage(self.access, self.os_password)
+            target = await asyncio.to_thread(self._resolve_os, self.access)  # pinned certificate
+            network = await self.esxi.read_network(target, self.os_password)
+            before = await self.esxi.read_storage(target, self.os_password)
             previous = await self.esxi.probe(self.access.address)
+        except CertificateChangedError:
+            raise  # never proceed past a changed certificate, config set or not
         except Exception as exc:
             if self.config is None:
                 raise

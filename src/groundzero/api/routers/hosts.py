@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from groundzero.api.deps import ServicesDep
 from groundzero.core.models import Host, HostCreate, Job, JobKind, OsAccess, OsAccessSet, OsCaptureRequest
 from groundzero.core.services import InstallPreview
+from groundzero.core.tls import PinnedCertificate
 from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.install.job import InstallReport, InstallRequest
 from groundzero.inventory.models import HostInventory
@@ -131,3 +132,16 @@ def set_host_values(host_id: str, family: str, body: dict[str, Any], services: S
 def preview_install(host_id: str, body: InstallRequest, services: ServicesDep) -> InstallPreview:
     """Show the spec and kickstart a deployment would use (password hidden). Touches nothing."""
     return services.preview_install(host_id, body)
+
+
+@router.get("/{host_id}/certificates", response_model=list[PinnedCertificate])
+def list_certificates(host_id: str, services: ServicesDep) -> list[PinnedCertificate]:
+    """Pinned BMC/OS certificates (trust on first use). Credentials are only sent to these."""
+    return services.list_pins(host_id)
+
+
+@router.post("/{host_id}/certificates/{role}/trust", response_model=PinnedCertificate)
+def trust_certificate(host_id: str, role: str, services: ServicesDep) -> PinnedCertificate:
+    """Accept the certificate the BMC ("bmc") or installed OS ("os") presents now. Use only after a
+    legitimate change (reinstall, renewed certificate): this replaces the pin."""
+    return services.retrust(host_id, role)

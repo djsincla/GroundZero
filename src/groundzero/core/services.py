@@ -5,6 +5,7 @@ HTTP handlers stay thin; everything here is plain Python that can be tested with
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import Callable
@@ -28,7 +29,8 @@ from groundzero.core.models import (
     OsAccessSet,
 )
 from groundzero.core.store import Store
-from groundzero.esxi.ops import EsxiOps, LiveEsxiOps
+from groundzero.core.tls import PinnedCertificate, check_pin, fetch_certificate, fingerprint, pinned_context
+from groundzero.esxi.ops import EsxiOps, LiveEsxiOps, OsTarget
 from groundzero.install.job import InstallConfig, Installer, InstallRequest, InstallTimings
 from groundzero.install.kickstart import render_kickstart
 from groundzero.inventory.collect import collect_inventory
@@ -184,7 +186,8 @@ class Services:
 
         async def run(ctx: JobContext) -> dict[str, Any]:
             ctx.progress(0.1, f"Reading network configuration from {access.address}")
-            config = await self.esxi.read_network(access, password)
+            target = await asyncio.to_thread(self.os_target, host_id, access)
+            config = await self.esxi.read_network(target, password)
             data = config.model_dump(mode="json")
             self.store.save_result(
                 host_id=host_id, kind=JobKind.OS_NETWORK.value, job_id=ctx.job.id, data=data
@@ -219,6 +222,8 @@ class Services:
             host=host,
             bmc_password=self._cipher.decrypt(self._secret(host.id)),
             os_access=access,
+            resolve_os=lambda a: self.os_target(host.id, a),
+            repin_os=lambda a: self.os_target(host.id, a, repin=True),
             os_password=os_password,
             request=req,
             config=config,
@@ -392,8 +397,9 @@ class Services:
 
         async def run(ctx: JobContext) -> dict[str, Any]:
             ctx.progress(0.2, f"Reading configuration from {access.address}")
-            network = await self.esxi.read_network(access, password)
-            storage = await self.esxi.read_storage(access, password)
+            target = await asyncio.to_thread(self.os_target, host_id, access)
+            network = await self.esxi.read_network(target, password)
+            storage = await self.esxi.read_storage(target, password)
             captured = EsxiPlugin.capture(network, storage)
             ctx.progress(0.8, "Saving config set")
             config_set = self.create_config_set(
@@ -415,8 +421,6 @@ class Services:
         return self.isos.list()
 
     async def rescan_isos(self) -> list[IsoImage]:
-        import asyncio
-
         return await asyncio.to_thread(self.isos.scan)
 
     # ── jobs ─────────────────────────────────────────────────────────────
@@ -485,6 +489,50 @@ class Services:
             data=inventory.model_dump(mode="json"),
         )
         return inventory, audit
+
+    # ── certificate pinning ─────────────────────────────────────────────
+    def pinned_pem(
+        self, host_id: str, role: str, address: str, *, verify_tls: bool = False, repin: bool = False
+    ) -> str | None:
+        """The certificate to trust for this host/role: pinned on first use, checked on every use.
+
+        Blocking (a TLS handshake); call via a thread from async code where practical.
+        """
+        if verify_tls:
+            return None  # CA-validated instead
+        stored = self.store.get_pin(host_id, role)
+        if stored and stored[0] == address and not repin:
+            check_pin(role, address, stored[1])  # clear error before any credential is sent
+            return stored[1]
+        pem = fetch_certificate(address)
+        self.store.set_pin(host_id, role, address, pem)
+        logger.info("Pinned %s certificate for host %s at %s: %s", role, host_id, address, fingerprint(pem))
+        return pem
+
+    def os_target(self, host_id: str, access: OsAccess, *, repin: bool = False) -> OsAccess:
+        if self.sim_esxi is not None:
+            return access
+        pem = self.pinned_pem(host_id, "os", access.address, verify_tls=access.verify_tls, repin=repin)
+        return OsTarget(**access.model_dump(), pinned_pem=pem)
+
+    def list_pins(self, host_id: str) -> list[PinnedCertificate]:
+        self.get_host(host_id)
+        return [
+            PinnedCertificate(role=role, address=address, fingerprint=fingerprint(pem), pinned_at=at)
+            for role, address, pem, at in self.store.list_pins(host_id)
+        ]
+
+    def retrust(self, host_id: str, role: str) -> PinnedCertificate:
+        """Explicitly accept the certificate the server presents now (after a legitimate change)."""
+        host = self.get_host(host_id)
+        if role == "bmc":
+            address = host.bmc_address
+        elif role == "os":
+            address = self._os_access(host_id)[0].address
+        else:
+            raise NotFoundError(f"Unknown certificate role '{role}' (bmc or os)")
+        self.pinned_pem(host_id, role, address, repin=True)
+        return next(p for p in self.list_pins(host_id) if p.role == role)
 
     def _resolve_iso(self, req: InstallRequest) -> Path:
         if req.iso_id:
@@ -569,11 +617,17 @@ class Services:
 
     def _default_client(self, host: Host, password: str) -> RedfishClient:
         transport = self.sim_bmc.transport() if self.sim_bmc else None
+        pem = (
+            None
+            if self.sim_bmc
+            else self.pinned_pem(host.id, "bmc", host.bmc_address, verify_tls=host.verify_tls)
+        )
         return RedfishClient(
             host.bmc_address,
             host.username,
             password,
             verify_tls=host.verify_tls,
+            ssl_context=pinned_context(pem) if pem else None,
             timeout=self.settings.redfish_timeout,
             max_parallel=self.settings.redfish_max_parallel,
             transport=transport,

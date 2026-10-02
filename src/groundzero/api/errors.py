@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException
 
 from groundzero.core.jobs import HostBusyError
 from groundzero.core.services import ConfirmationError, ConflictError, NotFoundError, SettingsValidationError
+from groundzero.core.tls import CertificateChangedError
 from groundzero.osconfig import OsConfigError
 from groundzero.preflight.evaluate import UnknownProfileError
 
@@ -56,6 +57,7 @@ _DOMAIN_ERRORS: tuple[tuple[type[Exception], int, str], ...] = (
     (UnknownProfileError, 422, "unknown_profile"),
     (ConfirmationError, 422, "confirmation_required"),
     (OsConfigError, 422, "os_config_invalid"),
+    (CertificateChangedError, 409, "certificate_changed"),
 )
 
 
