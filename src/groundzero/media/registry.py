@@ -96,7 +96,7 @@ class MediaRegistry:
             size=entry.path.stat().st_size,
             requests=len(fetches),
             bytes_served=sum(f.bytes for f in fetches),
-            clients=sorted({f.client for f in fetches}),
+            clients=sorted({f.client.rsplit(":", 1)[0] for f in fetches}),
             first_fetch=fetches[0].at if fetches else None,
             last_fetch=fetches[-1].at if fetches else None,
             expires_at=entry.expires_at,

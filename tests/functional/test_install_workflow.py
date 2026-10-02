@@ -38,7 +38,17 @@ def _report(gz: GroundZero) -> dict:
 def test_install_reinstalls_and_validates(simulated_r740xd: GroundZero) -> None:
     gz = simulated_r740xd
     iso = _prepare(gz)
-    result = gz.cli("install", "esxi1", "--iso", str(iso), "--confirm", "install esxi1", timeout=180)
+    result = gz.cli(
+        "install",
+        "esxi1",
+        "--iso",
+        str(iso),
+        "--confirm",
+        "install esxi1",
+        "--timeout-minutes",
+        "240",
+        timeout=180,
+    )
     assert result.code == 0, result.output
     assert "ESXi 9.1.1 build 25714478 on esxi1 (was 24957456)" in result.output
 
@@ -67,6 +77,9 @@ def test_install_reinstalls_and_validates(simulated_r740xd: GroundZero) -> None:
     assert report["media_bytes_served"] > 0
     fetches = report["media_fetches"]
     assert fetches and {f["method"] for f in fetches} >= {"HEAD", "GET"}
+    assert all(f["client"].count(":") == 1 for f in fetches)  # ip:port recorded
+    with gz.api() as api:
+        assert api.get("/api/v1/jobs").json()[0]["params"]["timeout_minutes"] == 240
     assert any(f["at"] > report["reset_at"] for f in fetches)  # the "installer" read the ISO after the reset
     assert not list((gz.home / "media").glob("*.iso"))  # built ISO cleaned up
 

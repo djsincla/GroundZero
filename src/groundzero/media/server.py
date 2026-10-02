@@ -51,7 +51,8 @@ def create_media_app(registry: MediaRegistry) -> FastAPI:
         registry.record(
             token,
             MediaFetch(
-                client=request.client.host if request.client else "unknown",
+                # ip:port, so the log shows whether the BMC reuses connections or opens one per read
+                client=f"{request.client.host}:{request.client.port}" if request.client else "unknown",
                 method=request.method,
                 byte_range=range_header,
                 bytes=0 if request.method == "HEAD" else _served_bytes(range_header, size),

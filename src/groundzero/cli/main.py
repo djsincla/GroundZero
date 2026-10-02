@@ -395,6 +395,9 @@ def install(
     confirm: Annotated[
         str | None, typer.Option(help='Non-interactive confirmation: "install <host name>"')
     ] = None,
+    timeout_minutes: Annotated[
+        int, typer.Option(help="Give up if the new build is not up after this long (10-240)")
+    ] = 90,
 ) -> None:
     """Reinstall ESXi on a host via its BMC (DESTRUCTIVE for the boot disk's system partitions)."""
     h = _resolve_host(host)
@@ -416,6 +419,7 @@ def install(
         "confirm": confirm,
         "wipe_install_disk_vmfs": wipe_install_disk_vmfs,
         "allow_legacy_cpu": allow_legacy_cpu,
+        "timeout_minutes": timeout_minutes,
     }
     if ntp:
         body["ntp_servers"] = ntp
