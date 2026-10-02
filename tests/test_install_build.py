@@ -64,7 +64,10 @@ def test_random_salt_differs() -> None:
 # ── kickstart ────────────────────────────────────────────────────────────
 def test_kickstart_for_lab_spec() -> None:
     ks = render_kickstart(_spec())
-    assert f"install --disk={BOSS} --preservevmfs --ignoreprereqwarnings --ignoreprereqerrors" in ks
+    assert (
+        f"install --disk={BOSS} --preservevmfs "
+        "--forceunsupportedinstall --ignoreprereqwarnings --ignoreprereqerrors"
+    ) in ks
     assert "rootpw --iscrypted $6$fixedsalt$" in ks and "secret" not in ks
     assert (
         "network --bootproto=static --device=vmnic0 --ip=192.0.2.101 --netmask=255.255.255.0 "
@@ -83,7 +86,7 @@ def test_kickstart_for_lab_spec() -> None:
 def test_wipe_only_when_asked_and_no_cpu_override_by_default() -> None:
     ks = render_kickstart(_spec(preserve_vmfs=False, allow_legacy_cpu=False))
     assert "--overwritevmfs" in ks and "--preservevmfs" not in ks
-    assert "allowLegacyCPU" not in ks and "ignoreprereq" not in ks
+    assert "allowLegacyCPU" not in ks and "ignoreprereq" not in ks and "forceunsupported" not in ks
 
 
 @pytest.mark.parametrize(

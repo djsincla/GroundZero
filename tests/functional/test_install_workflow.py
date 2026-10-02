@@ -167,3 +167,18 @@ def test_media_that_attaches_after_a_failed_mount_is_ejected(
     assert writes[-1].endswith("VirtualMedia.EjectMedia")  # the late attach was found and ejected
     assert not any(w.endswith("ComputerSystem.Reset") for w in writes)  # never reset after a failed mount
     assert not list((gz.home / "media").glob("*.iso*"))  # built ISO removed even on failure
+
+
+def test_installer_that_exits_without_installing_fails_fast(
+    simulated_r740xd_kickstart_error: GroundZero,
+) -> None:
+    """Regression (live run 8): kickstart parse error, installer rebooted, the job waited for its timeout."""
+    gz = simulated_r740xd_kickstart_error
+    iso = _prepare(gz)
+    result = gz.cli("install", "esxi1", "--iso", str(iso), "--confirm", "install esxi1", timeout=180)
+    assert result.code == 1
+    assert "installer exited without installing" in result.output and "24957456" in result.output
+    report = _report(gz)
+    assert report["media_bytes_served"] > 0  # it did boot the installer
+    assert report["bmc_audit"]["non_get"][-1].endswith("VirtualMedia.EjectMedia")
+    assert not list((gz.home / "media").glob("*.iso*"))

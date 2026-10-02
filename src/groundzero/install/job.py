@@ -299,7 +299,7 @@ class Installer:
                 threshold = installer_boot_threshold(built.stat().st_size)
                 await self._wait_for_installer(ctx, token, report.previous_build, threshold)
                 mark("installer_booted")
-                await self._wait_for_new_build(ctx, iso_info.build, started)
+                await self._wait_for_new_build(ctx, iso_info.build, started, report.previous_build)
                 mark("esxi_up")
             finally:
                 stats = self.media.stats(token)
@@ -363,13 +363,21 @@ class Installer:
         stats = self.media.stats(token)
         return stats.bytes_served if stats else 0
 
-    async def _wait_for_new_build(self, ctx: JobContext, build: str | None, started: float) -> None:
+    async def _wait_for_new_build(
+        self, ctx: JobContext, build: str | None, started: float, previous_build: str | None
+    ) -> None:
         deadline = started + self.req.timeout_minutes * 60
         while time.monotonic() < deadline:
             about = await self.esxi.probe(self.access.address)
             if about and about.build == build:
                 ctx.progress(0.85, f"ESXi {about.version} build {about.build} is up")
                 return
+            if about and previous_build and about.build == previous_build:
+                # The installer ran but rebooted without installing (live run 8: kickstart parse error).
+                raise InstallError(
+                    f"The installer exited without installing: the host is back on its previous build "
+                    f"{previous_build}. Check the server console for the installer's error message."
+                )
             ctx.progress(0.5, "Installing ESXi (waiting for the host to come back on the new build)")
             await asyncio.sleep(self.t.poll_seconds)
         raise InstallError(

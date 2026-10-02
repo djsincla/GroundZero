@@ -85,3 +85,26 @@ def test_esxi1_trunks_meet_holodeck_security(esxi1: EsxiNetworkConfig) -> None:
     assert len(trunks) == 4 and all(p.security.accepts_all for p in trunks)
     mgmt = esxi1.management_portgroup()
     assert mgmt is not None and not mgmt.security.accepts_all  # production port groups stay locked down
+
+
+async def test_probe_gives_up_on_a_silent_host() -> None:
+    """Regression (live run 8): a booting host accepted connections but never answered; the probe hung."""
+    import asyncio
+    import socket
+    import threading
+    import time
+
+    from groundzero.esxi.reader import probe_about
+
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen()
+    port = server.getsockname()[1]
+    held: list[socket.socket] = []
+    threading.Thread(target=lambda: held.append(server.accept()[0]), daemon=True).start()
+
+    started = time.monotonic()
+    assert await probe_about(f"127.0.0.1:{port}", timeout=1.0) is None
+    assert time.monotonic() - started < 3  # bounded by the timeout, not by the silent peer
+    await asyncio.sleep(0)
+    server.close()

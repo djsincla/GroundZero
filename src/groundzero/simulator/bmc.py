@@ -34,6 +34,7 @@ class SimulatedBmc:
         - "ignore-boot-once": the one-time boot override is accepted but not honoured
         - "slow-insert": InsertMedia takes effect but its response times out
         - "late-attach": InsertMedia fails (RAC0720) but the image attaches a moment later
+        - "kickstart-error": the installer boots, rejects KS.CFG and reboots into the old ESXi
         """
         self.responses = copy.deepcopy(responses)
         self.esxi = esxi
@@ -193,7 +194,10 @@ class SimulatedBmc:
         try:
             async with httpx.AsyncClient(verify=False, timeout=60) as http:
                 iso = (await http.get(url)).content  # the installer reads the whole image
-            await self.esxi.run_installer(iso)
+            if "kickstart-error" in self.faults:  # the installer rejects the script and reboots (live run 8)
+                await self.esxi.reject_kickstart()
+            else:
+                await self.esxi.run_installer(iso)
         except Exception:
             logger.exception("Simulated installer failed")
 

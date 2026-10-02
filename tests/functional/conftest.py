@@ -61,3 +61,12 @@ def simulated_r740xd_late_attach(tmp_path: Path) -> Iterator[GroundZero]:
     gz.start()
     yield gz
     gz.stop()
+
+
+@pytest.fixture
+def simulated_r740xd_kickstart_error(tmp_path: Path) -> Iterator[GroundZero]:
+    """The simulated installer rejects the kickstart and reboots into the old ESXi (seen live)."""
+    gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_FAULTS='["kickstart-error"]')
+    gz.start()
+    yield gz
+    gz.stop()

@@ -26,7 +26,9 @@ def render_kickstart(spec: InstallSpec) -> str:
     install = [f"install --disk={spec.install_disk}"]
     install.append("--preservevmfs" if spec.preserve_vmfs else "--overwritevmfs")
     if spec.allow_legacy_cpu:
-        install += ["--ignoreprereqwarnings", "--ignoreprereqerrors"]
+        # --forceunsupportedinstall accepts the CPU_SUPPORT OVERRIDEWARNING; without it the 9.1.1
+        # installer reports "An error has occurred while parsing the installation script" (live run 8).
+        install += ["--forceunsupportedinstall", "--ignoreprereqwarnings", "--ignoreprereqerrors"]
 
     network = [
         "network --bootproto=static",

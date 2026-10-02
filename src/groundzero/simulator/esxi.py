@@ -46,6 +46,7 @@ class SimulatedEsxi:
         self.about: EsxiAbout | None = EsxiAbout.model_validate_json((capture_dir / "about.json").read_text())
         self.boot_delay = boot_delay
         self.installs = 0
+        self._previous: EsxiAbout | None = self.about
 
     # ── EsxiOps ──────────────────────────────────────────────────────────
     async def read_network(self, access: OsAccess, password: str) -> EsxiNetworkConfig:
@@ -59,11 +60,18 @@ class SimulatedEsxi:
 
     # ── driven by the simulated BMC ──────────────────────────────────────
     def power_off(self) -> None:
+        if self.about is not None:
+            self._previous = self.about
         self.about = None
 
     async def boot_existing(self, previous: EsxiAbout) -> None:
         await asyncio.sleep(self.boot_delay)
         self.about = previous
+
+    async def reject_kickstart(self) -> None:
+        """The installer hit a kickstart error and rebooted: the host returns on its previous build."""
+        await asyncio.sleep(self.boot_delay)
+        self.about = self._previous
 
     async def run_installer(self, iso_bytes: bytes) -> None:
         """Apply the kickstart on the ISO the way the real installer would, then come up."""

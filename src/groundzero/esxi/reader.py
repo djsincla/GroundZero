@@ -254,4 +254,13 @@ async def read_storage(
 
 
 async def probe_about(address: str, *, timeout: float = 10.0) -> EsxiAbout | None:
-    return await asyncio.to_thread(_probe_about_blocking, address, timeout)
+    """None when the host does not answer within ``timeout``.
+
+    The hard deadline matters: pyVmomi does not bound the TCP connect or a silent peer, so against a
+    host that is booting the blocking call can hang for minutes (seen live during an install). The
+    worker thread is abandoned on timeout; it ends on its own when the socket finally gives up.
+    """
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_probe_about_blocking, address, timeout), timeout)
+    except TimeoutError:
+        return None
