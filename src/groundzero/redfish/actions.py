@@ -120,6 +120,8 @@ async def boot_once_from_virtual_cd(
     url: str,
     *,
     action_timeout: float = 180.0,
+    boot_method: str = "auto",
+    settle_seconds: float = 0.0,
 ) -> tuple[VirtualMediaSlot, str]:
     """Mount ``url`` and arrange for the next boot (only) to use it. Returns (slot, boot method)."""
     slot = profile.choose_cd_slot(caps)
@@ -127,7 +129,9 @@ async def boot_once_from_virtual_cd(
         raise BmcActionError("No virtual CD slot with InsertMedia on this BMC")
     try:
         await insert(client, slot, url, action_timeout=action_timeout)
-        method = await profile.set_one_time_cd_boot(client, identity, caps)
+        if settle_seconds:  # let the virtual USB optical device attach before POST enumerates USB
+            await asyncio.sleep(settle_seconds)
+        method = await profile.set_one_time_cd_boot(client, identity, caps, boot_method)
         logger.info("One-time boot to virtual CD via %s", method)
     except BaseException:
         await eject_if_ours(client, slot, url)  # leave the BMC as we found it, even if the mount half-worked

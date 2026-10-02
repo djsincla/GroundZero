@@ -854,6 +854,17 @@
             "description": "Default: on if preflight flags the CPU",
             "title": "Allow Legacy Cpu"
           },
+          "boot_method": {
+            "default": "auto",
+            "description": "How to request the one-time virtual CD boot (auto: vendor default)",
+            "enum": [
+              "auto",
+              "cd",
+              "uefi-target"
+            ],
+            "title": "Boot Method",
+            "type": "string"
+          },
           "confirm": {
             "description": "Must be exactly \"install <host name>\"",
             "title": "Confirm",

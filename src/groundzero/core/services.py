@@ -162,6 +162,7 @@ class Services:
             timings=InstallTimings(
                 poll_seconds=self.settings.install_poll_seconds,
                 action_timeout=self.settings.redfish_action_timeout,
+                media_settle_seconds=self.settings.media_settle_seconds,
                 installer_boot_minutes=self.settings.installer_boot_minutes,
             ),
         )

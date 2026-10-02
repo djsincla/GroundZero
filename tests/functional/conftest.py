@@ -18,6 +18,7 @@ def _simulated(tmp_path: Path, **extra: str) -> GroundZero:
             "GROUNDZERO_ESXI_PASSWORD": "simulated",
             "GROUNDZERO_INSTALL_POLL_SECONDS": "0.2",
             "GROUNDZERO_INSTALLER_BOOT_MINUTES": "0.5",
+            "GROUNDZERO_MEDIA_SETTLE_SECONDS": "0",
             **extra,
         },
     )

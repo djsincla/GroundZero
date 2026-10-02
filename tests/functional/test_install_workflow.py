@@ -8,6 +8,7 @@ kickstart and ISO as well as the orchestration.
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -56,13 +57,10 @@ def test_install_reinstalls_and_validates(simulated_r740xd: GroundZero) -> None:
     assert "root_password_hash" not in spec
 
     writes = [w.split("/redfish/v1/")[-1] for w in report["bmc_audit"]["non_get"]]
-    assert "Managers/iDRAC.Embedded.1/VirtualMedia/CD/Actions/VirtualMedia.InsertMedia" in writes
-    assert "Systems/System.Embedded.1" in writes  # standard Boot PATCH (one-time UefiTarget)
+    assert "Systems/System.Embedded.1/VirtualMedia/1/Actions/VirtualMedia.InsertMedia" in writes  # RFS slot
+    assert "Systems/System.Embedded.1" in writes  # standard Boot PATCH
     assert "Managers/iDRAC.Embedded.1/Attributes" not in writes  # VCD-DVD does not boot RFS media (live)
-    assert (
-        report["boot_method"]
-        == "UefiTarget PciRoot(0x0)/Pci(0x14,0x0)/USB(0xD,0x0)/USB(0x3,0x0)/USB(0x1,0x0)"
-    )
+    assert report["boot_method"] == "Cd"  # Dell default, learned from live runs 2 and 3
     assert "Systems/System.Embedded.1/Actions/ComputerSystem.Reset" in writes
     assert writes[-1].endswith("VirtualMedia.EjectMedia")  # media ejected last
     assert report["reset_type"] == "ForceRestart"
@@ -121,3 +119,20 @@ def test_slow_insert_media_is_verified_not_retried(simulated_r740xd_slow_insert:
     inserts = [w for w in report["bmc_audit"]["non_get"] if w.endswith("VirtualMedia.InsertMedia")]
     assert len(inserts) == 1  # verified by reading the slot back, never re-sent
     assert all(c["ok"] for c in report["validation"])
+
+
+def test_boot_method_can_be_chosen_per_install(simulated_r740xd: GroundZero) -> None:
+    gz = simulated_r740xd
+    iso = _prepare(gz)
+    with gz.api() as api:
+        host_id = api.get("/api/v1/hosts").json()[0]["id"]
+        body = {"iso_path": str(iso), "confirm": "install esxi1", "boot_method": "uefi-target"}
+        job = api.post(f"/api/v1/hosts/{host_id}/install", json=body).json()
+        for _ in range(600):
+            job = api.get(f"/api/v1/jobs/{job['id']}").json()
+            if job["status"] not in ("queued", "running"):
+                break
+            time.sleep(0.1)
+        assert job["status"] == "succeeded", job
+        report = api.get(f"/api/v1/hosts/{host_id}/install").json()
+    assert report["boot_method"].startswith("UefiTarget PciRoot(0x0)/Pci(0x14,0x0)/USB(0xD,0x0)")

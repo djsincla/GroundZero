@@ -55,16 +55,16 @@ class DellProfile(VendorProfile):
     cpu_virtualization_keys: ClassVar[tuple[str, ...]] = ("ProcVirtualization",)
     iommu_keys: ClassVar[tuple[str, ...]] = ("ProcVirtualization",)
 
-    def choose_cd_slot(self, caps: BmcCapabilities) -> VirtualMediaSlot | None:
-        """Dell: the iDRAC virtual CD slot (Managers/.../VirtualMedia/CD).
+    # Learned live on an R740xd, iDRAC 7.00.00.182:
+    # - Redfish-mounted media is a Remote File Share (LC log RAC0721), on either VirtualMedia path.
+    # - ServerBoot.1.FirstBootDevice=VCD-DVD is consumed but does not boot that media (run 2).
+    # - UefiTarget is applied through a BIOS config job (JCP027) with an extra reboot, after which the
+    #   host booted its disk (run 3).
+    # So Dell defaults to the plain Cd override with the System-scoped (RFS) slot.
+    default_boot_method: ClassVar[str] = "cd"
 
-        Learned live on iDRAC 7.x: media mounted over Redfish is a Remote File Share (RAC0721), and the
-        ServerBoot.1.FirstBootDevice=VCD-DVD one-time boot does NOT boot it (the host ignored the ISO).
-        The standard UefiTarget override at the "Virtual Optical Drive" boot option is used instead.
-        """
-        for slot in caps.virtual_media:
-            if slot.path.endswith("/VirtualMedia/CD") and slot.insert_target:
-                return slot
+    def choose_cd_slot(self, caps: BmcCapabilities) -> VirtualMediaSlot | None:
+        """Dell: the System-scoped Remote File Share slot, else the classic Managers/.../VirtualMedia/CD."""
         return super().choose_cd_slot(caps)
 
     async def license(self, client: RedfishClient, identity: BmcIdentity) -> LicenseInfo | None:

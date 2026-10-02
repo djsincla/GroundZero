@@ -17,7 +17,7 @@ import time
 from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -62,11 +62,15 @@ class InstallRequest(BaseModel):
     profile: str = "holodeck-9"
     variant: str | None = None
     timeout_minutes: int = Field(default=90, ge=10, le=240)
+    boot_method: Literal["auto", "cd", "uefi-target"] = Field(
+        default="auto", description="How to request the one-time virtual CD boot (auto: vendor default)"
+    )
 
 
 class InstallTimings(BaseModel):
     poll_seconds: float = 20.0
     action_timeout: float = 180.0
+    media_settle_seconds: float = 20.0
     installer_boot_minutes: float = 20.0
 
 
@@ -261,7 +265,14 @@ class Installer:
 
                 ctx.progress(0.12, "Mounting installer ISO and setting one-time boot")
                 slot, report.boot_method = await actions.boot_once_from_virtual_cd(
-                    client, identity, caps, profile, url, action_timeout=self.t.action_timeout
+                    client,
+                    identity,
+                    caps,
+                    profile,
+                    url,
+                    action_timeout=self.t.action_timeout,
+                    boot_method=self.req.boot_method,
+                    settle_seconds=self.t.media_settle_seconds,
                 )
                 ctx.progress(0.15, "Restarting the host into the installer")
                 report.reset_type = await actions.restart(client, identity, caps)
