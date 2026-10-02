@@ -129,3 +129,20 @@ def test_failed_install_is_never_shown_as_installed(
     expect(summary).to_contain_text("still on build 24957456")
     expect(summary).to_contain_text("instead of the installer")  # the job's own error message
     expect(summary).not_to_contain_text("Installed ESXi")
+
+
+def test_info_page_shows_ipsec_block_and_allow_for_macos_and_windows(
+    page: Page, simulated_r740xd: GroundZero
+) -> None:
+    _open(page, simulated_r740xd)
+    page.get_by_role("link", name="Info").click()
+    expect(page.get_by_role("heading", name="VPN: block or allow GlobalProtect IPsec")).to_be_visible()
+    mac, win = page.locator('[data-platform="macos"]'), page.locator('[data-platform="windows"]')
+    expect(mac).to_contain_text("pfctl -a com.apple/250.groundzero -f -")  # block
+    expect(mac).to_contain_text("pfctl -a com.apple/250.groundzero -F rules")  # allow
+    expect(win).to_contain_text("New-NetFirewallRule")
+    expect(win).to_contain_text("-Protocol UDP -RemotePort 4501 -Action Block")
+    expect(win).to_contain_text("Remove-NetFirewallRule")
+    expect(page.locator("nav a.active")).to_have_text("Info")
+    page.reload()  # deep link survives a reload
+    expect(page.get_by_role("heading", name="Info", exact=True)).to_be_visible()
