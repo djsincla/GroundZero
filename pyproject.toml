@@ -61,11 +61,12 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 # Browser tests run in their own process (pytest -m browser): Playwright's sync API keeps an event loop
 # running that breaks pytest-asyncio tests sharing the session.
-addopts = "-q -m 'not live and not browser'"
+addopts = "-q -m 'not live and not browser and not container'"
 markers = [
     "functional: black-box tests driving the real server and CLI processes",
     "live: talks to real lab hardware configured in .env (opt-in: pytest -m live)",
     "browser: drives the web UI in headless Chromium (Playwright)",
+    "container: builds and runs the OCI image with Podman (opt-in: pytest -m container)",
 ]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 

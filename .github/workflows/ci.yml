@@ -20,3 +20,14 @@ jobs:
       - run: uv run mypy
       - run: uv run pytest
       - run: uv run pytest -m browser
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: podman --version
+      - run: uv run pytest -m container

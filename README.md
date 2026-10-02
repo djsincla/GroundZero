@@ -107,6 +107,32 @@ uv run groundzero install r740xd --iso VMware-VMvisor-Installer-9.1.1.0.25714478
     --hostname esxi1 --ip 192.0.2.101
 ```
 
+### Or run it as a single container
+
+The REST API, the web UI, the install-media server and the SQLite state ship as **one OCI image**. It
+runs with [Podman](https://podman.io) (free and open source, Apache-2.0, with no Docker Desktop licence
+needed). [Colima](https://github.com/abiosoft/colima) or Rancher Desktop also work, with
+`GZ_ENGINE=docker`.
+
+```bash
+brew install podman && podman machine init && podman machine start    # one-time, macOS
+scripts/gz-container build
+scripts/gz-container up --bmc 198.51.100.11    # detects this machine's address on the route to the BMC
+scripts/gz-container ui                      # open the UI, signed in
+scripts/gz-container logs | status | token | shell | down
+```
+
+- **State** (database, API token, encryption key, certificates) lives in the `groundzero-data`
+  volume and survives upgrades and restarts.
+- **ISOs** are read from `./images`, mounted read-only.
+- **Ports:** the API and UI are published on `127.0.0.1:7182` only. The media server is published on
+  `:443`, so the BMC can fetch the install ISO.
+- **Media URL:** the BMC fetches media from *this machine* (for example its VPN address), not from
+  the container. `up` works that address out from the route to the BMC. Run `up` again if the VPN
+  address changes, or set `GROUNDZERO_MEDIA_PUBLIC_URL` yourself.
+- **Running both:** stop a native `groundzero serve` first, since they use the same ports, or set
+  `GZ_API_PORT` and `GZ_MEDIA_PORT`.
+
 To call the API directly, use the bearer token from `uv run groundzero token show`:
 
 ```bash
@@ -153,9 +179,11 @@ Functional testing is a first-class requirement. Every feature ships with tests 
 | **Functional** | The real `groundzero serve` process and CLI over HTTP, against a simulated R740xd and ESXi | part of `uv run pytest` |
 | **Browser** | The web UI in headless Chromium (Playwright) | `uv run pytest -m browser` |
 | **Live** | The same workflows against real lab hardware, including a check that preflight made no changes | `uv run pytest -m live` (opt-in) |
+| **Container** | Builds the image, runs it with a simulated BMC, and checks that state survives a restart and that it runs as non-root | `uv run pytest -m container` |
 
 ```bash
 uv run ruff check . && uv run mypy && uv run pytest && uv run pytest -m browser   # what CI runs
+uv run pytest -m container                                                        # CI, separate job
 ```
 
 - **Simulation mode:** `GROUNDZERO_SIMULATE_BMC_DIR=<capture dir> groundzero serve`. Inject faults
@@ -180,6 +208,7 @@ src/groundzero/
   simulator/   stateful Redfish BMC + ESXi with fault injection
   web/         the web UI (plain HTML/CSS/JS, no build step)
   cli/         Typer CLI (a thin API client) + dev tools
+scripts/       gz-container: build/run the single-container bundle
 docs/          lab network and Holodeck host-network notes
 tests/         unit, functional, browser and live suites; recorded fixtures
 legacy/        the original VCF Readiness v9.7.3 code, kept for reference only
