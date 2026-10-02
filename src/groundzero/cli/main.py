@@ -472,7 +472,7 @@ def _resolve_iso(ref: str) -> dict[str, Any]:
     for image in isos:
         if ref in (image["id"], image["filename"]):
             return image
-    _fail(f"no ISO matches '{ref}' in the repository (run `groundzero isos rescan`)")
+    _fail(f"no ISO matches '{ref}' in the repository (run `groundzero isos list` to rescan)")
 
 
 def _resolve_config_set(ref: str) -> dict[str, Any]:

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="GroundZero: bare metal to VMware Holodeck">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#14213d"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#facc15"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#1f2a44" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="300" rx="18" fill="url(#bg)"/>
+  <rect width="1200" height="300" rx="18" fill="url(#grid)" opacity="0.6"/>
+
+  <!-- logo: concentric target / ground zero -->
+  <g transform="translate(150 150)">
+    <circle r="78" fill="none" stroke="url(#accent)" stroke-width="6" opacity="0.35"/>
+    <circle r="54" fill="none" stroke="url(#accent)" stroke-width="6" opacity="0.65"/>
+    <circle r="28" fill="url(#accent)"/>
+    <path d="M-96 0H-64M64 0H96M0 -96V-64M0 64V96" stroke="#facc15" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <text x="270" y="140" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="76" font-weight="800" fill="#f8fafc" letter-spacing="-1">GroundZero</text>
+  <text x="274" y="186" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#cbd5e1">Bare metal to VMware Holodeck, through one API.</text>
+
+  <!-- pipeline -->
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="17" fill="#e2e8f0">
+    <g transform="translate(274 218)">
+      <rect width="118" height="38" rx="19" fill="#1e293b" stroke="#334155"/>
+      <text x="59" y="25" text-anchor="middle">Redfish</text>
+      <path d="M126 19H152" stroke="#f97316" stroke-width="3"/>
+      <rect x="160" width="128" height="38" rx="19" fill="#1e293b" stroke="#334155"/>
+      <text x="224" y="25" text-anchor="middle">preflight</text>
+      <path d="M296 19H322" stroke="#f97316" stroke-width="3"/>
+      <rect x="330" width="148" height="38" rx="19" fill="#1e293b" stroke="#334155"/>
+      <text x="404" y="25" text-anchor="middle">ESXi install</text>
+      <path d="M486 19H512" stroke="#f97316" stroke-width="3"/>
+      <rect x="520" width="136" height="38" rx="19" fill="#1e293b" stroke="#facc15" stroke-dasharray="5 4"/>
+      <text x="588" y="25" text-anchor="middle" fill="#facc15">Holodeck 9</text>
+    </g>
+  </g>
+</svg>
