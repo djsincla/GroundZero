@@ -14,6 +14,8 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from groundzero import __version__
+from groundzero.core import diagnostics
 from groundzero.core.config import Settings
 from groundzero.core.credentials import CredentialCipher
 from groundzero.core.jobs import JobContext, JobRunner
@@ -29,6 +31,15 @@ from groundzero.core.models import (
     OsAccessSet,
 )
 from groundzero.core.store import Store
+from groundzero.core.tasks import (
+    CATALOG,
+    TASKS,
+    Pipeline,
+    TaskInfo,
+    TaskRun,
+    evaluate_pipeline,
+    info,
+)
 from groundzero.core.tls import PinnedCertificate, check_pin, fetch_certificate, fingerprint, pinned_context
 from groundzero.esxi.ops import EsxiOps, LiveEsxiOps, OsTarget
 from groundzero.install.job import InstallConfig, Installer, InstallRequest, InstallTimings
@@ -185,14 +196,24 @@ class Services:
         password = self._cipher.decrypt(secret)
 
         async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.progress(0.1, f"Reading network configuration from {access.address}")
-            target = await asyncio.to_thread(self.os_target, host_id, access)
-            config = await self.esxi.read_network(target, password)
+            ctx.plan([("connect", "Connect to the OS"), ("network", "Read network and NTP"),
+                      ("storage", "Read disks and datastores")])  # fmt: skip
+            async with ctx.step("connect", "Connect to the OS"):
+                target = await asyncio.to_thread(self.os_target, host_id, access)
+            async with ctx.step("network", "Read network and NTP"):
+                ctx.progress(0.3, f"Reading network configuration from {access.address}")
+                config = await self.esxi.read_network(target, password)
+            async with ctx.step("storage", "Read disks and datastores"):
+                ctx.progress(0.7, f"Reading storage from {access.address}")
+                storage = await self.esxi.read_storage(target, password)
             data = config.model_dump(mode="json")
             self.store.save_result(
                 host_id=host_id, kind=JobKind.OS_NETWORK.value, job_id=ctx.job.id, data=data
             )
-            return {"os_network": data}
+            self.store.save_result(
+                host_id=host_id, kind="os_storage", job_id=ctx.job.id, data=storage.model_dump(mode="json")
+            )
+            return {"os_network": data, "os_storage": storage.model_dump(mode="json")}
 
         return self.runner.submit(kind=JobKind.OS_NETWORK, host_id=host_id, params={}, func=run)
 
@@ -246,6 +267,8 @@ class Services:
         async def run(ctx: JobContext) -> dict[str, Any]:
             try:
                 result = await installer.run(ctx)
+                # A new OS: anything read from the previous one (network, readiness, prep) is now stale.
+                self.store.bump_os_epoch(host.id)
                 if installer.last_network is not None:
                     # Keep the host's "installed OS" view current without an extra read.
                     self.store.save_result(
@@ -396,10 +419,11 @@ class Services:
         password = self._cipher.decrypt(secret)
 
         async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.progress(0.2, f"Reading configuration from {access.address}")
-            target = await asyncio.to_thread(self.os_target, host_id, access)
-            network = await self.esxi.read_network(target, password)
-            storage = await self.esxi.read_storage(target, password)
+            async with ctx.step("read", "Read the running OS"):
+                ctx.progress(0.2, f"Reading configuration from {access.address}")
+                target = await asyncio.to_thread(self.os_target, host_id, access)
+                network = await self.esxi.read_network(target, password)
+                storage = await self.esxi.read_storage(target, password)
             captured = EsxiPlugin.capture(network, storage)
             ctx.progress(0.8, "Saving config set")
             config_set = self.create_config_set(
@@ -423,6 +447,62 @@ class Services:
     async def rescan_isos(self) -> list[IsoImage]:
         return await asyncio.to_thread(self.isos.scan)
 
+    # ── tasks and the pipeline ──────────────────────────────────────────
+    def list_tasks(self) -> list[TaskInfo]:
+        return [info(t) for t in CATALOG]
+
+    def pipeline(self, host_id: str) -> Pipeline:
+        self.get_host(host_id)
+        kinds = {t.produces for t in CATALOG if t.produces}
+        return evaluate_pipeline(
+            host_id=host_id,
+            os_epoch=self.store.os_epoch(host_id),
+            jobs=self.store.list_jobs(host_id=host_id, limit=500),
+            outputs={k: self.store.latest_output(host_id=host_id, kind=k) for k in kinds},
+            has_os_access=self.store.get_os_access(host_id) is not None,
+        )
+
+    def start_task(self, host_id: str, task_id: str, run: TaskRun) -> Job:
+        """Start any catalog task, after checking its inputs exist and are current."""
+        spec = TASKS.get(task_id)
+        if spec is None:
+            raise NotFoundError(f"Unknown task '{task_id}'; see GET /tasks")
+        if not spec.available:
+            raise ConflictError(f"“{spec.title}” is not available yet")
+        state = next(t for s in self.pipeline(host_id).stages for t in s.tasks if t.id == task_id)
+        if state.blocked_by:
+            raise ConflictError(f"Can't run “{spec.title}” yet: " + "; ".join(state.blocked_by))
+        p = run.params
+        if task_id == "discover":
+            return self.start_inventory(host_id)
+        if task_id == "preflight":
+            return self.start_preflight(host_id, p.get("profile", "holodeck-9"), p.get("variant"))
+        if task_id in ("os.reimage", "os.custom"):
+            req = InstallRequest.model_validate({**p, "confirm": run.confirm or ""})
+            if task_id == "os.custom" and not req.config_set_id:
+                raise OsConfigError("Deploy custom OS needs a config set (params.config_set_id)")
+            if task_id == "os.reimage" and req.config_set_id:
+                raise OsConfigError("Deploy OS keeps the current settings; use os.custom for a config set")
+            return self.start_install(host_id, req)
+        if task_id == "os.read":
+            return self.start_os_network(host_id)
+        if task_id == "os.capture":
+            return self.start_os_capture(host_id, str(p.get("name") or ""))
+        raise ConflictError(f"“{spec.title}” has no runner")  # pragma: no cover - catalog/dispatch mismatch
+
+    def job_diagnostics(self, job_id: str) -> dict[str, Any]:
+        """Everything needed to debug a job from a file: job, host, BMC identity and the redacted log."""
+        job = self.get_job(job_id)
+        host = self.store.get_host(job.host_id)
+        recorded = self.store.get_diagnostics(job_id) or {"events": [], "dropped_events": 0}
+        return {
+            "groundzero": {"version": __version__, "mode": "simulated" if self.sim_bmc else "live"},
+            "job": job.model_dump(mode="json"),
+            "host": host.model_dump(mode="json", exclude={"username"}) if host else None,
+            "bmc_identity": next((e for e in recorded["events"] if e.get("event") == "bmc_identity"), None),
+            **recorded,
+        }
+
     # ── jobs ─────────────────────────────────────────────────────────────
     def get_job(self, job_id: str) -> Job:
         job = self.store.get_job(job_id)
@@ -444,7 +524,8 @@ class Services:
         host = self.get_host(host_id)
 
         async def run(ctx: JobContext) -> dict[str, Any]:
-            inventory, audit = await self._collect(host, ctx)
+            async with ctx.step("collect", "Read hardware inventory from the BMC"):
+                inventory, audit = await self._collect(host, ctx)
             return {"inventory": inventory.model_dump(mode="json"), "audit": audit.model_dump()}
 
         return self.runner.submit(kind=JobKind.INVENTORY, host_id=host.id, params={}, func=run)
@@ -458,9 +539,17 @@ class Services:
         evaluate_args = {"profile": profile, "variant": variant}
 
         async def run(ctx: JobContext) -> dict[str, Any]:
-            inventory, audit = await self._collect(host, ctx)
-            ctx.progress(0.97, "Evaluating preflight checks")
-            report = evaluate(inventory, profile, variant)
+            ctx.plan(
+                [
+                    ("collect", "Read hardware inventory from the BMC"),
+                    ("evaluate", "Evaluate the requirements"),
+                ]
+            )
+            async with ctx.step("collect", "Read hardware inventory from the BMC"):
+                inventory, audit = await self._collect(host, ctx)
+            async with ctx.step("evaluate", "Evaluate the requirements"):
+                ctx.progress(0.97, "Evaluating preflight checks")
+                report = evaluate(inventory, profile, variant)
             data = report.model_dump(mode="json")
             self.store.save_result(
                 host_id=host.id, kind=JobKind.PREFLIGHT.value, job_id=ctx.job.id, data=data
@@ -475,6 +564,8 @@ class Services:
         client = self._client_factory(host, password)
         async with client:
             identity, inventory = await collect_inventory(client, ctx.progress)
+        diagnostics.record("bmc_identity", **identity.model_dump(mode="json"),
+                           firmware=inventory.bmc.model_dump(mode="json"))  # fmt: skip
         audit = BmcAudit(
             requests=len(client.request_log),
             non_get=[f"{r.method} {r.path}" for r in client.request_log if r.method != "GET"],

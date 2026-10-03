@@ -11,7 +11,7 @@ const app = document.getElementById("app");
 // ── routes: [pattern, section, title, view, live] (live views re-render when a job finishes) ──
 const ROUTES = [
   [/^\/(?:hosts)?$/, "hosts", "Hosts", () => viewHosts(app), true],
-  [/^\/hosts\/([\w-]+)\/deploy$/, "hosts", "Deploy", (m) => viewDeploy(app, m[1]), false],
+  [/^\/hosts\/([\w-]+)\/deploy$/, "hosts", "Deploy", (m, q) => viewDeploy(app, m[1], q), false],
   [/^\/hosts\/([\w-]+)(?:\/(\w+))?$/, "hosts", "Host", (m) => viewHost(app, m[1], m[2]), true],
   [/^\/jobs$/, "jobs", "Jobs", () => viewJobs(app), true],
   [/^\/config-sets$/, "config-sets", "Config sets", () => viewConfigSets(app), true],

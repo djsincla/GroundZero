@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+import traceback
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import Any
 
-from groundzero.core.models import Job, JobError, JobEvent, JobKind, JobStatus
+from groundzero.core import diagnostics
+from groundzero.core.models import Job, JobError, JobEvent, JobKind, JobStatus, JobStep, JobStepStatus
 from groundzero.core.store import Store, utcnow
 
 logger = logging.getLogger(__name__)
@@ -28,7 +31,7 @@ class HostBusyError(Exception):
 
 
 class JobContext:
-    """Handle given to a job function for reporting progress."""
+    """Handle given to a job function for reporting progress and named steps."""
 
     def __init__(self, runner: JobRunner, job: Job) -> None:
         self._runner = runner
@@ -37,7 +40,52 @@ class JobContext:
     def progress(self, fraction: float, message: str) -> None:
         self.job.progress = max(0.0, min(1.0, fraction))
         self.job.message = message
+        diagnostics.record("progress", progress=round(self.job.progress, 3), message=message)
         self._runner._persist_and_publish(self.job)
+
+    def plan(self, steps: list[tuple[str, str]]) -> None:
+        """Declare the steps up front so they show as pending before they run."""
+        for key, title in steps:
+            self._step(key, title)
+        self._runner._persist_and_publish(self.job)
+
+    @asynccontextmanager
+    async def step(self, key: str, title: str) -> AsyncIterator[JobStep]:
+        """Run a block as a named step: running → succeeded/failed/cancelled, with timestamps."""
+        step = self._step(key, title)
+        step.status, step.started_at, step.finished_at = JobStepStatus.RUNNING, utcnow(), None
+        self.job.message = title
+        diagnostics.record("step", key=key, status="running", title=title)
+        self._runner._persist_and_publish(self.job)
+        try:
+            yield step
+        except asyncio.CancelledError:
+            step.status = JobStepStatus.CANCELLED
+            raise
+        except Exception as exc:
+            step.status = JobStepStatus.FAILED
+            step.message = step.message or str(exc)
+            raise
+        else:
+            step.status = JobStepStatus.SUCCEEDED
+        finally:
+            step.finished_at = utcnow()
+            diagnostics.record("step", key=key, status=step.status.value, message=step.message)
+            self._runner._persist_and_publish(self.job)
+
+    def skip(self, key: str, title: str, reason: str) -> None:
+        step = self._step(key, title)
+        step.status, step.message = JobStepStatus.SKIPPED, reason
+        diagnostics.record("step", key=key, status="skipped", message=reason)
+        self._runner._persist_and_publish(self.job)
+
+    def _step(self, key: str, title: str) -> JobStep:
+        for step in self.job.steps:
+            if step.key == key:
+                return step
+        step = JobStep(key=key, title=title)
+        self.job.steps.append(step)
+        return step
 
 
 JobFunc = Callable[[JobContext], Awaitable[dict[str, Any]]]
@@ -93,6 +141,9 @@ class JobRunner:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _run(self, job: Job, func: JobFunc) -> None:
+        diag = diagnostics.Diagnostics(job.id)
+        diagnostics.current.set(diag)  # this task's context: everything the job awaits records here
+        diag.record("job", kind=job.kind.value, task=job.task, params=job.params)
         try:
             async with self._sem:
                 job.status = JobStatus.RUNNING
@@ -110,8 +161,14 @@ class JobRunner:
             job.status = JobStatus.FAILED
             job.error = JobError(type=getattr(exc, "error_type", type(exc).__name__), message=str(exc))
             job.message = "Failed"
+            diag.record("error", type=job.error.type, message=str(exc), traceback=traceback.format_exc())
         finally:
             job.finished_at = utcnow()
+            diag.record("job", status=job.status.value, message=job.message)
+            try:
+                self._store.save_diagnostics(job.id, diag.export())
+            except Exception:
+                logger.exception("Could not save diagnostics for job %s", job.id)
             self._persist_and_publish(job)
             self._active_by_host.pop(job.host_id, None)
             self._tasks.pop(job.id, None)
@@ -119,7 +176,12 @@ class JobRunner:
     def _persist_and_publish(self, job: Job) -> None:
         self._store.save_job(job)
         event = JobEvent(
-            job_id=job.id, status=job.status, progress=job.progress, message=job.message, at=utcnow()
+            job_id=job.id,
+            status=job.status,
+            progress=job.progress,
+            message=job.message,
+            at=utcnow(),
+            steps=[s.model_copy() for s in job.steps],
         )
         for queue in list(self._subscribers.get(job.id, ())):
             if queue.full():

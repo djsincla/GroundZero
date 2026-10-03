@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -72,6 +73,12 @@ def test_sidebar_persists_on_every_page_including_api(page: Page, simulated_r740
             expect(docs.get_by_text("/api/v1/hosts").first).to_be_visible()
             expect(docs.locator(".information-container")).to_be_hidden()  # no second header inside the app
             expect(docs.get_by_role("button", name="Authorize")).to_be_hidden()  # uses the UI session
+            # Regression (user report): "Try it out" came first, and the locks had no way to sign in.
+            hosts_op = docs.locator("#operations-hosts-list_hosts_api_v1_hosts_get")
+            hosts_op.locator(".opblock-summary").click()
+            expect(hosts_op.get_by_role("button", name="Try it out")).to_have_count(0)
+            hosts_op.get_by_role("button", name="Execute").click()
+            expect(hosts_op.locator(".live-responses-table tbody .response-col_status")).to_have_text("200")
 
 
 def test_theme_toggle_switches_and_persists(page: Page, simulated_r740xd: GroundZero) -> None:
@@ -365,3 +372,39 @@ def test_build_a_config_set_from_a_running_server(page: Page, simulated_r740xd: 
     expect(page.get_by_label("OS password")).to_be_hidden()
     page.get_by_role("button", name="Capture", exact=True).click()
     expect(page.locator("dialog")).to_contain_text("already exists")
+
+
+# ── pipeline ──
+def test_pipeline_guides_through_the_next_steps(page: Page, simulated_r740xd: GroundZero) -> None:
+    gz = simulated_r740xd
+    assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+    _open(page, gz)
+    page.get_by_role("link", name="esxi1").click()  # the Pipeline tab is the default
+    nxt = page.locator('[data-role="next-step"]')
+    expect(nxt).to_contain_text("Holodeck preflight")
+    expect(page.locator('[data-task="host.assess"]')).to_have_attribute("data-state", "planned")
+
+    nxt.get_by_role("button", name="Holodeck preflight").click()
+    drawer = page.locator("#drawer")
+    expect(drawer.locator('[data-step="evaluate"]')).to_have_attribute(
+        "data-status", "succeeded", timeout=20_000
+    )
+    expect(drawer.locator('[data-step="collect"]')).to_have_attribute("data-status", "succeeded")
+    with page.expect_download() as download:
+        drawer.get_by_role("button", name="Download diagnostics").click()
+    bundle = json.loads(Path(download.value.path()).read_text())
+    assert bundle["job"]["task"] == "preflight" and bundle["bmc_identity"]["vendor"] == "dell"
+    assert any(e["event"] == "redfish" and e.get("status") == 200 for e in bundle["events"])
+
+    expect(page.locator('[data-task="preflight"]')).to_have_attribute("data-state", "done")
+    expect(page.locator('[data-task="preflight"] [data-role="output"]')).to_contain_text("12 passed")
+    expect(nxt).to_contain_text("Deploy custom OS")  # no OS access yet
+    expect(page.locator('[data-task="os.read"]')).to_contain_text("Needs: Set OS access")
+
+    assert gz.cli("os", "set", "esxi1", "--address", "192.0.2.101").code == 0
+    page.reload()
+    expect(nxt).to_contain_text("Read installed OS")
+    nxt.get_by_role("button", name="Read installed OS").click()
+    expect(page.locator('[data-task="os.read"]')).to_have_attribute("data-state", "done", timeout=20_000)
+    expect(page.locator('[data-task="os.read"] [data-role="output"]')).to_contain_text("VMware ESXi")
+    expect(nxt).to_contain_text("Assess Holodeck readiness")

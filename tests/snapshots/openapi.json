@@ -1280,6 +1280,18 @@
           },
           "status": {
             "$ref": "#/components/schemas/JobStatus"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/JobStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "task": {
+            "readOnly": true,
+            "title": "Task",
+            "type": "string"
           }
         },
         "required": [
@@ -1287,7 +1299,8 @@
           "kind",
           "host_id",
           "status",
-          "created_at"
+          "created_at",
+          "task"
         ],
         "title": "Job",
         "type": "object"
@@ -1321,6 +1334,47 @@
         "title": "JobKind",
         "type": "string"
       },
+      "JobRef": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "finished_at"
+        ],
+        "title": "JobRef",
+        "type": "object"
+      },
       "JobStatus": {
         "enum": [
           "queued",
@@ -1330,6 +1384,70 @@
           "cancelled"
         ],
         "title": "JobStatus",
+        "type": "string"
+      },
+      "JobStep": {
+        "description": "One named phase of a job (e.g. \"Build installer ISO\"), so progress and failures are legible.",
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStepStatus",
+            "default": "pending"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "JobStep",
+        "type": "object"
+      },
+      "JobStepStatus": {
+        "enum": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed",
+          "skipped",
+          "cancelled"
+        ],
+        "title": "JobStepStatus",
         "type": "string"
       },
       "LicenseInfo": {
@@ -1478,6 +1596,37 @@
         "title": "NetworkPort",
         "type": "object"
       },
+      "NextStep": {
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Task to run next, or null when there is nothing to run now",
+            "title": "Task"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task",
+          "title",
+          "reason"
+        ],
+        "title": "NextStep",
+        "type": "object"
+      },
       "OsAccess": {
         "properties": {
           "address": {
@@ -1592,6 +1741,41 @@
         "title": "OsFamily",
         "type": "object"
       },
+      "OutputInfo": {
+        "properties": {
+          "fresh": {
+            "description": "False when the OS was reinstalled after this output was produced",
+            "title": "Fresh",
+            "type": "boolean"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "produced_at": {
+            "format": "date-time",
+            "title": "Produced At",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job_id",
+          "produced_at",
+          "fresh",
+          "summary"
+        ],
+        "title": "OutputInfo",
+        "type": "object"
+      },
       "PhysicalNic": {
         "properties": {
           "device": {
@@ -1699,6 +1883,75 @@
           "pinned_at"
         ],
         "title": "PinnedCertificate",
+        "type": "object"
+      },
+      "Pipeline": {
+        "properties": {
+          "host_id": {
+            "title": "Host Id",
+            "type": "string"
+          },
+          "next": {
+            "$ref": "#/components/schemas/NextStep"
+          },
+          "os_epoch": {
+            "title": "Os Epoch",
+            "type": "integer"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineStage"
+            },
+            "title": "Stages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "host_id",
+          "os_epoch",
+          "stages",
+          "next"
+        ],
+        "title": "Pipeline",
+        "type": "object"
+      },
+      "PipelineStage": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Stage"
+          },
+          "state": {
+            "enum": [
+              "done",
+              "stale",
+              "ready",
+              "blocked",
+              "running",
+              "failed",
+              "planned"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskState"
+            },
+            "title": "Tasks",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "state",
+          "tasks"
+        ],
+        "title": "PipelineStage",
         "type": "object"
       },
       "PortGroup": {
@@ -2001,6 +2254,17 @@
         "title": "SecurityPolicy",
         "type": "object"
       },
+      "Stage": {
+        "enum": [
+          "hardware",
+          "os",
+          "readiness",
+          "prep",
+          "holodeck"
+        ],
+        "title": "Stage",
+        "type": "string"
+      },
       "SystemInfo": {
         "properties": {
           "bios_version": {
@@ -2061,6 +2325,195 @@
           "model"
         ],
         "title": "SystemInfo",
+        "type": "object"
+      },
+      "TaskInfo": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "destructive": {
+            "title": "Destructive",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "optional": {
+            "title": "Optional",
+            "type": "boolean"
+          },
+          "produces": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Produces"
+          },
+          "requires": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Requires",
+            "type": "array"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/Stage"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "stage",
+          "description",
+          "produces",
+          "requires",
+          "optional",
+          "destructive",
+          "available"
+        ],
+        "title": "TaskInfo",
+        "type": "object"
+      },
+      "TaskRun": {
+        "description": "Start a task. ``params`` are task-specific (e.g. iso_id, config_set_id for OS deployment).",
+        "properties": {
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Typed confirmation for destructive tasks",
+            "title": "Confirm"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "title": "TaskRun",
+        "type": "object"
+      },
+      "TaskState": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "blocked_by": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked By",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "destructive": {
+            "title": "Destructive",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "optional": {
+            "title": "Optional",
+            "type": "boolean"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutputInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "produces": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Produces"
+          },
+          "requires": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Requires",
+            "type": "array"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/Stage"
+          },
+          "state": {
+            "enum": [
+              "done",
+              "stale",
+              "ready",
+              "blocked",
+              "running",
+              "failed",
+              "planned"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "stage",
+          "description",
+          "produces",
+          "requires",
+          "optional",
+          "destructive",
+          "available",
+          "state"
+        ],
+        "title": "TaskState",
         "type": "object"
       },
       "VSwitch": {
@@ -3515,6 +3968,54 @@
         ]
       }
     },
+    "/api/v1/hosts/{host_id}/pipeline": {
+      "get": {
+        "description": "Every task from bare metal to Holodeck for this host: its state (done, stale, ready, blocked,\nrunning, failed, planned), what blocks it, its last job and output, plus the recommended next step.",
+        "operationId": "get_pipeline_api_v1_hosts__host_id__pipeline_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pipeline"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Pipeline",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
     "/api/v1/hosts/{host_id}/preflight": {
       "get": {
         "operationId": "latest_preflight_api_v1_hosts__host_id__preflight_get",
@@ -3619,6 +4120,73 @@
           }
         ],
         "summary": "Start Preflight",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/tasks/{task_id}": {
+      "post": {
+        "description": "Start a catalog task (GET /tasks). 409 if its inputs are missing or stale (the message says which\ntask to run first). Destructive tasks need ``confirm``.",
+        "operationId": "start_task_api_v1_hosts__host_id__tasks__task_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskRun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Task",
         "tags": [
           "hosts"
         ]
@@ -3849,6 +4417,56 @@
         ]
       }
     },
+    "/api/v1/jobs/{job_id}/diagnostics": {
+      "get": {
+        "description": "A redacted debugging bundle: the job and its steps, the host and BMC identity, and every\nRedfish/ESXi exchange (method, path, status, timing, truncated body). Passwords, tokens and session\nsecrets are removed. Attach it to a bug report when a BMC behaves unexpectedly.",
+        "operationId": "job_diagnostics_api_v1_jobs__job_id__diagnostics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Job Diagnostics Api V1 Jobs  Job Id  Diagnostics Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Job Diagnostics",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
     "/api/v1/jobs/{job_id}/events": {
       "get": {
         "operationId": "job_events_api_v1_jobs__job_id__events_get",
@@ -3948,6 +4566,37 @@
           }
         ],
         "summary": "List Profiles",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/v1/tasks": {
+      "get": {
+        "description": "The task catalog: what each task needs (``requires``) and makes (``produces``), in pipeline order.",
+        "operationId": "list_tasks_api_v1_tasks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskInfo"
+                  },
+                  "title": "Response List Tasks Api V1 Tasks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Tasks",
         "tags": [
           "meta"
         ]

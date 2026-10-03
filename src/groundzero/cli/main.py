@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -266,6 +267,46 @@ def hosts_trust(
         typer.confirm(f"Replace the pinned {role} certificate for {h['name']}?", abort=True)
     c = _call("POST", f"/hosts/{h['id']}/certificates/{role}/trust")
     console.print(f"Pinned {escape(c['address'])}: {c['fingerprint']}")
+
+
+# ── pipeline and tasks ───────────────────────────────────────────────────
+_STATE_STYLE = {"done": "green", "running": "cyan", "failed": "red", "stale": "yellow", "blocked": "magenta",
+                "ready": "white", "planned": "dim"}  # fmt: skip
+
+
+@app.command()
+def pipeline(host: str) -> None:
+    """Where a host is on the way from bare metal to Holodeck, and the recommended next step."""
+    h = _resolve_host(host)
+    p = _call("GET", f"/hosts/{h['id']}/pipeline")
+    table = Table("Stage", "Task", "State", "Output / needs")
+    for stage in p["stages"]:
+        for i, t in enumerate(stage["tasks"]):
+            detail = t["output"]["summary"] if t["output"] else "; ".join(t["blocked_by"])
+            table.add_row(
+                Text(stage["title"] if i == 0 else ""), Text(t["id"]),
+                Text(t["state"], style=_STATE_STYLE.get(t["state"], "")), Text(detail or ""),
+            )  # fmt: skip
+    console.print(table)
+    nxt = p["next"]
+    hint = f"  →  groundzero run {h['name']} {nxt['task']}" if nxt["task"] else ""
+    console.print(Text(f"Next: {nxt['title']}. {nxt['reason']}{hint}"))
+
+
+@app.command("run")
+def run_task(
+    host: str,
+    task: Annotated[str, typer.Argument(help="Task id from `groundzero pipeline` (e.g. preflight, os.read)")],
+    wait: Annotated[bool, typer.Option(help="Follow the job until it finishes")] = True,
+) -> None:
+    """Run one pipeline task on a host (OS deployment: use `groundzero install`)."""
+    h = _resolve_host(host)
+    job = _call("POST", f"/hosts/{h['id']}/tasks/{task}", json={})
+    console.print(f"Started {task} as job {job['id']}")
+    if wait:
+        job = _wait(job)
+        for step in job.get("steps", []):
+            console.print(Text(f"  {step['status']:<9} {step['title']}"))
 
 
 # ── inventory / preflight ────────────────────────────────────────────────
@@ -573,6 +614,24 @@ def jobs_list(limit: int = 20) -> None:
 @jobs_app.command("show")
 def jobs_show(job_id: str) -> None:
     console.print_json(data=_call("GET", f"/jobs/{job_id}"))
+
+
+@jobs_app.command("diag")
+def jobs_diag(
+    job_id: str,
+    out: Annotated[
+        Path | None, typer.Option("--out", "-o", help="Write to this file instead of stdout")
+    ] = None,
+) -> None:
+    """Redacted diagnostics bundle for a job (attach it to a bug report): steps, BMC identity, every
+    Redfish/ESXi exchange. Passwords and tokens are removed."""
+    bundle = _call("GET", f"/jobs/{job_id}/diagnostics")
+    text = json.dumps(bundle, indent=2)
+    if out is None:
+        sys.stdout.write(text + "\n")
+    else:
+        out.write_text(text + "\n")
+        console.print(f"Wrote {len(bundle.get('events', []))} events to {escape(str(out))}")
 
 
 @jobs_app.command("cancel")

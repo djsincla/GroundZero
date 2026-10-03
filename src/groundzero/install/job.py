@@ -47,6 +47,18 @@ logger = logging.getLogger(__name__)
 INSTALLER_BOOT_BYTES = 32 * 1024 * 1024
 
 
+INSTALL_STEPS = [
+    ("snapshot", "Read the current OS"),
+    ("bmc_check", "Check the BMC and hardware"),
+    ("build", "Build the installer ISO"),
+    ("mount", "Mount the ISO and set a one-time boot"),
+    ("reset", "Restart into the installer"),
+    ("boot", "Load the installer"),
+    ("install", "Install ESXi"),
+    ("validate", "Validate the installed host"),
+]
+
+
 def installer_boot_threshold(iso_size: int) -> int:
     """Bytes the BMC must have read before we believe the installer (not a mount probe) is running."""
     return min(INSTALLER_BOOT_BYTES, iso_size // 2)
@@ -278,15 +290,22 @@ class Installer:
         def mark(name: str) -> None:
             marks[name] = round(time.monotonic() - started, 1)
 
-        network, before, previous = await self._snapshot(ctx)
+        ctx.plan(INSTALL_STEPS)
+        if self.access is None or self.os_password is None:
+            ctx.skip("snapshot", "Read the current OS", "No OS access: installing from the config set only")
+            network, before, previous = None, None, None
+        else:
+            async with ctx.step("snapshot", "Read the current OS"):
+                network, before, previous = await self._snapshot(ctx)
 
-        ctx.progress(0.05, "Running preflight against the BMC")
-        async with self.client_factory(self.host, self.bmc_password) as client:
-            _, inventory = await collect_inventory(client)
-        preflight = evaluate(inventory, self.req.profile, self.req.variant)
-        if preflight.overall is CheckStatus.FAIL:
-            failed = [c.id for c in preflight.checks if c.status is CheckStatus.FAIL]
-            raise InstallError(f"Preflight failed ({', '.join(failed)}); refusing to install")
+        async with ctx.step("bmc_check", "Check the BMC and hardware"):
+            ctx.progress(0.05, "Running preflight against the BMC")
+            async with self.client_factory(self.host, self.bmc_password) as client:
+                _, inventory = await collect_inventory(client)
+            preflight = evaluate(inventory, self.req.profile, self.req.variant)
+            if preflight.overall is CheckStatus.FAIL:
+                failed = [c.id for c in preflight.checks if c.status is CheckStatus.FAIL]
+                raise InstallError(f"Preflight failed ({', '.join(failed)}); refusing to install")
         cpu = next((c for c in preflight.checks if c.id == "cpu.generation"), None)
         legacy_cpu = self.req.allow_legacy_cpu
         if legacy_cpu is None:
@@ -309,10 +328,13 @@ class Installer:
         if not self.req.iso_path:
             raise InstallError("No installer ISO resolved for this install")
         stock = Path(self.req.iso_path)
-        iso_info = inspect_iso(stock)
-        ctx.progress(0.08, f"Building installer ISO (ESXi {iso_info.version} build {iso_info.build})")
-        built = self.media_dir / f"{ctx.job.id}-{spec.network.hostname}.iso"
-        await asyncio.to_thread(build_install_iso, stock, built, render_kickstart(spec), spec.kernel_options)
+        async with ctx.step("build", "Build the installer ISO"):
+            iso_info = inspect_iso(stock)
+            ctx.progress(0.08, f"Building installer ISO (ESXi {iso_info.version} build {iso_info.build})")
+            built = self.media_dir / f"{ctx.job.id}-{spec.network.hostname}.iso"
+            await asyncio.to_thread(
+                build_install_iso, stock, built, render_kickstart(spec), spec.kernel_options
+            )
         mark("iso_built")
 
         base = self.media_base_url or f"https://{source_address_towards(self.host.bmc_address)}"
@@ -339,30 +361,36 @@ class Installer:
                 caps = await discover_capabilities(client, system, manager)
                 profile = profile_for(identity.vendor)
 
-                ctx.progress(0.12, "Mounting installer ISO, waiting for it to attach, setting one-time boot")
-                slot, report.boot_method = await actions.boot_once_from_virtual_cd(
-                    client,
-                    identity,
-                    caps,
-                    profile,
-                    url,
-                    action_timeout=self.t.action_timeout,
-                    boot_method=self.req.boot_method,
-                    settle_seconds=self.t.media_settle_seconds,
-                    cleanup_watch_seconds=self.t.cleanup_watch_seconds,
-                    attach_timeout=self.t.media_attach_seconds,
-                )
-                ctx.progress(0.15, "Restarting the host into the installer")
-                report.reset_type = await actions.restart(client, identity, caps)
-                report.reset_at = utcnow()
+                async with ctx.step("mount", "Mount the ISO and set a one-time boot"):
+                    ctx.progress(
+                        0.12, "Mounting installer ISO, waiting for it to attach, setting one-time boot"
+                    )
+                    slot, report.boot_method = await actions.boot_once_from_virtual_cd(
+                        client,
+                        identity,
+                        caps,
+                        profile,
+                        url,
+                        action_timeout=self.t.action_timeout,
+                        boot_method=self.req.boot_method,
+                        settle_seconds=self.t.media_settle_seconds,
+                        cleanup_watch_seconds=self.t.cleanup_watch_seconds,
+                        attach_timeout=self.t.media_attach_seconds,
+                    )
+                async with ctx.step("reset", "Restart into the installer"):
+                    ctx.progress(0.15, "Restarting the host into the installer")
+                    report.reset_type = await actions.restart(client, identity, caps)
+                    report.reset_at = utcnow()
                 mark("reset")
 
-                threshold = installer_boot_threshold(built.stat().st_size)
-                await self._wait_for_installer(ctx, token, report.previous_build, threshold)
+                async with ctx.step("boot", "Load the installer"):
+                    threshold = installer_boot_threshold(built.stat().st_size)
+                    await self._wait_for_installer(ctx, token, report.previous_build, threshold)
                 mark("installer_booted")
-                await self._wait_for_new_build(ctx, iso_info.build, started, report.previous_build)
-                # A reinstall generates a new host certificate: trust it now that the expected build answers.
-                self.new_access = await asyncio.to_thread(self._repin_os, self.new_access)
+                async with ctx.step("install", "Install ESXi"):
+                    await self._wait_for_new_build(ctx, iso_info.build, started, report.previous_build)
+                    # A reinstall generates a new host certificate: trust it now that the new build answers.
+                    self.new_access = await asyncio.to_thread(self._repin_os, self.new_access)
                 mark("esxi_up")
             finally:
                 stats = self.media.stats(token)
@@ -379,14 +407,17 @@ class Installer:
                     non_get=[f"{r.method} {r.path}" for r in client.request_log if r.method != "GET"],
                 )
 
-        ctx.progress(0.9, "Validating the installed host")
-        report.validation = await self._validate(spec, iso_info.build, before)
-        report.installed_build = next((c.observed for c in report.validation if c.name == "esxi.build"), None)
-        mark("validated")
-        report.durations_s = marks
-        if not report.valid:
-            failed = [c.name for c in report.validation if not c.ok]
-            raise InstallError(f"ESXi installed but validation failed: {', '.join(failed)}")
+        async with ctx.step("validate", "Validate the installed host"):
+            ctx.progress(0.9, "Validating the installed host")
+            report.validation = await self._validate(spec, iso_info.build, before)
+            report.installed_build = next(
+                (c.observed for c in report.validation if c.name == "esxi.build"), None
+            )
+            mark("validated")
+            report.durations_s = marks
+            if not report.valid:
+                failed = [c.name for c in report.validation if not c.ok]
+                raise InstallError(f"ESXi installed but validation failed: {', '.join(failed)}")
         return {"install": report.model_dump(mode="json")}
 
     async def _wait_for_installer(

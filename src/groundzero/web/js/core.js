@@ -131,14 +131,48 @@ export async function followJob(jobId, onEvent, signal) {
   }
 }
 
-export const JOB_LABELS = {
-  inventory: "Inventory", preflight: "Preflight", os_network: "Read ESXi network", install: "Install",
-  os_capture: "Capture config set",
+export const TASK_TITLES = {
+  discover: "Discover hardware", preflight: "Preflight", "os.read": "Read installed OS", "os.reimage": "Deploy OS",
+  "os.custom": "Deploy custom OS", "os.capture": "Capture config set", "host.assess": "Assess readiness",
+  "host.prep": "Prepare host", "net.verify_jumbo": "Verify jumbo frames", "holodeck.router": "Deploy Holorouter",
+  "holodeck.stage": "Stage binaries", "holodeck.deploy": "Deploy Holodeck",
 };
+export const jobLabel = (job) => TASK_TITLES[job.task] || job.task || job.kind;
+// Kept for older callers: kind → label.
+export const JOB_LABELS = { inventory: "Discover hardware", preflight: "Preflight", os_network: "Read installed OS",
+  install: "Install", os_capture: "Capture config set" };
+
+const STEP_ICON = { pending: "○", running: "◐", succeeded: "✓", failed: "✕", skipped: "–", cancelled: "✕" };
+function stepDuration(step) {
+  if (!step.started_at) return "";
+  const end = step.finished_at ? new Date(step.finished_at) : new Date();
+  const s = Math.max(0, Math.round((end - new Date(step.started_at)) / 1000));
+  return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
+}
+export function stepsList(steps) {
+  if (!steps?.length) return null;
+  return h("ol", { class: "steps", "aria-label": "Steps" }, steps.map((s) =>
+    h("li", { class: `step ${s.status}`, "data-step": s.key, "data-status": s.status },
+      h("span", { class: "step-icon", "aria-hidden": "true" }, STEP_ICON[s.status] || "○"),
+      h("span", { class: "step-title" }, s.title, h("span", { class: "visually-hidden" }, `: ${s.status}`)),
+      h("span", { class: "muted small-text" }, stepDuration(s)),
+      s.message && s.status !== "succeeded" ? h("div", { class: "step-msg small-text" }, s.message) : null)));
+}
+
+export async function downloadDiagnostics(jobId) {
+  const res = await fetch(`${API}/jobs/${jobId}/diagnostics`, { headers: { Authorization: `Bearer ${token()}` } });
+  if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+  const url = URL.createObjectURL(await res.blob());
+  const a = h("a", { href: url, download: `groundzero-job-${jobId}-diagnostics.json` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 const FINAL = ["succeeded", "failed", "cancelled"];
 export const isActive = (job) => job.status === "queued" || job.status === "running";
 
-export function jobCard(job, { onDone, hostName } = {}) {
+export function jobCard(job, { onDone, hostName, detailed = false } = {}) {
   const bar = h("div", { style: `width:${Math.round((job.progress || 0) * 100)}%` });
   let status = badge(job.status);
   const msg = h("span", { class: "muted", "data-role": "message" }, job.message || "");
@@ -148,20 +182,30 @@ export function jobCard(job, { onDone, hostName } = {}) {
         try { await api("POST", `/jobs/${job.id}/cancel`); toast("Cancel requested"); } catch (e) { toast(e.message, "error"); }
       } }, "Cancel")
     : null;
+  const stepsSlot = h("div", {}, detailed ? stepsList(job.steps) : null);
+  const diag = detailed
+    ? h("button", { class: "small", onclick: () => downloadDiagnostics(job.id).catch((e) => toast(e.message, "error")) },
+        "Download diagnostics")
+    : null;
   const el = h("div", { class: "job", "data-job": job.id },
-    h("div", { class: "row" }, status, h("strong", {}, JOB_LABELS[job.kind] || job.kind),
+    h("div", { class: "row" }, status, h("strong", {}, jobLabel(job)),
       hostName ? h("span", {}, hostName) : null,
       h("span", { class: "mono muted" }, job.id), h("span", { class: "spacer" }),
       h("span", { class: "muted small-text" }, fmtTime(job.created_at)), cancel),
-    h("div", { class: "progress" }, bar), msg, err);
+    h("div", { class: "progress" }, bar), msg, err, stepsSlot, diag ? h("div", { class: "row" }, diag) : null);
   if (isActive(job)) {
     followJob(job.id, (ev) => {
       bar.style.width = `${Math.round(ev.progress * 100)}%`;
       status.replaceWith((status = badge(ev.status)));
       msg.textContent = ev.message;
+      if (detailed && ev.steps?.length) stepsSlot.replaceChildren(stepsList(ev.steps));
       if (FINAL.includes(ev.status)) {
         cancel?.remove();
-        api("GET", `/jobs/${job.id}`).then((j) => { err.textContent = j.error ? j.error.message : ""; onDone?.(j); });
+        api("GET", `/jobs/${job.id}`).then((j) => {
+          err.textContent = j.error ? j.error.message : "";
+          if (detailed) stepsSlot.replaceChildren(stepsList(j.steps) || "");
+          onDone?.(j);
+        });
       }
     }).catch(() => {});
   }
@@ -173,11 +217,12 @@ export function showJobDrawer(job, { onDone, title } = {}) {
   const drawer = document.getElementById("drawer");
   const close = h("button", { class: "icon", "aria-label": "Close", onclick: () => { drawer.hidden = true; } }, "✕");
   drawer.replaceChildren(
-    h("div", { class: "drawer-head" }, h("h2", {}, title || JOB_LABELS[job.kind] || "Job"), close),
+    h("div", { class: "drawer-head" }, h("h2", {}, title || jobLabel(job)), close),
     jobCard(job, {
+      detailed: true,
       onDone: (j) => {
         const ok = j.status === "succeeded";
-        toast(`${JOB_LABELS[j.kind] || j.kind} ${j.status}`, ok ? "success" : "error");
+        toast(`${jobLabel(j)} ${j.status}`, ok ? "success" : "error");
         // Success: get out of the way (the toast confirms it). Failure: stay open so the error can be read.
         if (ok) setTimeout(() => { if (drawer.dataset.job === j.id) drawer.hidden = true; }, 2500);
         onDone?.(j);

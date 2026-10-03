@@ -7,7 +7,7 @@ import { schemaForm } from "../forms.js";
 
 const LEGACY = "";  // "keep this host's current settings": captured from the running OS at install time
 
-export async function viewDeploy(app, id) {
+export async function viewDeploy(app, id, query = new URLSearchParams()) {
   const [host, osAccess, families, isos, sets, stored, jobs] = await Promise.all([
     api("GET", `/hosts/${id}`),
     maybe(api("GET", `/hosts/${id}/os`)),
@@ -34,7 +34,8 @@ export async function viewDeploy(app, id) {
       : empty("No ESXi installer ISOs in the repository.", h("a", { class: "button", href: "#/isos" }, "Open ISO repository")));
 
   // ── step 2: configuration ──
-  const preferred = esxiSets[0]?.id ?? LEGACY;
+  // ?mode=keep comes from the pipeline's "Deploy OS" (re-image with the current settings).
+  const preferred = query.get("mode") === "keep" && osAccess ? LEGACY : esxiSets[0]?.id ?? LEGACY;
   const setSelect = h("select", { id: "d-config", name: "config" },
     esxiSets.map((s) => h("option", { value: s.id, selected: s.id === preferred }, s.name)),
     h("option", { value: LEGACY, disabled: !osAccess, selected: preferred === LEGACY },
@@ -137,8 +138,10 @@ export async function viewDeploy(app, id) {
 
   async function go() {
     start.disabled = true;
-    const job = await startJob("POST", `/hosts/${id}/install`, body(confirm.value), {
-      title: `Install on ${host.name}`,
+    const { confirm: typed, ...params } = body(confirm.value);
+    const task = legacy() ? "os.reimage" : "os.custom";  // Deploy OS vs Deploy custom OS
+    const job = await startJob("POST", `/hosts/${id}/tasks/${task}`, { params, confirm: typed }, {
+      title: `${legacy() ? "Deploy OS" : "Deploy custom OS"} on ${host.name}`,
       onDone: () => window.dispatchEvent(new Event("gz:refresh")),
     });
     if (job) {

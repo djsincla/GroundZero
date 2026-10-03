@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from groundzero.api.deps import ServicesDep
 from groundzero.core.models import Host, HostCreate, Job, JobKind, OsAccess, OsAccessSet, OsCaptureRequest
 from groundzero.core.services import InstallPreview
+from groundzero.core.tasks import Pipeline, TaskRun
 from groundzero.core.tls import PinnedCertificate
 from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.install.job import InstallReport, InstallRequest
@@ -145,3 +146,19 @@ def trust_certificate(host_id: str, role: str, services: ServicesDep) -> PinnedC
     """Accept the certificate the BMC ("bmc") or installed OS ("os") presents now. Use only after a
     legitimate change (reinstall, renewed certificate): this replaces the pin."""
     return services.retrust(host_id, role)
+
+
+@router.get("/{host_id}/pipeline", response_model=Pipeline)
+def get_pipeline(host_id: str, services: ServicesDep) -> Pipeline:
+    """Every task from bare metal to Holodeck for this host: its state (done, stale, ready, blocked,
+    running, failed, planned), what blocks it, its last job and output, plus the recommended next step."""
+    return services.pipeline(host_id)
+
+
+@router.post("/{host_id}/tasks/{task_id}", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
+async def start_task(
+    host_id: str, task_id: str, body: TaskRun, services: ServicesDep, response: Response
+) -> Job:
+    """Start a catalog task (GET /tasks). 409 if its inputs are missing or stale (the message says which
+    task to run first). Destructive tasks need ``confirm``."""
+    return _accepted(response, services.start_task(host_id, task_id, body))

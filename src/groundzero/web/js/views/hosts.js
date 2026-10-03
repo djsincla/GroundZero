@@ -52,9 +52,10 @@ function addHostDialog() {
 }
 
 // ── host page ──
-const TABS = [["overview", "Overview"], ["preflight", "Preflight"], ["network", "Networking"], ["install", "Install"], ["jobs", "Jobs"]];
+const TABS = [["pipeline", "Pipeline"], ["overview", "Overview"], ["preflight", "Preflight"], ["network", "Networking"],
+  ["install", "Install"], ["jobs", "Jobs"]];
 
-export async function viewHost(app, id, tab = "overview") {
+export async function viewHost(app, id, tab = "pipeline") {
   const host = await api("GET", `/hosts/${id}`);
   const [pre, osAccess, net, install, jobs, certs] = await Promise.all([
     maybe(api("GET", `/hosts/${id}/preflight`)),
@@ -64,17 +65,19 @@ export async function viewHost(app, id, tab = "overview") {
     api("GET", `/jobs?host_id=${id}&limit=20`),
     api("GET", `/hosts/${id}/certificates`),
   ]);
+  const pipeline = tab === "pipeline" ? await api("GET", `/hosts/${id}/pipeline`) : null;
   const active = jobs.find(isActive);
   const busy = Boolean(active);
-  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy,
+  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline,
     lastInstallJob: jobs.find((j) => j.kind === "install") };
 
   const tabs = h("nav", { class: "tabs", "aria-label": "Host sections" }, TABS.map(([key, label]) =>
     h("a", { href: `#/hosts/${id}/${key}`, class: key === tab ? "active" : null, "aria-current": key === tab ? "page" : null }, label)));
 
   const body = {
-    overview: overviewTab, preflight: preflightTab, network: networkTab, install: installTab, jobs: jobsTab,
-  }[tab] || overviewTab;
+    pipeline: pipelineTab, overview: overviewTab, preflight: preflightTab, network: networkTab, install: installTab,
+    jobs: jobsTab,
+  }[tab] || pipelineTab;
 
   mount(app, 
     pageHeader(host.name, [hardware(host), host.bmc_address].filter(Boolean).join(" · "),
@@ -83,6 +86,74 @@ export async function viewHost(app, id, tab = "overview") {
     tabs,
     active ? card({ class: "panel running" }, h("h2", {}, "Running"), jobCard(active, { onDone: refresh })) : null,
     body(ctx));
+}
+
+// ── pipeline: bare metal → OS → readiness → prep → Holodeck; each task's output feeds the next ──
+const STATE_BADGE = { done: "pass", running: "running", failed: "fail", stale: "warn", blocked: "unknown",
+  ready: "none", planned: "none" };
+const STATE_LABEL = { done: "done", running: "running", failed: "failed", stale: "out of date", blocked: "blocked",
+  ready: "ready", planned: "coming" };
+const stateBadge = (state) => badge(STATE_BADGE[state] || "none", STATE_LABEL[state] || state);
+
+function runTask(ctx, task) {
+  const { id, host } = ctx;
+  if (task.id === "os.custom") { location.hash = `#/hosts/${id}/deploy`; return; }
+  if (task.id === "os.reimage") { location.hash = `#/hosts/${id}/deploy?mode=keep`; return; }
+  if (task.id === "os.capture") { captureDialog(host); return; }
+  startJob("POST", `/hosts/${id}/tasks/${task.id}`, {}, { onDone: refresh });
+}
+
+function taskButton(ctx, task, { primary = false, label = null } = {}) {
+  if (!task.available || task.state === "running") return null;
+  const blocked = task.state === "blocked";
+  const text = label || { done: "Run again", stale: "Run again", failed: "Retry" }[task.state] || "Run";
+  return h("button", {
+    class: [primary ? "primary" : "small", task.destructive && !primary ? "danger-outline" : ""].join(" ").trim(),
+    disabled: ctx.busy || blocked, title: blocked ? task.blocked_by.join("; ") : null,
+    "data-run": task.id, onclick: () => runTask(ctx, task),
+  }, text);
+}
+
+async function openJob(jobId) {
+  try { showJobDrawer(await api("GET", `/jobs/${jobId}`), { onDone: refresh }); } catch (e) { toast(e.message, "error"); }
+}
+
+function taskRow(ctx, task) {
+  const last = task.last_job;
+  return h("li", { class: `task ${task.state}`, "data-task": task.id, "data-state": task.state },
+    h("div", { class: "row" },
+      h("strong", {}, task.title),
+      task.optional ? h("span", { class: "chip" }, "optional") : null,
+      task.destructive ? h("span", { class: "chip danger-chip" }, "changes the server") : null,
+      stateBadge(task.state), h("span", { class: "spacer" }), taskButton(ctx, task)),
+    h("p", { class: "muted small-text task-desc" }, task.description),
+    task.output ? h("p", { class: "task-output", "data-role": "output" }, "→ ", task.output.summary,
+      task.output.fresh ? null : h("span", { class: "warn-text" }, " (from before the OS was reinstalled)")) : null,
+    task.state === "blocked" && task.blocked_by.length
+      ? h("p", { class: "small-text blocked-by" }, "Needs: ", task.blocked_by.join("; ")) : null,
+    last ? h("p", { class: "small-text muted" }, "Last run: ",
+      h("a", { href: `#/hosts/${ctx.id}/pipeline`, onclick: (e) => { e.preventDefault(); openJob(last.id); } },
+        `${last.status}${last.finished_at ? ` · ${fmtTime(last.finished_at)}` : ""}`)) : null);
+}
+
+function pipelineTab(ctx) {
+  const { pipeline } = ctx;
+  const next = pipeline.next;
+  const tasks = Object.fromEntries(pipeline.stages.flatMap((s) => s.tasks).map((t) => [t.id, t]));
+  const nextTask = next.task ? tasks[next.task] : null;
+  return [
+    card({ class: "panel next-step", "data-role": "next-step" },
+      h("div", { class: "row" },
+        h("div", { class: "grow" }, h("p", { class: "eyebrow" }, "Next step"), h("h2", {}, next.title),
+          h("p", { class: "muted" }, next.reason)),
+        nextTask ? taskButton(ctx, nextTask, { primary: true, label: next.title }) : null)),
+    card({},
+      h("ol", { class: "pipeline" }, pipeline.stages.map((stage) =>
+        h("li", { class: `stage ${stage.state}`, "data-stage": stage.id },
+          h("div", { class: "stage-head" }, h("span", { class: "stage-dot", "aria-hidden": "true" }),
+            h("h3", {}, stage.title), stateBadge(stage.state)),
+          h("ul", { class: "stage-tasks" }, stage.tasks.map((t) => taskRow(ctx, t))))))),
+  ];
 }
 
 function overviewTab(ctx) {

@@ -8,6 +8,8 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from groundzero import __version__
+from groundzero.api.deps import ServicesDep
+from groundzero.core.tasks import TaskInfo
 from groundzero.preflight.evaluate import Variant, available_profiles, load_profile
 
 health_router = APIRouter(tags=["meta"])
@@ -49,3 +51,9 @@ def list_profiles() -> list[ProfileSummary]:
             )
         )
     return summaries
+
+
+@router.get("/tasks", response_model=list[TaskInfo])
+def list_tasks(services: ServicesDep) -> list[TaskInfo]:
+    """The task catalog: what each task needs (``requires``) and makes (``produces``), in pipeline order."""
+    return services.list_tasks()

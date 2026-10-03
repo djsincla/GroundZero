@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import StreamingResponse
@@ -29,6 +30,14 @@ def list_jobs(
 @router.get("/{job_id}", response_model=Job)
 def get_job(job_id: str, services: ServicesDep) -> Job:
     return services.get_job(job_id)
+
+
+@router.get("/{job_id}/diagnostics")
+def job_diagnostics(job_id: str, services: ServicesDep) -> dict[str, Any]:
+    """A redacted debugging bundle: the job and its steps, the host and BMC identity, and every
+    Redfish/ESXi exchange (method, path, status, timing, truncated body). Passwords, tokens and session
+    secrets are removed. Attach it to a bug report when a BMC behaves unexpectedly."""
+    return services.job_diagnostics(job_id)
 
 
 @router.post("/{job_id}/cancel", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
@@ -59,6 +68,7 @@ async def job_events(job_id: str, request: Request, services: ServicesDep) -> St
                     progress=current.progress,
                     message=current.message,
                     at=utcnow(),
+                    steps=current.steps,
                 )
             )
             if current.status.is_terminal:

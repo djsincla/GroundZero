@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from groundzero.core.models import ConfigSet, Host, Job, JobError, JobKind, JobStatus, OsAccess
+from groundzero.core.models import ConfigSet, Host, Job, JobError, JobKind, JobStatus, JobStep, OsAccess
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS hosts (
@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS pins (
     pinned_at TEXT NOT NULL,
     PRIMARY KEY (host_id, role)
 );
+CREATE TABLE IF NOT EXISTS job_diagnostics (
+    job_id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS host_values (
     host_id TEXT NOT NULL,
     os_family TEXT NOT NULL,
@@ -82,6 +87,23 @@ CREATE TABLE IF NOT EXISTS host_values (
     PRIMARY KEY (host_id, os_family)
 );
 """
+
+# Columns added after the first release: (table, column, definition). Applied in place on startup.
+_MIGRATIONS = (
+    ("jobs", "steps", "TEXT NOT NULL DEFAULT '[]'"),
+    ("hosts", "os_epoch", "INTEGER NOT NULL DEFAULT 0"),  # bumped by every successful OS install
+    ("results", "epoch", "INTEGER NOT NULL DEFAULT 0"),  # the host's os_epoch when the result was made
+)
+
+
+class OutputMeta:
+    """A stored task output plus where and when it came from."""
+
+    def __init__(self, data: dict[str, Any], job_id: str, created_at: datetime, epoch: int) -> None:
+        self.data = data
+        self.job_id = job_id
+        self.created_at = created_at
+        self.epoch = epoch
 
 
 def utcnow() -> datetime:
@@ -101,6 +123,10 @@ class Store:
         self._lock = threading.Lock()
         with self._tx() as cur:
             cur.executescript(_SCHEMA)
+            for table, column, definition in _MIGRATIONS:
+                existing = {r["name"] for r in cur.execute(f"PRAGMA table_info({table})").fetchall()}
+                if column not in existing:
+                    cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def close(self) -> None:
         self._conn.close()
@@ -160,6 +186,10 @@ class Store:
             cur.execute("DELETE FROM os_access WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM host_values WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM pins WHERE host_id = ?", (host_id,))
+            cur.execute(
+                "DELETE FROM job_diagnostics WHERE job_id IN (SELECT id FROM jobs WHERE host_id = ?)",
+                (host_id,),
+            )
             cur.execute("DELETE FROM jobs WHERE host_id = ?", (host_id,))
             deleted = cur.execute("DELETE FROM hosts WHERE id = ?", (host_id,)).rowcount
         return deleted > 0
@@ -319,7 +349,7 @@ class Store:
         with self._tx() as cur:
             cur.execute(
                 "UPDATE jobs SET status = ?, progress = ?, message = ?, result = ?, error = ?,"
-                " started_at = ?, finished_at = ? WHERE id = ?",
+                " started_at = ?, finished_at = ?, steps = ? WHERE id = ?",
                 (
                     job.status.value,
                     job.progress,
@@ -328,6 +358,7 @@ class Store:
                     job.error.model_dump_json() if job.error else None,
                     job.started_at.isoformat() if job.started_at else None,
                     job.finished_at.isoformat() if job.finished_at else None,
+                    json.dumps([s.model_dump(mode="json") for s in job.steps]),
                     job.id,
                 ),
             )
@@ -365,13 +396,63 @@ class Store:
                 ),
             ).rowcount
 
-    # ── results ──────────────────────────────────────────────────────────
+    # ── results (task outputs) ───────────────────────────────────────────
     def save_result(self, *, host_id: str, kind: str, job_id: str, data: dict[str, Any]) -> None:
+        """Store a task output, stamped with the host's current OS epoch."""
+        with self._tx() as cur:
+            row = cur.execute("SELECT os_epoch FROM hosts WHERE id = ?", (host_id,)).fetchone()
+            cur.execute(
+                "INSERT INTO results (host_id, kind, job_id, data, created_at, epoch)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    host_id,
+                    kind,
+                    job_id,
+                    json.dumps(data),
+                    utcnow().isoformat(),
+                    row["os_epoch"] if row else 0,
+                ),
+            )
+
+    def latest_output(self, *, host_id: str, kind: str) -> OutputMeta | None:
+        with self._tx() as cur:
+            row = cur.execute(
+                "SELECT * FROM results WHERE host_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1",
+                (host_id, kind),
+            ).fetchone()
+        if not row:
+            return None
+        return OutputMeta(
+            json.loads(row["data"]), row["job_id"], datetime.fromisoformat(row["created_at"]), row["epoch"]
+        )
+
+    def os_epoch(self, host_id: str) -> int:
+        with self._tx() as cur:
+            row = cur.execute("SELECT os_epoch FROM hosts WHERE id = ?", (host_id,)).fetchone()
+        return int(row["os_epoch"]) if row else 0
+
+    def bump_os_epoch(self, host_id: str) -> int:
+        """A new OS was installed: outputs read from the previous OS are now stale."""
+        with self._tx() as cur:
+            cur.execute("UPDATE hosts SET os_epoch = os_epoch + 1 WHERE id = ?", (host_id,))
+            row = cur.execute("SELECT os_epoch FROM hosts WHERE id = ?", (host_id,)).fetchone()
+        return int(row["os_epoch"]) if row else 0
+
+    # ── job diagnostics ──────────────────────────────────────────────────
+    def save_diagnostics(self, job_id: str, data: dict[str, Any]) -> None:
         with self._tx() as cur:
             cur.execute(
-                "INSERT INTO results (host_id, kind, job_id, data, created_at) VALUES (?, ?, ?, ?, ?)",
-                (host_id, kind, job_id, json.dumps(data), utcnow().isoformat()),
+                "INSERT OR REPLACE INTO job_diagnostics (job_id, data, created_at) VALUES (?, ?, ?)",
+                (job_id, json.dumps(data, default=str), utcnow().isoformat()),
             )
+
+    def get_diagnostics(self, job_id: str) -> dict[str, Any] | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT data FROM job_diagnostics WHERE job_id = ?", (job_id,)).fetchone()
+        if not row:
+            return None
+        data: dict[str, Any] = json.loads(row["data"])
+        return data
 
     def latest_result(self, *, host_id: str, kind: str) -> dict[str, Any] | None:
         with self._tx() as cur:
@@ -416,6 +497,7 @@ def _row_to_job(row: sqlite3.Row) -> Job:
         created_at=datetime.fromisoformat(row["created_at"]),
         started_at=_dt(row["started_at"]),
         finished_at=_dt(row["finished_at"]),
+        steps=[JobStep.model_validate(s) for s in json.loads(row["steps"] or "[]")],
     )
 
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import ssl
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Self
@@ -20,6 +21,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from groundzero.core import diagnostics
 from groundzero.redfish.errors import (
     RedfishAuthError,
     RedfishError,
@@ -61,6 +63,10 @@ class RequestRecord:
 ResponseHook = Callable[[str, dict[str, Any]], None]
 
 
+# Response headers worth keeping for debugging other vendors' BMCs (never auth headers).
+_DIAG_HEADERS = ("server", "content-type", "location", "etag", "odata-version", "retry-after", "allow")
+
+
 class RedfishClient:
     def __init__(
         self,
@@ -97,6 +103,7 @@ class RedfishClient:
         self._session_uri: str | None = None
         self._basic_auth = False
         self.request_log: list[RequestRecord] = []
+        diagnostics.add_secret(password)
 
     # ── lifecycle ────────────────────────────────────────────────────────
     async def __aenter__(self) -> Self:
@@ -117,6 +124,7 @@ class RedfishClient:
                 continue
             token = resp.headers.get("X-Auth-Token")
             if resp.status in (200, 201) and token:
+                diagnostics.add_secret(token)
                 self._token = token
                 self._session_uri = self._same_host_path(resp.headers.get("Location"))
                 return
@@ -233,15 +241,37 @@ class RedfishClient:
                 req_headers["X-Auth-Token"] = self._token
             elif self._basic_auth:
                 auth = httpx.BasicAuth(self._username, self._password)
+        started = time.monotonic()
         try:
             extra: dict[str, Any] = {"timeout": timeout} if timeout is not None else {}
             raw = await self._http.request(method, path, json=json, headers=req_headers, auth=auth, **extra)
         except httpx.HTTPError as exc:
             self.request_log.append(RequestRecord(method, path, None))
             detail = str(exc) or type(exc).__name__  # e.g. ReadTimeout carries no message
+            diagnostics.record(
+                "redfish",
+                host=self._host,
+                method=method,
+                path=path,
+                request=json,
+                error=f"{type(exc).__name__}: {detail}",
+                ms=round((time.monotonic() - started) * 1000),
+            )
             raise RedfishTransportError(f"{method} {path} failed: {detail}", path=path) from exc
         self.request_log.append(RequestRecord(method, path, raw.status_code))
-        return RedfishResponse(status=raw.status_code, headers=raw.headers, body=_parse_body(raw))
+        body = _parse_body(raw)
+        diagnostics.record(
+            "redfish",
+            host=self._host,
+            method=method,
+            path=path,
+            status=raw.status_code,
+            ms=round((time.monotonic() - started) * 1000),
+            request=json,
+            headers={k: raw.headers[k] for k in _DIAG_HEADERS if k in raw.headers},
+            response=diagnostics.truncate(body if body is not None else raw.text or None),
+        )
+        return RedfishResponse(status=raw.status_code, headers=raw.headers, body=body)
 
     async def _sleep(self, attempt: int) -> None:
         if self._backoff > 0:

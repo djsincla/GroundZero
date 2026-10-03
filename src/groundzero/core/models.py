@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, computed_field
 
 
 class HostCreate(BaseModel):
@@ -68,6 +68,38 @@ class JobError(BaseModel):
     message: str
 
 
+class JobStepStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    CANCELLED = "cancelled"
+
+
+class JobStep(BaseModel):
+    """One named phase of a job (e.g. "Build installer ISO"), so progress and failures are legible."""
+
+    key: str
+    title: str
+    status: JobStepStatus = JobStepStatus.PENDING
+    message: str = ""
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+def task_id_for(kind: JobKind, params: dict[str, Any]) -> str:
+    """The catalog task a job ran (see GET /tasks); install splits into re-image vs custom."""
+    if kind is JobKind.INSTALL:
+        return "os.custom" if params.get("config_set_id") else "os.reimage"
+    return {
+        JobKind.INVENTORY: "discover",
+        JobKind.PREFLIGHT: "preflight",
+        JobKind.OS_NETWORK: "os.read",
+        JobKind.OS_CAPTURE: "os.capture",
+    }.get(kind, kind.value)
+
+
 class Job(BaseModel):
     id: str
     kind: JobKind
@@ -81,6 +113,12 @@ class Job(BaseModel):
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    steps: list[JobStep] = Field(default_factory=list)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def task(self) -> str:
+        return task_id_for(self.kind, self.params)
 
 
 class BmcAudit(BaseModel):
@@ -96,6 +134,7 @@ class JobEvent(BaseModel):
     progress: float
     message: str
     at: datetime
+    steps: list[JobStep] = Field(default_factory=list)
 
 
 class ConfigSetWrite(BaseModel):
