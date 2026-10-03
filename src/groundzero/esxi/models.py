@@ -75,6 +75,8 @@ class EsxiNetworkConfig(BaseModel):
     search_domains: list[str] = Field(default_factory=list)
     dns_from_dhcp: bool = False
     ntp_servers: list[str] = Field(default_factory=list)
+    ntp_running: bool | None = Field(default=None, description="ntpd service running (None: not read)")
+    ntp_policy: str | None = Field(default=None, description='ntpd startup policy: "on", "off", "automatic"')
     vmkernel: list[VmkInterface] = Field(default_factory=list)
     vswitches: list[VSwitch] = Field(default_factory=list)
     portgroups: list[PortGroup] = Field(default_factory=list)
@@ -115,7 +117,30 @@ class Datastore(BaseModel):
     name: str
     type: str
     capacity_gb: float
+    free_gb: float | None = None
+    ssd: bool | None = Field(default=None, description="Backed by flash (SSD/NVMe)")
+    local: bool | None = None
     disks: list[str] = Field(default_factory=list)
+
+
+class EsxiDisk(BaseModel):
+    """A local or attached disk as ESXi sees it (canonical name is what VMFS and kickstart use)."""
+
+    name: str = Field(description="Canonical name, e.g. t10.NVMe____... or naa.5000...")
+    display_name: str | None = None
+    vendor: str | None = None
+    model: str | None = None
+    capacity_gb: float
+    ssd: bool | None = None
+    local: bool | None = None
+    is_boot: bool = False
+    datastores: list[str] = Field(default_factory=list, description="Datastores with an extent on this disk")
+    partitions: int | None = Field(default=None, description="Partitions on the disk (None: not read)")
+
+    @property
+    def unused(self) -> bool:
+        """No datastore, not the boot disk, and no partitions of any kind: safe to propose formatting."""
+        return not self.is_boot and not self.datastores and self.partitions == 0
 
 
 class EsxiStorage(BaseModel):
@@ -123,6 +148,7 @@ class EsxiStorage(BaseModel):
         default=None, description="Disk holding OSDATA/bootbanks (the install disk)"
     )
     datastores: list[Datastore] = Field(default_factory=list)
+    disks: list[EsxiDisk] = Field(default_factory=list)
 
     @property
     def vmfs_names(self) -> list[str]:

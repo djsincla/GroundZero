@@ -52,7 +52,7 @@ function addHostDialog() {
 }
 
 // ── host page ──
-const TABS = [["pipeline", "Pipeline"], ["overview", "Overview"], ["preflight", "Preflight"], ["network", "Networking"],
+const TABS = [["pipeline", "Pipeline"], ["readiness", "Readiness"], ["overview", "Overview"], ["preflight", "Preflight"], ["network", "Networking"],
   ["install", "Install"], ["jobs", "Jobs"]];
 
 export async function viewHost(app, id, tab = "pipeline") {
@@ -66,16 +66,17 @@ export async function viewHost(app, id, tab = "pipeline") {
     api("GET", `/hosts/${id}/certificates`),
   ]);
   const pipeline = tab === "pipeline" ? await api("GET", `/hosts/${id}/pipeline`) : null;
+  const readiness = tab === "readiness" ? await maybe(api("GET", `/hosts/${id}/readiness`)) : null;
   const active = jobs.find(isActive);
   const busy = Boolean(active);
-  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline,
+  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness,
     lastInstallJob: jobs.find((j) => j.kind === "install") };
 
   const tabs = h("nav", { class: "tabs", "aria-label": "Host sections" }, TABS.map(([key, label]) =>
     h("a", { href: `#/hosts/${id}/${key}`, class: key === tab ? "active" : null, "aria-current": key === tab ? "page" : null }, label)));
 
   const body = {
-    pipeline: pipelineTab, overview: overviewTab, preflight: preflightTab, network: networkTab, install: installTab,
+    pipeline: pipelineTab, readiness: readinessTab, overview: overviewTab, preflight: preflightTab, network: networkTab, install: installTab,
     jobs: jobsTab,
   }[tab] || pipelineTab;
 
@@ -128,7 +129,8 @@ function taskRow(ctx, task) {
       stateBadge(task.state), h("span", { class: "spacer" }), taskButton(ctx, task)),
     h("p", { class: "muted small-text task-desc" }, task.description),
     task.output ? h("p", { class: "task-output", "data-role": "output" }, "→ ", task.output.summary,
-      task.output.fresh ? null : h("span", { class: "warn-text" }, " (from before the OS was reinstalled)")) : null,
+      task.output.fresh ? null : h("span", { class: "warn-text" }, " (from before the OS was reinstalled)"),
+      task.id === "host.assess" ? [" · ", h("a", { href: `#/hosts/${ctx.id}/readiness` }, "View report")] : null) : null,
     task.state === "blocked" && task.blocked_by.length
       ? h("p", { class: "small-text blocked-by" }, "Needs: ", task.blocked_by.join("; ")) : null,
     last ? h("p", { class: "small-text muted" }, "Last run: ",
@@ -153,6 +155,44 @@ function pipelineTab(ctx) {
           h("div", { class: "stage-head" }, h("span", { class: "stage-dot", "aria-hidden": "true" }),
             h("h3", {}, stage.title), stateBadge(stage.state)),
           h("ul", { class: "stage-tasks" }, stage.tasks.map((t) => taskRow(ctx, t))))))),
+  ];
+}
+
+// ── readiness: checks, the datastore proposal and the planned fixes (applied by "Prepare host") ──
+function readinessTab(ctx) {
+  const { id, readiness: r, busy } = ctx;
+  const assess = () => startJob("POST", `/hosts/${id}/tasks/host.assess`, {}, { onDone: refresh });
+  const header = h("div", { class: "row" }, h("h2", {}, "Holodeck readiness"), r ? badge(r.ready ? "pass" : "fail", r.ready ? "ready" : "not ready") : null,
+    h("span", { class: "spacer" }), h("button", { onclick: assess, disabled: busy }, r ? "Assess again" : "Assess now"));
+  if (!r) {
+    return card({ "data-panel": "readiness" }, header, h("p", { class: "muted" },
+      "Not assessed yet. The assessment reads the installed OS (read-only) and plans what Holodeck still needs."));
+  }
+  const s = r.storage;
+  const storageText = {
+    existing: `Holodeck will use the existing flash datastore ${s.datastore}: ${Math.round(s.free_gb).toLocaleString()} GB free of ${Math.round(s.capacity_gb).toLocaleString()} GB.`,
+    format: `Proposed: create datastore “${s.datastore}” on ${s.disk_label} (${Math.round(s.capacity_gb).toLocaleString()} GB). This erases the disk; you'll confirm by typing a phrase.`,
+    none: s.reason,
+  }[s.kind];
+  const planList = r.plan.length
+    ? h("ul", { class: "plan" }, r.plan.map((a) => h("li", { class: `plan-item${a.destructive ? " destructive" : ""}`, "data-action": a.id, "data-check": a.check },
+        h("label", { class: "inline" },
+          h("input", { type: "checkbox", checked: a.recommended, disabled: true, "aria-label": a.title }),
+          h("span", {}, h("strong", {}, a.title), a.destructive ? h("span", { class: "chip danger-chip" }, "erases a disk") : null,
+            a.recommended ? null : h("span", { class: "chip" }, "optional"))),
+        h("p", { class: "muted small-text" }, a.why))))
+    : h("p", { class: "muted" }, "Nothing to fix.");
+  return [
+    card({ "data-panel": "readiness" }, header,
+      h("p", { class: "muted" }, `${r.variant_title} · ${r.esxi} · assessed ${fmtTime(r.generated_at)} · ${r.summary.passed} passed, ${r.summary.warnings} warnings, ${r.summary.failed} to fix, ${r.summary.unknown} not yet verified`),
+      h("div", { class: `storage-proposal ${s.kind}`, "data-role": "storage" }, h("h3", {}, "Holodeck datastore"), h("p", {}, storageText))),
+    card({}, h("h2", {}, "Checks"),
+      table(["", "Check", "Observed", "Required", "What to do"], r.checks.map((c) =>
+        h("tr", { "data-check": c.id }, h("td", {}, badge(c.status)), h("td", {}, c.title), h("td", {}, c.observed),
+          h("td", { class: "muted" }, c.required), h("td", {}, c.remediation || ""))))),
+    card({ "data-panel": "plan" }, h("h2", {}, "Planned fixes"),
+      h("p", { class: "muted small-text" }, "Each fix changes only what is listed. Applying them is the next pipeline step, Prepare host, which arrives in the next update; nothing has been changed."),
+      planList),
   ];
 }
 

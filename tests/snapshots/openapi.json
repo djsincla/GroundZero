@@ -1,6 +1,65 @@
 {
   "components": {
     "schemas": {
+      "Action": {
+        "description": "One fix ``host.prep`` can apply. ``params`` are exactly what it will do.",
+        "properties": {
+          "check": {
+            "description": "The check this action fixes",
+            "title": "Check",
+            "type": "string"
+          },
+          "confirm_phrase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Typed confirmation for destructive actions",
+            "title": "Confirm Phrase"
+          },
+          "destructive": {
+            "default": false,
+            "title": "Destructive",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "set_mtu, ensure_portgroup, configure_ntp, create_datastore, verify_jumbo",
+            "title": "Id",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "recommended": {
+            "default": true,
+            "description": "Selected by default in the UI",
+            "title": "Recommended",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "check",
+          "title",
+          "why"
+        ],
+        "title": "Action",
+        "type": "object"
+      },
       "BiosSettings": {
         "properties": {
           "attributes": {
@@ -548,6 +607,30 @@
               }
             ],
             "title": "Hostname"
+          },
+          "ntp_policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ntpd startup policy: \"on\", \"off\", \"automatic\"",
+            "title": "Ntp Policy"
+          },
+          "ntp_running": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ntpd service running (None: not read)",
+            "title": "Ntp Running"
           },
           "ntp_servers": {
             "items": {
@@ -1329,7 +1412,8 @@
           "preflight",
           "os_network",
           "install",
-          "os_capture"
+          "os_capture",
+          "assess"
         ],
         "title": "JobKind",
         "type": "string"
@@ -2187,6 +2271,86 @@
         "title": "ProfileSummary",
         "type": "object"
       },
+      "ReadinessReport": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/Check"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "esxi": {
+            "description": "Product and build that was assessed",
+            "title": "Esxi",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "overall": {
+            "$ref": "#/components/schemas/CheckStatus"
+          },
+          "plan": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "title": "Plan",
+            "type": "array"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "ready": {
+            "description": "True when nothing blocks the Holodeck deployment",
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "storage": {
+            "$ref": "#/components/schemas/StorageProposal"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PreflightSummary"
+          },
+          "target_vswitch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Vswitch"
+          },
+          "variant": {
+            "title": "Variant",
+            "type": "string"
+          },
+          "variant_title": {
+            "title": "Variant Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile",
+          "variant",
+          "variant_title",
+          "generated_at",
+          "esxi",
+          "overall",
+          "ready",
+          "summary",
+          "checks",
+          "plan",
+          "storage"
+        ],
+        "title": "ReadinessReport",
+        "type": "object"
+      },
       "ResetCapability": {
         "properties": {
           "allowed_types": {
@@ -2264,6 +2428,90 @@
         ],
         "title": "Stage",
         "type": "string"
+      },
+      "StorageProposal": {
+        "properties": {
+          "capacity_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity Gb"
+          },
+          "datastore": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Datastore"
+          },
+          "disk": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical name of the disk to format (kind=format)",
+            "title": "Disk"
+          },
+          "disk_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Label"
+          },
+          "free_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Gb"
+          },
+          "kind": {
+            "enum": [
+              "existing",
+              "format",
+              "none"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "required_gb": {
+            "title": "Required Gb",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "required_gb",
+          "reason"
+        ],
+        "title": "StorageProposal",
+        "type": "object"
       },
       "SystemInfo": {
         "properties": {
@@ -4120,6 +4368,54 @@
           }
         ],
         "summary": "Start Preflight",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/readiness": {
+      "get": {
+        "description": "Latest Holodeck readiness assessment: checks, the proposed datastore and the planned fixes.",
+        "operationId": "get_readiness_api_v1_hosts__host_id__readiness_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Readiness",
         "tags": [
           "hosts"
         ]

@@ -87,7 +87,9 @@ def test_pipeline_walks_from_preflight_to_reading_the_os(api: TestClient) -> Non
     assert p["next"]["task"] == "os.custom"  # no OS access yet
 
     api.put(f"/api/v1/hosts/{host}/os", json={"address": "192.0.2.101", "password": "esxi-pw"})
-    assert api.get(f"/api/v1/hosts/{host}/pipeline").json()["next"]["task"] == "os.read"
+    assert (
+        api.get(f"/api/v1/hosts/{host}/pipeline").json()["next"]["task"] == "host.assess"
+    )  # reads the OS itself
     job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/os.read", json={}).json()["id"])
     assert job["status"] == "succeeded", job
     assert [s["key"] for s in job["steps"]] == ["connect", "network", "storage"]
@@ -95,7 +97,8 @@ def test_pipeline_walks_from_preflight_to_reading_the_os(api: TestClient) -> Non
     p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
     assert _task(p, "os.read")["state"] == "done"
     assert _task(p, "os.read")["output"]["summary"].startswith("VMware ESXi")
-    assert _task(p, "host.assess")["state"] == "planned"
+    assert _task(p, "host.assess")["state"] == "ready"
+    assert p["next"]["task"] == "host.assess"
 
 
 def test_unknown_and_unavailable_tasks(api: TestClient) -> None:
@@ -117,3 +120,29 @@ def test_job_diagnostics_bundle_has_the_bmc_exchanges_and_no_secrets(api: TestCl
     assert len(redfish) > 10 and all("status" in e or "error" in e for e in redfish)
     assert "calvin" not in json.dumps(bundle)
     assert api.get("/api/v1/jobs/nope/diagnostics").status_code == 404
+
+
+def test_assess_reads_the_os_and_plans_fixes(api: TestClient) -> None:
+    host = _host(api)
+    api.put(f"/api/v1/hosts/{host}/os", json={"address": "192.0.2.101", "password": "esxi-pw"})
+    blocked = api.post(f"/api/v1/hosts/{host}/tasks/host.assess", json={})
+    assert blocked.status_code == 409 and "Holodeck preflight" in blocked.json()["detail"]  # needs its input
+
+    assert (
+        _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/preflight", json={}).json()["id"])["status"]
+        == "succeeded"
+    )
+    job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/host.assess", json={}).json()["id"])
+    assert job["status"] == "succeeded", job
+    assert [s["key"] for s in job["steps"]] == ["connect", "network", "storage", "evaluate"]
+
+    report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+    assert report["variant"] == "vcf-9.0-esa-single"  # taken from the preflight output
+    assert report["storage"] == {**report["storage"], "kind": "existing", "datastore": "localHolodeck"}
+    assert {a["id"] for a in report["plan"]} >= {"set_mtu", "configure_ntp", "verify_jumbo"}
+    assert not report["ready"]
+
+    p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
+    assess = _task(p, "host.assess")
+    assert assess["state"] == "done" and "to fix for VCF 9.0" in assess["output"]["summary"]
+    assert _task(p, "os.read")["state"] == "done"  # the assessment's fresh OS read is reused

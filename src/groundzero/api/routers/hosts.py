@@ -16,6 +16,7 @@ from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.install.job import InstallReport, InstallRequest
 from groundzero.inventory.models import HostInventory
 from groundzero.preflight.evaluate import PreflightReport
+from groundzero.readiness import ReadinessReport
 
 router = APIRouter(prefix="/hosts", tags=["hosts"])
 
@@ -162,3 +163,9 @@ async def start_task(
     """Start a catalog task (GET /tasks). 409 if its inputs are missing or stale (the message says which
     task to run first). Destructive tasks need ``confirm``."""
     return _accepted(response, services.start_task(host_id, task_id, body))
+
+
+@router.get("/{host_id}/readiness", response_model=ReadinessReport)
+def get_readiness(host_id: str, services: ServicesDep) -> ReadinessReport:
+    """Latest Holodeck readiness assessment: checks, the proposed datastore and the planned fixes."""
+    return ReadinessReport.model_validate(services.latest_output(host_id, "readiness"))

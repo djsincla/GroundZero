@@ -50,7 +50,8 @@ from groundzero.isos import IsoImage, IsoRepository
 from groundzero.media.registry import MediaRegistry
 from groundzero.osconfig import PLUGINS, OsConfigError, plugin_for
 from groundzero.osconfig.esxi import EsxiHostValues, EsxiPlugin, EsxiSettings
-from groundzero.preflight.evaluate import UnknownProfileError, evaluate, load_profile
+from groundzero.preflight.evaluate import PreflightReport, UnknownProfileError, evaluate, load_profile
+from groundzero.readiness import assess
 from groundzero.redfish.capture import load_recording
 from groundzero.redfish.client import RedfishClient
 from groundzero.simulator.bmc import SimulatedBmc
@@ -105,6 +106,14 @@ class InstallPreview(BaseModel):
     spec: dict[str, Any]
     kickstart: str  # root password hash masked
     notes: list[str]
+
+
+ASSESS_STEPS = [
+    ("connect", "Connect to the OS"),
+    ("network", "Read network and NTP"),
+    ("storage", "Read disks and datastores"),
+    ("evaluate", "Evaluate Holodeck readiness"),
+]
 
 
 class Services:
@@ -173,6 +182,13 @@ class Services:
         if self.runner.active_job(host_id):
             raise ConflictError(f"Host {host_id} has an active job; cancel it first")
         self.store.delete_host(host_id)
+
+    def latest_output(self, host_id: str, kind: str) -> dict[str, Any]:
+        self.get_host(host_id)
+        meta = self.store.latest_output(host_id=host_id, kind=kind)
+        if meta is None:
+            raise NotFoundError(f"No {kind} for host {host_id} yet")
+        return meta.data
 
     def latest_result(self, host_id: str, kind: JobKind) -> dict[str, Any]:
         self.get_host(host_id)
@@ -488,7 +504,47 @@ class Services:
             return self.start_os_network(host_id)
         if task_id == "os.capture":
             return self.start_os_capture(host_id, str(p.get("name") or ""))
+        if task_id == "host.assess":
+            return self.start_assess(host_id, p.get("variant"))
         raise ConflictError(f"“{spec.title}” has no runner")  # pragma: no cover - catalog/dispatch mismatch
+
+    def start_assess(self, host_id: str, variant: str | None = None) -> Job:
+        """Read the installed OS live and assess it against Holodeck's needs (read-only)."""
+        self.get_host(host_id)
+        access, secret = self._os_access(host_id)
+        password = self._cipher.decrypt(secret)
+        stored = self.store.latest_output(host_id=host_id, kind=JobKind.PREFLIGHT.value)
+        preflight = PreflightReport.model_validate(stored.data) if stored else None
+        profile = load_profile(preflight.profile if preflight else "holodeck-9")
+        variant = variant or (preflight.variant if preflight else profile.default_variant)
+        if variant not in profile.variants:
+            raise UnknownProfileError(f"Unknown variant '{variant}'; choose from {sorted(profile.variants)}")
+        jumbo_meta = self.store.latest_output(host_id=host_id, kind="jumbo")
+        epoch = self.store.os_epoch(host_id)
+        jumbo = jumbo_meta.data if jumbo_meta and jumbo_meta.epoch >= epoch else None
+
+        async def run(ctx: JobContext) -> dict[str, Any]:
+            ctx.plan(ASSESS_STEPS)
+            async with ctx.step("connect", "Connect to the OS"):
+                target = await asyncio.to_thread(self.os_target, host_id, access)
+            async with ctx.step("network", "Read network and NTP"):
+                ctx.progress(0.3, f"Reading network configuration from {access.address}")
+                network = await self.esxi.read_network(target, password)
+            async with ctx.step("storage", "Read disks and datastores"):
+                ctx.progress(0.6, f"Reading disks and datastores from {access.address}")
+                storage = await self.esxi.read_storage(target, password)
+            for kind, model in ((JobKind.OS_NETWORK.value, network), ("os_storage", storage)):
+                self.store.save_result(
+                    host_id=host_id, kind=kind, job_id=ctx.job.id, data=model.model_dump(mode="json")
+                )
+            async with ctx.step("evaluate", "Evaluate Holodeck readiness"):
+                report = assess(profile=profile, variant=variant, network=network, storage=storage,
+                                preflight=preflight, jumbo=jumbo)  # fmt: skip
+                data = report.model_dump(mode="json")
+                self.store.save_result(host_id=host_id, kind="readiness", job_id=ctx.job.id, data=data)
+            return {"readiness": data}
+
+        return self.runner.submit(kind=JobKind.ASSESS, host_id=host_id, params={"variant": variant}, func=run)
 
     def job_diagnostics(self, job_id: str) -> dict[str, Any]:
         """Everything needed to debug a job from a file: job, host, BMC identity and the redacted log."""

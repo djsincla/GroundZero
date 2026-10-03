@@ -6,7 +6,10 @@
       "disks": [
         "t10.ATA_____DELLBOSS_VD_____________________________SN01"
       ],
+      "free_gb": 306.6,
+      "local": true,
       "name": "boss",
+      "ssd": false,
       "type": "VMFS"
     },
     {
@@ -14,7 +17,10 @@
       "disks": [
         "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN02"
       ],
+      "free_gb": 105.0,
+      "local": true,
       "name": "esx1ds",
+      "ssd": true,
       "type": "VMFS"
     },
     {
@@ -22,7 +28,10 @@
       "disks": [
         "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN03"
       ],
+      "free_gb": 105.0,
+      "local": true,
       "name": "esx2ds",
+      "ssd": true,
       "type": "VMFS"
     },
     {
@@ -30,7 +39,10 @@
       "disks": [
         "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN04"
       ],
+      "free_gb": 105.0,
+      "local": true,
       "name": "esx3ds",
+      "ssd": true,
       "type": "VMFS"
     },
     {
@@ -38,7 +50,10 @@
       "disks": [
         "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN05"
       ],
+      "free_gb": 555.0,
+      "local": true,
       "name": "localVM",
+      "ssd": true,
       "type": "VMFS"
     },
     {
@@ -46,7 +61,10 @@
       "disks": [
         "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN06"
       ],
+      "free_gb": 105.0,
+      "local": true,
       "name": "esxi4ds",
+      "ssd": true,
       "type": "VMFS"
     },
     {
@@ -54,7 +72,10 @@
       "disks": [
         "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN07"
       ],
+      "free_gb": 998.4,
+      "local": true,
       "name": "esxi5ds",
+      "ssd": true,
       "type": "VMFS"
     },
     {
@@ -62,7 +83,10 @@
       "disks": [
         "t10.NVMe____Dell_Express_Flash_NVMe_P4510_4TB_SFF___SN08"
       ],
+      "free_gb": 3903.9,
+      "local": true,
       "name": "localHolodeck",
+      "ssd": true,
       "type": "VMFS"
     },
     {
@@ -70,7 +94,9 @@
       "disks": [
         "t10.ATA_____DELLBOSS_VD_____________________________SN01"
       ],
+      "local": true,
       "name": "OSDATA-0000",
+      "ssd": false,
       "type": "OTHER"
     },
     {
@@ -84,6 +110,205 @@
       "disks": [],
       "name": "BOOTBANK2",
       "type": "OTHER"
+    }
+  ],
+  "disks": [
+    {
+      "capacity_gb": 480.0,
+      "datastores": [
+        "boss",
+        "OSDATA-0000"
+      ],
+      "display_name": "Local ATA Disk (t10.ATA_____DELLBOSS_VD_____________________________SN01)",
+      "is_boot": true,
+      "local": true,
+      "model": "DELLBOSS VD",
+      "name": "t10.ATA_____DELLBOSS_VD_____________________________SN01",
+      "partitions": 5,
+      "ssd": false,
+      "vendor": "ATA"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [
+        "esx1ds"
+      ],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN02)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN02",
+      "partitions": 1,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [
+        "esx2ds"
+      ],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN03)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN03",
+      "partitions": 1,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [
+        "esx3ds"
+      ],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN04)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN04",
+      "partitions": 1,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [
+        "localVM"
+      ],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN05)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN05",
+      "partitions": 1,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [
+        "esxi4ds"
+      ],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN06)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN06",
+      "partitions": 1,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [
+        "esxi5ds"
+      ],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN07)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_P4510_1TB_SFF___SN07",
+      "partitions": 1,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 4000.8,
+      "datastores": [
+        "localHolodeck"
+      ],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_P4510_4TB_SFF___SN08)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 4TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_P4510_4TB_SFF___SN08",
+      "partitions": 1,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN09)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN09",
+      "partitions": 0,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN10)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN10",
+      "partitions": 0,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN11)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN11",
+      "partitions": 3,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN12)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN12",
+      "partitions": 0,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1600.3,
+      "datastores": [],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_1.6TB_SFF________SN13)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash PM1725b 1.6TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_1.6TB_SFF________SN13",
+      "partitions": 0,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN14)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN14",
+      "partitions": 0,
+      "ssd": true,
+      "vendor": "NVMe"
+    },
+    {
+      "capacity_gb": 1000.2,
+      "datastores": [],
+      "display_name": "Local NVMe Disk (t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN15)",
+      "is_boot": false,
+      "local": true,
+      "model": "Dell Express Flash NVMe P4510 1TB SFF",
+      "name": "t10.NVMe____Dell_Express_Flash_NVMe_1TB_SFF________SN15",
+      "partitions": 0,
+      "ssd": true,
+      "vendor": "NVMe"
     }
   ]
 }

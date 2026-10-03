@@ -382,7 +382,7 @@ def test_pipeline_guides_through_the_next_steps(page: Page, simulated_r740xd: Gr
     page.get_by_role("link", name="esxi1").click()  # the Pipeline tab is the default
     nxt = page.locator('[data-role="next-step"]')
     expect(nxt).to_contain_text("Holodeck preflight")
-    expect(page.locator('[data-task="host.assess"]')).to_have_attribute("data-state", "planned")
+    expect(page.locator('[data-task="host.prep"]')).to_have_attribute("data-state", "planned")
 
     nxt.get_by_role("button", name="Holodeck preflight").click()
     drawer = page.locator("#drawer")
@@ -403,8 +403,30 @@ def test_pipeline_guides_through_the_next_steps(page: Page, simulated_r740xd: Gr
 
     assert gz.cli("os", "set", "esxi1", "--address", "192.0.2.101").code == 0
     page.reload()
-    expect(nxt).to_contain_text("Read installed OS")
-    nxt.get_by_role("button", name="Read installed OS").click()
+    expect(nxt).to_contain_text("Assess Holodeck readiness")  # it reads the OS itself
+    page.locator('[data-task="os.read"]').get_by_role("button", name="Run").click()  # optional utility
     expect(page.locator('[data-task="os.read"]')).to_have_attribute("data-state", "done", timeout=20_000)
     expect(page.locator('[data-task="os.read"] [data-role="output"]')).to_contain_text("VMware ESXi")
-    expect(nxt).to_contain_text("Assess Holodeck readiness")
+
+
+def test_readiness_report_shows_checks_storage_and_planned_fixes(
+    page: Page, simulated_r740xd: GroundZero
+) -> None:
+    gz = simulated_r740xd
+    _host_with_os(gz)
+    assert gz.cli("run", "esxi1", "preflight", timeout=120).code == 0
+    _open(page, gz)
+    page.get_by_role("link", name="esxi1").click()
+    nxt = page.locator('[data-role="next-step"]')
+    nxt.get_by_role("button", name="Assess Holodeck readiness").click()
+    expect(page.locator('[data-task="host.assess"]')).to_have_attribute("data-state", "done", timeout=20_000)
+    page.locator('[data-task="host.assess"]').get_by_role("link", name="View report").click()
+
+    expect(page.locator('[data-panel="readiness"]')).to_contain_text("not ready")
+    expect(page.locator('[data-role="storage"]')).to_contain_text("existing flash datastore localHolodeck")
+    expect(page.locator('tr[data-check="network.mtu"]')).to_contain_text("vSwitch0: 1500")
+    plan = page.locator('[data-panel="plan"]')
+    expect(plan.locator('[data-action="set_mtu"]')).to_contain_text("Set vSwitch0 MTU to 9000")
+    expect(plan.locator('[data-check="network.external"] input')).not_to_be_checked()  # optional fix
+    expect(plan.locator('[data-action="set_mtu"] input')).to_be_checked()
+    expect(plan).to_contain_text("nothing has been changed")

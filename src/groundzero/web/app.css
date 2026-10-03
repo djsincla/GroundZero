@@ -234,6 +234,19 @@ ol.steps { list-style: none; margin: 10px 0 6px; padding: 0; display: grid; gap:
 .step-msg { grid-column: 2 / -1; color: var(--muted); overflow-wrap: anywhere; }
 .step.failed .step-msg { color: var(--fail); }
 
+/* ── readiness ── */
+.storage-proposal { border-left: 4px solid var(--line); padding: 4px 0 4px 12px; margin-top: 12px; }
+.storage-proposal h3 { margin: 0 0 4px; }
+.storage-proposal p { margin: 0; }
+.storage-proposal.existing { border-left-color: var(--pass); }
+.storage-proposal.format { border-left-color: var(--warn); }
+.storage-proposal.none { border-left-color: var(--fail); }
+ul.plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.plan-item { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.plan-item.destructive { border-color: color-mix(in srgb, var(--fail) 45%, var(--line)); }
+.plan-item label { margin: 0; }
+.plan-item p { margin: 4px 0 0 26px; }
+
 /* ── small screens: off-canvas sidebar, 16px gutters ── */
 @media (max-width: 860px) {
   .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); transition: transform .2s ease; box-shadow: var(--shadow-lg); }

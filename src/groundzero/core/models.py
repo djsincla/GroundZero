@@ -34,6 +34,7 @@ class JobKind(StrEnum):
     OS_NETWORK = "os_network"
     INSTALL = "install"
     OS_CAPTURE = "os_capture"
+    ASSESS = "assess"
 
 
 class OsAccessSet(BaseModel):
@@ -97,6 +98,7 @@ def task_id_for(kind: JobKind, params: dict[str, Any]) -> str:
         JobKind.PREFLIGHT: "preflight",
         JobKind.OS_NETWORK: "os.read",
         JobKind.OS_CAPTURE: "os.capture",
+        JobKind.ASSESS: "host.assess",
     }.get(kind, kind.value)
 
 

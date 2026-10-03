@@ -71,13 +71,13 @@ CATALOG: tuple[TaskSpec, ...] = (
              produces="install", optional=True, destructive=True),
     TaskSpec("os.read", "Read installed OS", Stage.OS,
              "Read the running hypervisor's network, NTP and storage (read-only).",
-             produces="os_network", requires=(OS_ACCESS,), os_bound=True),
+             produces="os_network", requires=(OS_ACCESS,), os_bound=True, optional=True),
     TaskSpec("os.capture", "Capture config set", Stage.OS,
              "Save the running hypervisor's settings as a reusable config set (read-only).",
              produces=None, requires=(OS_ACCESS,), optional=True),
     TaskSpec("host.assess", "Assess Holodeck readiness", Stage.READINESS,
              "Compare drives, datastores, network and NTP with what Holodeck needs, and plan the fixes.",
-             produces="readiness", requires=("inventory", "os_network"), os_bound=True, available=False),
+             produces="readiness", requires=("preflight", OS_ACCESS), os_bound=True),
     TaskSpec("host.prep", "Prepare host", Stage.PREP,
              "Apply the planned fixes: MTU, trunk and external port groups, NTP, Holodeck datastore.",
              produces="host_prep", requires=("readiness",), os_bound=True, destructive=True, available=False),
@@ -191,6 +191,13 @@ def summarize(kind: str, data: dict[str, Any]) -> str:
             if data.get("installed_build") and all(c.get("ok") for c in data.get("validation", [])):
                 return f"{target} installed and validated"
             return f"{target}: did not complete (still on {data.get('previous_build') or '?'})"
+        if kind == "readiness":
+            if data.get("ready"):
+                return f"Ready for {data['variant_title']}" + (
+                    " (with warnings)" if data["overall"] == "warn" else ""
+                )
+            fixes = len(data.get("plan", []))
+            return f"{data['summary']['failed']} to fix for {data['variant_title']} · {fixes} planned actions"
         if kind == "os_network":
             mgmt = next((v for v in data.get("vmkernel", []) if "management" in v.get("services", [])), None)
             return f"{data['product']} at {(mgmt or {}).get('ip') or data.get('address')}"

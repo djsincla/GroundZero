@@ -13,6 +13,7 @@ from typing import Any
 from groundzero.esxi.models import (
     Datastore,
     EsxiAbout,
+    EsxiDisk,
     EsxiNetworkConfig,
     EsxiStorage,
     PhysicalNic,
@@ -69,6 +70,7 @@ def extract_network(
     ntp_servers: list[str],
     services_by_vnic: dict[str, list[str]],
     hints: dict[str, Any] | None = None,
+    ntp_service: tuple[bool, str] | None = None,
 ) -> EsxiNetworkConfig:
     hints = hints or {}
     dns = network.dnsConfig
@@ -133,6 +135,8 @@ def extract_network(
         search_domains=list(dns.searchDomain or []),
         dns_from_dhcp=bool(dns.dhcp),
         ntp_servers=ntp_servers,
+        ntp_running=ntp_service[0] if ntp_service else None,
+        ntp_policy=ntp_service[1] if ntp_service else None,
         vmkernel=vmks,
         vswitches=vswitches,
         portgroups=portgroups,
@@ -183,7 +187,16 @@ def _read_network_blocking(
         except vim.fault.HostConfigFault:
             hints = {}
         ntp_servers = list(ntp.server or []) if ntp else []
-        return extract_network(address, content.about, network, ntp_servers, services, hints)
+        ntp_service = None
+        try:
+            ntpd = next(
+                (s for s in host.configManager.serviceSystem.serviceInfo.service or [] if s.key == "ntpd"),
+                None,
+            )
+            ntp_service = (bool(ntpd.running), str(ntpd.policy)) if ntpd else None
+        except vim.fault.HostConfigFault:
+            pass
+        return extract_network(address, content.about, network, ntp_servers, services, hints, ntp_service)
     finally:
         Disconnect(si)
 
@@ -196,7 +209,17 @@ async def read_network(
     )
 
 
-def extract_storage(mount_info: list[Any]) -> EsxiStorage:
+def extract_storage(
+    mount_info: list[Any],
+    luns: list[Any] | None = None,
+    partitions: dict[str, int] | None = None,
+    free_bytes: dict[str, int] | None = None,
+) -> EsxiStorage:
+    """Datastores (with free space and flash backing) and every disk ESXi sees.
+
+    ``luns``: ``storageDevice.scsiLun``; ``partitions``: partition count per device path;
+    ``free_bytes``: datastore name → free space (from the datastore summaries).
+    """
     datastores: list[Datastore] = []
     boot_disk: str | None = None
     for mount in mount_info:
@@ -204,12 +227,40 @@ def extract_storage(mount_info: list[Any]) -> EsxiStorage:
         disks = [extent.diskName for extent in getattr(volume, "extent", None) or []]
         if volume.name.startswith("OSDATA") and disks:
             boot_disk = disks[0]
+        free = (free_bytes or {}).get(volume.name)
         datastores.append(
             Datastore(
-                name=volume.name, type=volume.type, capacity_gb=round(volume.capacity / 1e9, 1), disks=disks
+                name=volume.name,
+                type=volume.type,
+                capacity_gb=round(volume.capacity / 1e9, 1),
+                free_gb=round(free / 1e9, 1) if free is not None else None,
+                ssd=getattr(volume, "ssd", None),
+                local=getattr(volume, "local", None),
+                disks=disks,
             )
         )
-    return EsxiStorage(boot_disk=boot_disk, datastores=datastores)
+    found: list[EsxiDisk] = []
+    for lun in luns or []:
+        if getattr(lun, "lunType", "disk") != "disk":
+            continue  # CD-ROMs, enclosures, controllers
+        name = lun.canonicalName
+        capacity = getattr(lun, "capacity", None)
+        size = capacity.block * capacity.blockSize if capacity else 0
+        found.append(
+            EsxiDisk(
+                name=name,
+                display_name=getattr(lun, "displayName", None),
+                vendor=(getattr(lun, "vendor", "") or "").strip() or None,
+                model=(getattr(lun, "model", "") or "").strip() or None,
+                capacity_gb=round(size / 1e9, 1),
+                ssd=getattr(lun, "ssd", None),
+                local=getattr(lun, "localDisk", None),
+                is_boot=name == boot_disk,
+                datastores=[d.name for d in datastores if name in d.disks],
+                partitions=None if partitions is None else partitions.get(getattr(lun, "devicePath", ""), 0),
+            )
+        )
+    return EsxiStorage(boot_disk=boot_disk, datastores=datastores, disks=found)
 
 
 def _ssl_context(verify_tls: bool, pinned_pem: str | None = None) -> ssl.SSLContext:
@@ -243,7 +294,17 @@ def _read_storage_blocking(
         view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
         host = view.view[0]
         view.Destroy()
-        return extract_storage(list(host.config.fileSystemVolume.mountInfo or []))
+        luns = [lun for lun in host.config.storageDevice.scsiLun or [] if isinstance(lun, vim.host.ScsiDisk)]
+        partitions: dict[str, int] | None = None
+        try:
+            infos = host.configManager.storageSystem.RetrieveDiskPartitionInfo(
+                devicePath=[lun.devicePath for lun in luns]
+            )
+            partitions = {i.deviceName: len(i.spec.partition or []) for i in infos or []}
+        except vim.fault.HostConfigFault:
+            partitions = None  # unknown: never propose formatting a disk we could not inspect
+        free = {ds.summary.name: ds.summary.freeSpace for ds in host.datastore or [] if ds.summary}
+        return extract_storage(list(host.config.fileSystemVolume.mountInfo or []), luns, partitions, free)
     finally:
         Disconnect(si)
 

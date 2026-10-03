@@ -43,7 +43,8 @@ def test_a_new_host_starts_with_preflight() -> None:
     p = _pipeline([], {}, os_access=False)
     assert p.next.task == "preflight"
     assert _state(p, "os.read") == "blocked"
-    assert _state(p, "host.assess") == "planned"
+    assert _state(p, "host.assess") == "blocked"
+    assert _state(p, "host.prep") == "planned"
     assert [s.id for s in p.stages] == ["hardware", "os", "readiness", "prep", "holodeck"]
 
 
@@ -61,19 +62,27 @@ def test_without_os_access_the_next_step_is_deploying_an_os() -> None:
 def test_outputs_feed_the_next_task_and_go_stale_after_a_reinstall() -> None:
     jobs = [
         _job("p1", JobKind.PREFLIGHT, JobStatus.SUCCEEDED, 1),
-        _job("n1", JobKind.OS_NETWORK, JobStatus.SUCCEEDED, 2),
+        _job("a1", JobKind.ASSESS, JobStatus.SUCCEEDED, 2),
     ]
-    outputs = {"preflight": _out("p1", 1, PREFLIGHT), "os_network": _out("n1", 2, NETWORK, epoch=0)}
+    readiness = {
+        "ready": False,
+        "variant_title": "VCF 9.0",
+        "overall": "fail",
+        "summary": {"failed": 3},
+        "plan": [1, 2],
+    }
+    outputs = {"preflight": _out("p1", 1, PREFLIGHT), "readiness": _out("a1", 2, readiness, epoch=0),
+               "os_network": _out("a1", 2, NETWORK, epoch=0)}  # fmt: skip
     p = _pipeline(jobs, outputs)
-    assert _state(p, "os.read") == "done"
-    os_read = next(t for t in p.stages[1].tasks if t.id == "os.read")
-    assert os_read.output is not None and os_read.output.summary == "VMware ESXi 9.1.1 at 192.0.2.101"
-    assert p.next.task is None and "Assess Holodeck readiness" in p.next.reason  # the next stage is planned
+    assert _state(p, "host.assess") == "done" and _state(p, "os.read") == "done"
+    assess = next(t for t in p.stages[2].tasks if t.id == "host.assess")
+    assert assess.output is not None and assess.output.summary == "3 to fix for VCF 9.0 · 2 planned actions"
+    assert p.next.task is None and "Prepare host" in p.next.reason  # the next stage is planned
 
     reinstalled = _pipeline(jobs, outputs, epoch=1)  # an install bumped the OS epoch
-    assert _state(reinstalled, "os.read") == "stale"
-    assert reinstalled.next.task == "os.read" and "reinstalled" in reinstalled.next.reason
-    assert next(s for s in reinstalled.stages if s.id == "os").state == "stale"
+    assert _state(reinstalled, "host.assess") == "stale" and _state(reinstalled, "os.read") == "stale"
+    assert reinstalled.next.task == "host.assess" and "reinstalled" in reinstalled.next.reason
+    assert next(s for s in reinstalled.stages if s.id == "readiness").state == "stale"
 
 
 def test_a_failed_run_is_shown_and_offered_again() -> None:
