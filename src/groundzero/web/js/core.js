@@ -132,8 +132,8 @@ export async function followJob(jobId, onEvent, signal) {
 }
 
 export const TASK_TITLES = {
-  discover: "Discover hardware", preflight: "Preflight", "os.read": "Read installed OS", "os.reimage": "Deploy OS",
-  "os.custom": "Deploy custom OS", "os.capture": "Capture config set", "host.assess": "Assess readiness",
+  discover: "Discover hardware", preflight: "Preflight", "os.read": "Read installed OS", "os.reimage": "Deploy OS · custom ISO from current settings",
+  "os.custom": "Deploy OS · custom ISO from a config set", "os.capture": "Capture config set", "host.assess": "Assess readiness",
   "host.prep": "Prepare host", "net.verify_jumbo": "Verify jumbo frames", "holodeck.router": "Deploy Holorouter",
   "holodeck.stage": "Stage binaries", "holodeck.deploy": "Deploy Holodeck",
 };

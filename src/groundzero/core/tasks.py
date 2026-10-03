@@ -62,11 +62,11 @@ CATALOG: tuple[TaskSpec, ...] = (
     TaskSpec("preflight", "Holodeck preflight", Stage.HARDWARE,
              "Check CPU, memory, disks, NICs, BIOS and BMC against the Holodeck requirements (read-only).",
              produces="preflight"),
-    TaskSpec("os.reimage", "Deploy OS", Stage.OS,
+    TaskSpec("os.reimage", "Deploy OS · custom ISO from current settings", Stage.OS,
              "Reinstall ESXi with a custom ISO built from a stock one. Settings come from the running OS "
              "(IP, VLAN, uplinks, boot disk) plus the options you choose (NTP, CPU override, VMFS).",
              produces="install", requires=(OS_ACCESS,), optional=True, destructive=True),
-    TaskSpec("os.custom", "Deploy custom OS", Stage.OS,
+    TaskSpec("os.custom", "Deploy OS · custom ISO from a config set", Stage.OS,
              "Install ESXi with a custom ISO built from a stock one. Settings come from a saved config set "
              "plus this server's own values (hostname, IP); no running OS needed.",
              produces="install", optional=True, destructive=True),
@@ -190,7 +190,7 @@ def summarize(kind: str, data: dict[str, Any]) -> str:
         if kind == "install":
             target = f"ESXi {data.get('iso_version')} build {data.get('iso_build')}"
             if data.get("installed_build") and all(c.get("ok") for c in data.get("validation", [])):
-                return f"{target} installed and validated"
+                return f"{target} installed and validated" + _iso_settings(data.get("spec") or {})
             return f"{target}: did not complete (still on {data.get('previous_build') or '?'})"
         if kind == "host_prep":
             changed = [c for c in data.get("applied", []) if c.get("changed")]
@@ -210,6 +210,21 @@ def summarize(kind: str, data: dict[str, Any]) -> str:
     except (KeyError, TypeError):
         pass
     return kind
+
+
+def _iso_settings(spec: dict[str, Any]) -> str:
+    """' · custom ISO: VLAN 100, vmnic0 + vmnic1, NTP pool.ntp.org, VMFS kept, CPU override'."""
+    net = spec.get("network")
+    if not net:
+        return ""
+    parts = [f"VLAN {net.get('vlan_id') or 'untagged'}",
+             " + ".join([net.get("install_nic", "?"), *net.get("extra_uplinks", [])])]  # fmt: skip
+    if spec.get("ntp_servers"):
+        parts.append("NTP " + ", ".join(spec["ntp_servers"]))
+    parts.append("VMFS kept" if spec.get("preserve_vmfs") else "VMFS overwritten")
+    if spec.get("allow_legacy_cpu"):
+        parts.append("CPU override")
+    return " · custom ISO: " + ", ".join(parts)
 
 
 def evaluate_pipeline(
@@ -305,7 +320,7 @@ def _stage_state(tasks: list[TaskState]) -> TaskStateName:
     core = [t for t in available if not t.optional]
     if not core:
         # Only alternatives/utilities (the OS stage): done once any of them has done its job. Runnable
-        # alternatives such as "Deploy custom OS" don't make an installed OS look unfinished.
+        # alternatives such as a config-set deployment don't make an installed OS look unfinished.
         order: tuple[TaskStateName, ...] = ("done", "stale", "failed")
         for state in order:
             if any(t.state == state for t in available):
@@ -336,7 +351,7 @@ def _next(states: dict[str, TaskState], has_os_access: bool) -> NextStep:
             )
         if s.state == "blocked":
             if spec.requires and OS_ACCESS in spec.requires and not has_os_access:
-                return NextStep(task="os.custom", title="Deploy custom OS",
+                return NextStep(task="os.custom", title="Deploy OS · custom ISO from a config set",
                                 reason="GroundZero can't reach an OS on this server yet. Deploy one, "
                                 "or set OS access if one is already installed.")  # fmt: skip
             return NextStep(task=None, title=spec.title, reason="; ".join(s.blocked_by))

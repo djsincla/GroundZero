@@ -401,7 +401,7 @@ def test_pipeline_guides_through_the_next_steps(page: Page, simulated_r740xd: Gr
 
     expect(page.locator('[data-task="preflight"]')).to_have_attribute("data-state", "done")
     expect(page.locator('[data-task="preflight"] [data-role="output"]')).to_contain_text("12 passed")
-    expect(nxt).to_contain_text("Deploy custom OS")  # no OS access yet
+    expect(nxt).to_contain_text("Deploy OS · custom ISO from a config set")  # no OS access yet
     expect(page.locator('[data-task="os.read"]')).to_contain_text("Needs: Set OS access")
 
     assert gz.cli("os", "set", "esxi1", "--address", "192.0.2.101").code == 0

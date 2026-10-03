@@ -500,9 +500,13 @@ class Services:
         if task_id in ("os.reimage", "os.custom"):
             req = InstallRequest.model_validate({**p, "confirm": run.confirm or ""})
             if task_id == "os.custom" and not req.config_set_id:
-                raise OsConfigError("Deploy custom OS needs a config set (params.config_set_id)")
+                raise OsConfigError(
+                    "Deploy OS · custom ISO from a config set needs a config set (params.config_set_id)"
+                )
             if task_id == "os.reimage" and req.config_set_id:
-                raise OsConfigError("Deploy OS keeps the current settings; use os.custom for a config set")
+                raise OsConfigError(
+                    "os.reimage builds the ISO from the current settings; use os.custom for a config set"
+                )
             return self.start_install(host_id, req)
         if task_id == "os.read":
             return self.start_os_network(host_id)

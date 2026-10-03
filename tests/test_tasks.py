@@ -137,3 +137,22 @@ def test_an_installed_os_stage_is_done_even_though_alternatives_can_run() -> Non
 
 def test_an_os_stage_with_nothing_run_yet_is_ready() -> None:
     assert next(s for s in _pipeline([], {}, os_access=False).stages if s.id == "os").state == "ready"
+
+
+def test_install_history_says_what_went_into_the_custom_iso() -> None:
+    """User report: the esxi1 install used a custom ISO with the lab's parameters; the history must say so."""
+    spec = {"network": {"vlan_id": 100, "install_nic": "vmnic0", "extra_uplinks": ["vmnic1"]},
+            "ntp_servers": ["pool.ntp.org"], "preserve_vmfs": True, "allow_legacy_cpu": True}  # fmt: skip
+    report = {"iso_version": "9.1.1", "iso_build": "25714478", "installed_build": "25714478",
+              "validation": [{"ok": True}], "spec": spec}  # fmt: skip
+    p = _pipeline([_job("i1", JobKind.INSTALL, JobStatus.SUCCEEDED, 1)], {"install": _out("i1", 1, report)})
+    reimage = next(t for t in p.stages[1].tasks if t.id == "os.reimage")
+    assert reimage.title == "Deploy OS · custom ISO from current settings"
+    assert reimage.output is not None and reimage.output.summary == (
+        "ESXi 9.1.1 build 25714478 installed and validated · custom ISO: VLAN 100, vmnic0 + vmnic1, "
+        "NTP pool.ntp.org, VMFS kept, CPU override"
+    )
+    assert (
+        next(t for t in p.stages[1].tasks if t.id == "os.custom").title
+        == "Deploy OS · custom ISO from a config set"
+    )

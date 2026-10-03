@@ -34,7 +34,7 @@ export async function viewDeploy(app, id, query = new URLSearchParams()) {
       : empty("No ESXi installer ISOs in the repository.", h("a", { class: "button", href: "#/isos" }, "Open ISO repository")));
 
   // ── step 2: configuration ──
-  // ?mode=keep comes from the pipeline's "Deploy OS" (re-image with the current settings).
+  // ?mode=keep comes from the pipeline's "Deploy OS · custom ISO from current settings".
   const preferred = query.get("mode") === "keep" && osAccess ? LEGACY : esxiSets[0]?.id ?? LEGACY;
   const setSelect = h("select", { id: "d-config", name: "config" },
     esxiSets.map((s) => h("option", { value: s.id, selected: s.id === preferred }, s.name)),
@@ -139,9 +139,9 @@ export async function viewDeploy(app, id, query = new URLSearchParams()) {
   async function go() {
     start.disabled = true;
     const { confirm: typed, ...params } = body(confirm.value);
-    const task = legacy() ? "os.reimage" : "os.custom";  // Deploy OS vs Deploy custom OS
+    const task = legacy() ? "os.reimage" : "os.custom";  // current settings vs a config set
     const job = await startJob("POST", `/hosts/${id}/tasks/${task}`, { params, confirm: typed }, {
-      title: `${legacy() ? "Deploy OS" : "Deploy custom OS"} on ${host.name}`,
+      title: `${legacy() ? "Deploy OS · custom ISO from current settings" : "Deploy OS · custom ISO from a config set"} on ${host.name}`,
       onDone: () => window.dispatchEvent(new Event("gz:refresh")),
     });
     if (job) {
