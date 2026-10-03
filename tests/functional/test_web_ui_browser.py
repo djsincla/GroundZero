@@ -313,6 +313,9 @@ def test_deploy_keeping_current_settings_needs_exact_phrase(page: Page, simulate
     install = page.locator('[data-panel="install"]')
     expect(install.locator('[data-role="install-summary"]')).to_contain_text("and validated", timeout=60_000)
     expect(install).to_contain_text("datastores")
+    settings = install.locator('[data-role="install-settings"]')  # what the custom ISO's kickstart carried
+    expect(settings).to_contain_text("VLAN 100 · vmnic0 + vmnic1")
+    expect(settings).to_contain_text("pool.ntp.org")
 
 
 def test_failed_install_is_never_shown_as_installed(

@@ -410,10 +410,27 @@ function installTab({ id, install, busy, lastInstallJob }) {
   const header = h("div", { class: "row" }, h("h2", {}, "OS install"), h("span", { class: "spacer" }),
     h("a", { class: `button danger${busy ? " disabled" : ""}`, href: `#/hosts/${id}/deploy`,
       onclick: (e) => { if (busy) e.preventDefault(); } }, "Deploy OS…"));
-  return card({ "data-panel": "install" }, header, installSummary(install, lastInstallJob),
+  return card({ "data-panel": "install" }, header, installSummary(install, lastInstallJob), installSettings(install),
     install?.validation.length ? table(["", "Check", "Expected", "Observed"], install.validation.map((c) =>
       h("tr", {}, h("td", {}, badge(c.ok ? "pass" : "fail", c.ok ? "ok" : "failed")), h("td", {}, c.name),
         h("td", { class: "muted" }, c.expected), h("td", {}, c.observed)))) : null);
+}
+
+// What the generated kickstart put on the custom ISO (password hash excluded by the API).
+function installSettings(report) {
+  const spec = report?.spec;
+  if (!spec?.network) return null;
+  const n = spec.network;
+  const disk = spec.install_firstdisk ? `first match: ${spec.install_firstdisk}` : spec.install_disk;
+  return h("div", { "data-role": "install-settings" },
+    h("h3", {}, "Settings in the custom ISO"),
+    h("dl", { class: "kv compact" },
+      h("dt", {}, "Host"), h("dd", {}, `${n.hostname} · ${n.ip}/${n.netmask} · gateway ${n.gateway}`),
+      h("dt", {}, "DNS / NTP"), h("dd", {}, `${(n.nameservers || []).join(", ")} / ${(spec.ntp_servers || []).join(", ") || "none"}`),
+      h("dt", {}, "Network"), h("dd", {}, `VLAN ${n.vlan_id || "untagged"} · ${[n.install_nic, ...(n.extra_uplinks || [])].join(" + ")}`),
+      h("dt", {}, "Install disk"), h("dd", { class: "mono" }, disk || "—"),
+      h("dt", {}, "VMFS"), h("dd", {}, spec.preserve_vmfs ? "kept" : "overwritten"),
+      h("dt", {}, "CPU override"), h("dd", {}, spec.allow_legacy_cpu ? "on (allowLegacyCPU)" : "off")));
 }
 
 function jobsTab({ jobs }) {

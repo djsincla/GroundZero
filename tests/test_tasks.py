@@ -111,3 +111,29 @@ def test_the_two_os_deployments_are_attributed_to_the_task_that_ran() -> None:
         custom.output is not None
         and custom.output.summary == "ESXi 9.1.1 build 25714478 installed and validated"
     )
+
+
+def test_an_installed_os_stage_is_done_even_though_alternatives_can_run() -> None:
+    """Regression (user report): the OS stage showed "ready" with the OS installed, validated and read."""
+    report = {"iso_version": "9.1.1", "iso_build": "1", "installed_build": "1", "validation": [{"ok": True}]}
+    jobs = [
+        _job("i1", JobKind.INSTALL, JobStatus.SUCCEEDED, 1),
+        _job("n1", JobKind.OS_NETWORK, JobStatus.SUCCEEDED, 2),
+        _job("c1", JobKind.OS_CAPTURE, JobStatus.SUCCEEDED, 3, name="lab"),
+    ]
+    p = _pipeline(jobs, {"install": _out("i1", 1, report), "os_network": _out("n1", 2, NETWORK)})
+    os_stage = next(s for s in p.stages if s.id == "os")
+    assert os_stage.state == "done"
+    assert _state(p, "os.custom") == "ready"  # still offered as an alternative
+    assert _state(p, "os.capture") == "done"  # its last run succeeded
+
+    reinstalled = _pipeline(
+        jobs, {"install": _out("i1", 1, report), "os_network": _out("n1", 2, NETWORK)}, epoch=1
+    )
+    assert (
+        next(s for s in reinstalled.stages if s.id == "os").state == "done"
+    )  # the install itself is current
+
+
+def test_an_os_stage_with_nothing_run_yet_is_ready() -> None:
+    assert next(s for s in _pipeline([], {}, os_access=False).stages if s.id == "os").state == "ready"

@@ -63,11 +63,12 @@ CATALOG: tuple[TaskSpec, ...] = (
              "Check CPU, memory, disks, NICs, BIOS and BMC against the Holodeck requirements (read-only).",
              produces="preflight"),
     TaskSpec("os.reimage", "Deploy OS", Stage.OS,
-             "Reinstall ESXi from a stock ISO, keeping this server's current network identity "
-             "(read from the running OS).",
+             "Reinstall ESXi with a custom ISO built from a stock one. Settings come from the running OS "
+             "(IP, VLAN, uplinks, boot disk) plus the options you choose (NTP, CPU override, VMFS).",
              produces="install", requires=(OS_ACCESS,), optional=True, destructive=True),
     TaskSpec("os.custom", "Deploy custom OS", Stage.OS,
-             "Install ESXi from a stock ISO using a config set and this server's own values.",
+             "Install ESXi with a custom ISO built from a stock one. Settings come from a saved config set "
+             "plus this server's own values (hostname, IP); no running OS needed.",
              produces="install", optional=True, destructive=True),
     TaskSpec("os.read", "Read installed OS", Stage.OS,
              "Read the running hypervisor's network, NTP and storage (read-only).",
@@ -275,6 +276,8 @@ def evaluate_pipeline(
             state = "failed"
         elif output is not None and output.fresh:
             state = "done"
+        elif spec.produces is None and job is not None and job.status is JobStatus.SUCCEEDED:
+            state = "done"  # e.g. capture: its result is a config set, not a host output
         elif output is not None:
             state = "stale"
         elif blocked:
@@ -296,9 +299,18 @@ def evaluate_pipeline(
 def _stage_state(tasks: list[TaskState]) -> TaskStateName:
     if any(t.state == "running" for t in tasks):
         return "running"
-    core = [t for t in tasks if not t.optional and t.available] or [t for t in tasks if t.available]
-    if not core:
+    available = [t for t in tasks if t.available]
+    if not available:
         return "planned"
+    core = [t for t in available if not t.optional]
+    if not core:
+        # Only alternatives/utilities (the OS stage): done once any of them has done its job. Runnable
+        # alternatives such as "Deploy custom OS" don't make an installed OS look unfinished.
+        order: tuple[TaskStateName, ...] = ("done", "stale", "failed")
+        for state in order:
+            if any(t.state == state for t in available):
+                return state
+        return "ready"
     for state in ("failed", "stale", "blocked", "ready"):
         if any(t.state == state for t in core):
             return state
