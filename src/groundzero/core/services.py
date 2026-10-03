@@ -30,7 +30,7 @@ from groundzero.core.models import (
     OsAccess,
     OsAccessSet,
 )
-from groundzero.core.store import Store
+from groundzero.core.store import Store, utcnow
 from groundzero.core.tasks import (
     CATALOG,
     TASKS,
@@ -41,6 +41,7 @@ from groundzero.core.tasks import (
     info,
 )
 from groundzero.core.tls import PinnedCertificate, check_pin, fetch_certificate, fingerprint, pinned_context
+from groundzero.esxi.models import EsxiNetworkConfig, EsxiStorage
 from groundzero.esxi.ops import EsxiOps, LiveEsxiOps, OsTarget
 from groundzero.install.job import InstallConfig, Installer, InstallRequest, InstallTimings
 from groundzero.install.kickstart import render_kickstart
@@ -51,7 +52,7 @@ from groundzero.media.registry import MediaRegistry
 from groundzero.osconfig import PLUGINS, OsConfigError, plugin_for
 from groundzero.osconfig.esxi import EsxiHostValues, EsxiPlugin, EsxiSettings
 from groundzero.preflight.evaluate import PreflightReport, UnknownProfileError, evaluate, load_profile
-from groundzero.readiness import assess
+from groundzero.readiness import ReadinessReport, assess
 from groundzero.redfish.capture import load_recording
 from groundzero.redfish.client import RedfishClient
 from groundzero.simulator.bmc import SimulatedBmc
@@ -138,6 +139,7 @@ class Services:
             SimulatedEsxi(
                 settings.simulate_esxi_dir,
                 unreachable_until_installed="os-unreachable" in settings.simulate_faults,
+                faults=frozenset(settings.simulate_faults),
             )
             if settings.simulate_esxi_dir
             else None
@@ -283,8 +285,10 @@ class Services:
         async def run(ctx: JobContext) -> dict[str, Any]:
             try:
                 result = await installer.run(ctx)
-                # A new OS: anything read from the previous one (network, readiness, prep) is now stale.
+                # A new OS: anything read from the previous one (network, readiness, prep) is now stale,
+                # and it has a new SSH host key (the TLS certificate was re-pinned during the install).
                 self.store.bump_os_epoch(host.id)
+                self.store.delete_pin(host.id, "os-ssh")
                 if installer.last_network is not None:
                     # Keep the host's "installed OS" view current without an extra read.
                     self.store.save_result(
@@ -506,6 +510,11 @@ class Services:
             return self.start_os_capture(host_id, str(p.get("name") or ""))
         if task_id == "host.assess":
             return self.start_assess(host_id, p.get("variant"))
+        if task_id == "host.prep":
+            checks = p.get("checks")
+            return self.start_prep(host_id, list(checks) if checks is not None else None, run.confirm)
+        if task_id == "net.verify_jumbo":
+            return self.start_verify_jumbo(host_id)
         raise ConflictError(f"“{spec.title}” has no runner")  # pragma: no cover - catalog/dispatch mismatch
 
     def start_assess(self, host_id: str, variant: str | None = None) -> Job:
@@ -545,6 +554,140 @@ class Services:
             return {"readiness": data}
 
         return self.runner.submit(kind=JobKind.ASSESS, host_id=host_id, params={"variant": variant}, func=run)
+
+    def _readiness(self, host_id: str) -> ReadinessReport:
+        meta = self.store.latest_output(host_id=host_id, kind="readiness")
+        if meta is None:
+            raise ConflictError("Assess Holodeck readiness first")
+        return ReadinessReport.model_validate(meta.data)
+
+    def _reassess(
+        self, host_id: str, network: EsxiNetworkConfig, storage: EsxiStorage, job_id: str
+    ) -> ReadinessReport:
+        """Re-run the assessment with the variant the last one used (after prep or a jumbo test)."""
+        previous = self._readiness(host_id)
+        stored = self.store.latest_output(host_id=host_id, kind=JobKind.PREFLIGHT.value)
+        preflight = PreflightReport.model_validate(stored.data) if stored else None
+        jumbo_meta = self.store.latest_output(host_id=host_id, kind="jumbo")
+        epoch = self.store.os_epoch(host_id)
+        jumbo = jumbo_meta.data if jumbo_meta and jumbo_meta.epoch >= epoch else None
+        report = assess(profile=load_profile(previous.profile), variant=previous.variant, network=network,
+                        storage=storage, preflight=preflight, jumbo=jumbo)  # fmt: skip
+        self.store.save_result(
+            host_id=host_id, kind="readiness", job_id=job_id, data=report.model_dump(mode="json")
+        )
+        return report
+
+    def start_prep(self, host_id: str, checks: list[str] | None, confirm: str | None) -> Job:
+        """Apply planned readiness fixes (by check id; default: the recommended ones), then re-assess."""
+        self.get_host(host_id)
+        access, secret = self._os_access(host_id)
+        password = self._cipher.decrypt(secret)
+        report = self._readiness(host_id)
+        plan = [a for a in report.plan if a.task == "host.prep"]
+        by_check = {a.check: a for a in plan}
+        if checks is None:
+            selected = [a for a in plan if a.recommended]
+        else:
+            unknown = [c for c in checks if c not in by_check]
+            if unknown:
+                raise OsConfigError(
+                    f"Not in the current plan: {', '.join(unknown)}. Assess again to refresh it."
+                )
+            selected = [by_check[c] for c in checks]
+        if not selected:
+            raise OsConfigError("Nothing selected to apply")
+        for action in selected:
+            if action.destructive and confirm != action.confirm_phrase:
+                raise ConfirmationError(
+                    f'“{action.title}” erases a disk: confirm with exactly "{action.confirm_phrase}"'
+                )
+
+        async def run(ctx: JobContext) -> dict[str, Any]:
+            ctx.plan(
+                [(a.check, a.title) for a in selected] + [("reassess", "Read the host again and re-assess")]
+            )
+            target = await asyncio.to_thread(self.os_target, host_id, access)
+            applied = []
+            for i, action in enumerate(selected):
+                async with ctx.step(action.check, action.title) as step:
+                    ctx.progress(0.1 + 0.7 * i / len(selected), action.title)
+                    record = await self.esxi.apply(target, password, action.id, action.params)
+                    step.message = (
+                        f"{record.before} → {record.after}" if record.changed else f"already {record.after}"
+                    )
+                    applied.append(record)
+            async with ctx.step("reassess", "Read the host again and re-assess"):
+                network = await self.esxi.read_network(target, password)
+                storage = await self.esxi.read_storage(target, password)
+                for kind, model in ((JobKind.OS_NETWORK.value, network), ("os_storage", storage)):
+                    self.store.save_result(
+                        host_id=host_id, kind=kind, job_id=ctx.job.id, data=model.model_dump(mode="json")
+                    )
+                after = self._reassess(host_id, network, storage, ctx.job.id)
+            vswitch = after.target_vswitch
+            trunk = next((pg.name for pg in network.portgroups if pg.is_trunk and pg.vswitch == vswitch
+                          and pg.security.accepts_all), None)  # fmt: skip
+            external = next((pg.name for pg in network.portgroups if pg.name == "Holodeck-External"), None)
+            data = {
+                "applied": [r.model_dump(mode="json") for r in applied],
+                "vswitch": vswitch,
+                "trunk_portgroup": trunk,
+                "external_portgroup": external,
+                "datastore": after.storage.datastore if after.storage.kind == "existing" else None,
+                "ready": after.ready,
+            }
+            self.store.save_result(host_id=host_id, kind="host_prep", job_id=ctx.job.id, data=data)
+            return {"host_prep": data, "readiness": after.model_dump(mode="json")}
+
+        return self.runner.submit(kind=JobKind.HOST_PREP, host_id=host_id,
+                                  params={"checks": [a.check for a in selected]}, func=run)  # fmt: skip
+
+    def start_verify_jumbo(self, host_id: str) -> Job:
+        """Loop test 9000-byte frames through the physical switch (temporary changes, always reverted)."""
+        self.get_host(host_id)
+        access, secret = self._os_access(host_id)
+        password = self._cipher.decrypt(secret)
+        self._readiness(host_id)
+        pinned = self.store.get_pin(host_id, "os-ssh")
+
+        async def run(ctx: JobContext) -> dict[str, Any]:
+            ctx.plan([("read", "Read the network"), ("loop", "Loop test through the switch"),
+                      ("reassess", "Update the readiness report")])  # fmt: skip
+            target = await asyncio.to_thread(self.os_target, host_id, access)
+            async with ctx.step("read", "Read the network"):
+                network = await self.esxi.read_network(target, password)
+                vswitch = next(
+                    (v for v in network.vswitches if v.name == self._readiness(host_id).target_vswitch), None
+                )
+                if vswitch is None or len(vswitch.uplinks) < 2:
+                    raise OsConfigError("The jumbo-frame test needs a standard switch with two uplinks")
+                uplinks = (vswitch.uplinks[0], vswitch.uplinks[1])
+                vlan = network.management_vlan()
+            async with ctx.step("loop", "Loop test through the switch") as step:
+                result = await self.esxi.verify_jumbo(
+                    target, password, vswitch=vswitch.name, uplinks=uplinks, vlan=vlan, mtu=9000,
+                    pinned_ssh_key=pinned[1] if pinned else None, log=lambda m: ctx.progress(0.5, m),
+                )  # fmt: skip
+                if result.ssh_host_key and not pinned:
+                    self.store.set_pin(host_id, "os-ssh", access.address, result.ssh_host_key)
+                self.store.save_result(
+                    host_id=host_id, kind="jumbo", job_id=ctx.job.id, data=result.model_dump(mode="json")
+                )
+                step.message = result.summary
+            async with ctx.step("reassess", "Update the readiness report"):
+                storage_meta = self.store.latest_output(host_id=host_id, kind="os_storage")
+                if storage_meta is not None:
+                    self._reassess(
+                        host_id, network, EsxiStorage.model_validate(storage_meta.data), ctx.job.id
+                    )
+            if not result.restored:
+                raise OsConfigError(f"The network configuration was not fully restored:\n{result.diff}")
+            if not result.ok:
+                raise OsConfigError(result.summary)
+            return {"jumbo": result.model_dump(mode="json")}
+
+        return self.runner.submit(kind=JobKind.VERIFY_JUMBO, host_id=host_id, params={}, func=run)
 
     def job_diagnostics(self, job_id: str) -> dict[str, Any]:
         """Everything needed to debug a job from a file: job, host, BMC identity and the redacted log."""
@@ -665,7 +808,12 @@ class Services:
     def list_pins(self, host_id: str) -> list[PinnedCertificate]:
         self.get_host(host_id)
         return [
-            PinnedCertificate(role=role, address=address, fingerprint=fingerprint(pem), pinned_at=at)
+            PinnedCertificate(
+                role=role,
+                address=address,
+                fingerprint=pem if role == "os-ssh" else fingerprint(pem),
+                pinned_at=at,
+            )
             for role, address, pem, at in self.store.list_pins(host_id)
         ]
 
@@ -676,8 +824,13 @@ class Services:
             address = host.bmc_address
         elif role == "os":
             address = self._os_access(host_id)[0].address
+        elif role == "os-ssh":  # an SSH key can only be seen by logging in: pinned again on next use
+            address = self._os_access(host_id)[0].address
+            self.store.delete_pin(host_id, role)
+            return PinnedCertificate(role=role, address=address, fingerprint="(pinned again on next use)",
+                                     pinned_at=utcnow())  # fmt: skip
         else:
-            raise NotFoundError(f"Unknown certificate role '{role}' (bmc or os)")
+            raise NotFoundError(f"Unknown certificate role '{role}' (bmc, os or os-ssh)")
         self.pinned_pem(host_id, role, address, repin=True)
         return next(p for p in self.list_pins(host_id) if p.role == role)
 

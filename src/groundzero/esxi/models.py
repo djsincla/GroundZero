@@ -159,3 +159,39 @@ class EsxiAbout(BaseModel):
     product: str
     version: str
     build: str
+
+
+class ChangeRecord(BaseModel):
+    """What one host-prep action found and did. ``changed`` is False when it was already satisfied."""
+
+    action: str
+    target: str
+    changed: bool
+    before: str
+    after: str
+
+
+class JumboProbe(BaseModel):
+    label: str
+    command: str
+    expect_success: bool
+    exit_code: int
+    passed: bool
+    output: str
+
+
+class JumboResult(BaseModel):
+    """Jumbo frames sent out of one uplink and back in the other, through the physical switch."""
+
+    ok: bool
+    summary: str
+    vswitch: str
+    uplinks: list[str]
+    vlan: int
+    mtu: int
+    probes: list[JumboProbe] = Field(default_factory=list)
+    restored: bool = Field(
+        description="The network configuration afterwards matches the snapshot taken before"
+    )
+    diff: str | None = None
+    ssh_host_key: str | None = Field(default=None, description="SHA-256 fingerprint of the host's SSH key")

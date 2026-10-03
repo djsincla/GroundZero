@@ -174,13 +174,26 @@ function readinessTab(ctx) {
     format: `Proposed: create datastore “${s.datastore}” on ${s.disk_label} (${Math.round(s.capacity_gb).toLocaleString()} GB). This erases the disk; you'll confirm by typing a phrase.`,
     none: s.reason,
   }[s.kind];
+  const prepActions = r.plan.filter((a) => a.task === "host.prep");
+  const boxes = new Map();
+  const applyBtn = h("button", { class: "primary", disabled: busy || !prepActions.length, onclick: () => applyDialog(ctx, prepActions, boxes) },
+    "Apply selected fixes…");
+  const actionRow = (a) => {
+    const prep = a.task === "host.prep";
+    const box = prep ? h("input", { type: "checkbox", checked: a.recommended, disabled: busy, "aria-label": a.title }) : null;
+    if (box) boxes.set(a.check, box);
+    return h("li", { class: `plan-item${a.destructive ? " destructive" : ""}`, "data-action": a.id, "data-check": a.check },
+      h("div", { class: "row" },
+        prep ? h("label", { class: "inline" }, box, h("strong", {}, a.title)) : h("strong", {}, a.title),
+        a.destructive ? h("span", { class: "chip danger-chip" }, "erases a disk") : null,
+        a.recommended ? null : h("span", { class: "chip" }, "optional"),
+        h("span", { class: "spacer" }),
+        prep ? null : h("button", { class: "small", disabled: busy, "data-run": a.task,
+          onclick: () => startJob("POST", `/hosts/${id}/tasks/${a.task}`, {}, { onDone: refresh }) }, "Run test")),
+      h("p", { class: "muted small-text" }, a.why));
+  };
   const planList = r.plan.length
-    ? h("ul", { class: "plan" }, r.plan.map((a) => h("li", { class: `plan-item${a.destructive ? " destructive" : ""}`, "data-action": a.id, "data-check": a.check },
-        h("label", { class: "inline" },
-          h("input", { type: "checkbox", checked: a.recommended, disabled: true, "aria-label": a.title }),
-          h("span", {}, h("strong", {}, a.title), a.destructive ? h("span", { class: "chip danger-chip" }, "erases a disk") : null,
-            a.recommended ? null : h("span", { class: "chip" }, "optional"))),
-        h("p", { class: "muted small-text" }, a.why))))
+    ? h("ul", { class: "plan" }, r.plan.map(actionRow))
     : h("p", { class: "muted" }, "Nothing to fix.");
   return [
     card({ "data-panel": "readiness" }, header,
@@ -190,10 +203,37 @@ function readinessTab(ctx) {
       table(["", "Check", "Observed", "Required", "What to do"], r.checks.map((c) =>
         h("tr", { "data-check": c.id }, h("td", {}, badge(c.status)), h("td", {}, c.title), h("td", {}, c.observed),
           h("td", { class: "muted" }, c.required), h("td", {}, c.remediation || ""))))),
-    card({ "data-panel": "plan" }, h("h2", {}, "Planned fixes"),
-      h("p", { class: "muted small-text" }, "Each fix changes only what is listed. Applying them is the next pipeline step, Prepare host, which arrives in the next update; nothing has been changed."),
+    card({ "data-panel": "plan" },
+      h("div", { class: "row" }, h("h2", {}, "Planned fixes"), h("span", { class: "spacer" }), prepActions.length ? applyBtn : null),
+      h("p", { class: "muted small-text" }, "Each fix changes only what is listed, checks the live state first, and is skipped if already done. GroundZero re-assesses afterwards."),
       planList),
   ];
+}
+
+// Confirm exactly what will change on the server; erasing a disk needs its typed phrase.
+function applyDialog(ctx, actions, boxes) {
+  const chosen = actions.filter((a) => boxes.get(a.check)?.checked);
+  if (!chosen.length) { toast("Select at least one fix", "error"); return; }
+  const destructive = chosen.find((a) => a.destructive);
+  const phrase = destructive?.confirm_phrase;
+  const input = phrase ? h("input", { id: "prep-confirm", autocomplete: "off" }) : null;
+  const { submit } = openDialog(`Apply ${chosen.length} fix${chosen.length === 1 ? "" : "es"} on ${ctx.host.name}`, [
+    h("p", {}, "GroundZero will make these changes on the host:"),
+    h("ul", { class: "change-list" }, chosen.map((a) => h("li", { class: a.destructive ? "danger-text" : null }, a.title))),
+    destructive ? h("div", { class: "notice" }, `${destructive.title} erases everything on that disk.`) : null,
+    phrase ? [h("label", { for: "prep-confirm" }, `Type "${phrase}" to confirm`), input] : null,
+  ], {
+    submitLabel: "Apply", submitClass: destructive ? "danger" : "primary", wide: true,
+    onSubmit: async () => {
+      const job = await api("POST", `/hosts/${ctx.id}/tasks/host.prep`,
+        { params: { checks: chosen.map((a) => a.check) }, confirm: input ? input.value : null });
+      showJobDrawer(job, { title: `Prepare ${ctx.host.name}`, onDone: refresh });
+    },
+  });
+  if (input) {
+    submit.disabled = true;
+    input.addEventListener("input", () => { submit.disabled = input.value !== phrase; });
+  }
 }
 
 function overviewTab(ctx) {

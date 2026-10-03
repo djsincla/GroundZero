@@ -311,6 +311,10 @@ class Store:
                 (host_id, role, address, pem, utcnow().isoformat()),
             )
 
+    def delete_pin(self, host_id: str, role: str) -> None:
+        with self._tx() as cur:
+            cur.execute("DELETE FROM pins WHERE host_id = ? AND role = ?", (host_id, role))
+
     def get_pin(self, host_id: str, role: str) -> tuple[str, str, datetime] | None:
         with self._tx() as cur:
             row = cur.execute("SELECT * FROM pins WHERE host_id = ? AND role = ?", (host_id, role)).fetchone()

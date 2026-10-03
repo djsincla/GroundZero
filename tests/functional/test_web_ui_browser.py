@@ -382,7 +382,7 @@ def test_pipeline_guides_through_the_next_steps(page: Page, simulated_r740xd: Gr
     page.get_by_role("link", name="esxi1").click()  # the Pipeline tab is the default
     nxt = page.locator('[data-role="next-step"]')
     expect(nxt).to_contain_text("Holodeck preflight")
-    expect(page.locator('[data-task="host.prep"]')).to_have_attribute("data-state", "planned")
+    expect(page.locator('[data-task="holodeck.router"]')).to_have_attribute("data-state", "planned")
 
     nxt.get_by_role("button", name="Holodeck preflight").click()
     drawer = page.locator("#drawer")
@@ -429,4 +429,26 @@ def test_readiness_report_shows_checks_storage_and_planned_fixes(
     expect(plan.locator('[data-action="set_mtu"]')).to_contain_text("Set vSwitch0 MTU to 9000")
     expect(plan.locator('[data-check="network.external"] input')).not_to_be_checked()  # optional fix
     expect(plan.locator('[data-action="set_mtu"] input')).to_be_checked()
-    expect(plan).to_contain_text("nothing has been changed")
+
+    # Apply the fixes, including the optional external port group on VLAN 100
+    plan.locator('[data-check="network.external"] input').check()
+    plan.get_by_role("button", name="Apply selected fixes…").click()
+    dialog = page.locator("dialog")
+    expect(dialog).to_contain_text("Set vSwitch0 MTU to 9000")
+    expect(dialog).to_contain_text("Create port group Holodeck-External (VLAN 100) on vSwitch0")
+    dialog.get_by_role("button", name="Apply").click()
+    drawer = page.locator("#drawer")
+    expect(drawer.locator('[data-step="reassess"]')).to_have_attribute(
+        "data-status", "succeeded", timeout=20_000
+    )
+    expect(drawer.locator('[data-step="network.mtu"]')).to_contain_text("MTU 1500 → MTU 9000")
+    page.reload()
+    expect(page.locator('tr[data-check="network.mtu"] [data-status="pass"]')).to_be_visible()
+
+    # Then the jumbo-frame test; afterwards nothing is left to fix
+    plan.locator('[data-action="verify_jumbo"]').get_by_role("button", name="Run test").click()
+    expect(drawer.locator('[data-step="loop"]')).to_have_attribute("data-status", "succeeded", timeout=20_000)
+    page.reload()
+    expect(page.locator('[data-panel="readiness"]')).to_contain_text("ready")
+    expect(page.locator('[data-panel="readiness"] [data-status="pass"]').first).to_have_text("ready")
+    expect(plan).to_contain_text("Nothing to fix")

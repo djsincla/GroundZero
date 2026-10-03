@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import ssl
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from groundzero.esxi.models import (
@@ -261,6 +263,34 @@ def extract_storage(
             )
         )
     return EsxiStorage(boot_disk=boot_disk, datastores=datastores, disks=found)
+
+
+@contextmanager
+def connect_host(
+    address: str, username: str, password: str, verify_tls: bool, pinned_pem: str | None = None
+) -> Iterator[Any]:
+    """Blocking: log in to ESXi and yield its HostSystem (pinned certificate when given)."""
+    from pyVim.connect import Disconnect, SmartConnect
+    from pyVmomi import vim
+
+    try:
+        si = SmartConnect(
+            host=address, user=username, pwd=password, sslContext=_ssl_context(verify_tls, pinned_pem)
+        )
+    except vim.fault.InvalidLogin as exc:
+        raise EsxiError(f"ESXi rejected the credentials for {address}") from exc
+    except (OSError, ssl.SSLError) as exc:
+        raise EsxiError(f"Cannot connect to ESXi at {address}: {exc}") from exc
+    try:
+        content = si.RetrieveContent()
+        view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
+        hosts = list(view.view)
+        view.Destroy()
+        if not hosts:
+            raise EsxiError(f"No HostSystem found at {address}")
+        yield hosts[0]
+    finally:
+        Disconnect(si)
 
 
 def _ssl_context(verify_tls: bool, pinned_pem: str | None = None) -> ssl.SSLContext:

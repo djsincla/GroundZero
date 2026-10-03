@@ -42,6 +42,12 @@
             "title": "Recommended",
             "type": "boolean"
           },
+          "task": {
+            "default": "host.prep",
+            "description": "The pipeline task that applies this action",
+            "title": "Task",
+            "type": "string"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -1413,7 +1419,9 @@
           "os_network",
           "install",
           "os_capture",
-          "assess"
+          "assess",
+          "host_prep",
+          "verify_jumbo"
         ],
         "title": "JobKind",
         "type": "string"

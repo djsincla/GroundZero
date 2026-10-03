@@ -12,12 +12,25 @@ import asyncio
 import io
 import re
 import shlex
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pycdlib
 
 from groundzero.core.models import OsAccess
-from groundzero.esxi.models import EsxiAbout, EsxiNetworkConfig, EsxiStorage, VmkInterface
+from groundzero.esxi.models import (
+    ChangeRecord,
+    Datastore,
+    EsxiAbout,
+    EsxiNetworkConfig,
+    EsxiStorage,
+    JumboProbe,
+    JumboResult,
+    PortGroup,
+    SecurityPolicy,
+    VmkInterface,
+)
 from groundzero.esxi.reader import EsxiError
 
 
@@ -42,10 +55,17 @@ def _options(line: str) -> dict[str, str]:
 
 class SimulatedEsxi:
     def __init__(
-        self, capture_dir: Path, *, boot_delay: float = 0.5, unreachable_until_installed: bool = False
+        self,
+        capture_dir: Path,
+        *,
+        boot_delay: float = 0.5,
+        unreachable_until_installed: bool = False,
+        faults: frozenset[str] = frozenset(),
     ) -> None:
         """``unreachable_until_installed``: the host answers nothing until the simulated installer has run."""
         self.unreachable = unreachable_until_installed
+        self.faults = faults  # ntp-fails, datastore-create-fails, jumbo-drops
+        self.changes: list[ChangeRecord] = []
         self.network = EsxiNetworkConfig.model_validate_json((capture_dir / "network.json").read_text())
         self.storage = EsxiStorage.model_validate_json((capture_dir / "storage.json").read_text())
         self.about: EsxiAbout | None = EsxiAbout.model_validate_json((capture_dir / "about.json").read_text())
@@ -64,6 +84,159 @@ class SimulatedEsxi:
 
     async def probe(self, address: str) -> EsxiAbout | None:
         return None if self.unreachable else self.about
+
+    async def apply(
+        self, access: OsAccess, password: str, action: str, params: dict[str, Any]
+    ) -> ChangeRecord:
+        """Host-prep actions against the simulated host's state (same idempotency as the real writer)."""
+        self._reachable(access.address)
+        net = self.network
+        if action == "set_mtu":
+            vs = next((v for v in net.vswitches if v.name == params["vswitch"]), None)
+            if vs is None:
+                raise EsxiError(f"No standard switch named {params['vswitch']}")
+            before = f"MTU {vs.mtu}"
+            record = ChangeRecord(
+                action=action,
+                target=vs.name,
+                changed=vs.mtu != params["mtu"],
+                before=before,
+                after=f"MTU {params['mtu']}",
+            )
+            vs.mtu = int(params["mtu"])
+        elif action == "ensure_portgroup":
+            keys = ("allow_promiscuous", "mac_changes", "forged_transmits")
+            existing = next((p for p in net.portgroups if p.name == params["name"]), None)
+            security = (
+                SecurityPolicy(**{k: params[k] for k in keys if k in params})
+                if any(k in params for k in keys)
+                else SecurityPolicy()
+            )
+            wanted = PortGroup(
+                name=params["name"], vlan_id=int(params["vlan"]), vswitch=params["vswitch"], security=security
+            )
+            same = (
+                existing is not None
+                and existing.vlan_id == wanted.vlan_id
+                and (not any(k in params for k in keys) or existing.security == security)
+            )
+            record = ChangeRecord(
+                action=action,
+                target=f"{wanted.name} on {wanted.vswitch}",
+                changed=not same,
+                before="absent" if existing is None else f"VLAN {existing.vlan_id}",
+                after=f"VLAN {wanted.vlan_id}",
+            )
+            if not same:
+                net.portgroups = [p for p in net.portgroups if p.name != wanted.name] + [wanted]
+                for vs in net.vswitches:
+                    if vs.name == wanted.vswitch and wanted.name not in vs.portgroups:
+                        vs.portgroups.append(wanted.name)
+        elif action == "configure_ntp":
+            if "ntp-fails" in self.faults:
+                raise EsxiError("Simulated fault: ntpd failed to start")
+            servers = ",".join(net.ntp_servers) or "none"
+            before = f"servers={servers} running={net.ntp_running} policy={net.ntp_policy}"
+            changed = (net.ntp_servers, net.ntp_running, net.ntp_policy) != (
+                params["servers"],
+                True,
+                params["policy"],
+            )
+            net.ntp_servers, net.ntp_running, net.ntp_policy = list(params["servers"]), True, params["policy"]
+            record = ChangeRecord(
+                action=action,
+                target="ntpd",
+                changed=changed,
+                before=before,
+                after=f"servers={','.join(net.ntp_servers)} running=True policy={net.ntp_policy}",
+            )
+        elif action == "create_datastore":
+            if "datastore-create-fails" in self.faults:
+                raise EsxiError("Simulated fault: CreateVmfsDatastore failed")
+            disk = next((d for d in self.storage.disks if d.name == params["disk"]), None)
+            if disk is None or not disk.unused:
+                raise EsxiError(
+                    f"Disk {params['disk']} is no longer available for a new datastore; assess again"
+                )
+            self.storage.datastores.append(
+                Datastore(
+                    name=params["name"],
+                    type="VMFS",
+                    capacity_gb=disk.capacity_gb,
+                    free_gb=round(disk.capacity_gb * 0.99, 1),
+                    ssd=disk.ssd,
+                    local=True,
+                    disks=[disk.name],
+                )
+            )
+            disk.datastores, disk.partitions = [params["name"]], 1
+            record = ChangeRecord(
+                action=action,
+                target=params["name"],
+                changed=True,
+                before=f"{disk.name}: unused",
+                after=f"VMFS datastore {params['name']} on {disk.name}",
+            )
+        else:
+            raise EsxiError(f"Unknown host-prep action {action}")
+        self.changes.append(record)
+        return record
+
+    async def verify_jumbo(
+        self,
+        access: OsAccess,
+        password: str,
+        *,
+        vswitch: str,
+        uplinks: tuple[str, str],
+        vlan: int,
+        mtu: int,
+        pinned_ssh_key: str | None,
+        log: Callable[[str], None],
+    ) -> JumboResult:
+        self._reachable(access.address)
+        vs = next((v for v in self.network.vswitches if v.name == vswitch), None)
+        if vs is None or (vs.mtu or 1500) < mtu:
+            raise EsxiError(f"{vswitch} MTU is {vs.mtu if vs else '?'}; set it to {mtu} first (Prepare host)")
+        drops = "jumbo-drops" in self.faults
+        log(f"Simulated loop test {uplinks[0]} ↔ {uplinks[1]} on VLAN {vlan}")
+        probes = [
+            JumboProbe(
+                label="1500-byte frames A→B",
+                command="vmkping -s 1472",
+                expect_success=True,
+                exit_code=0,
+                passed=True,
+                output="3 packets transmitted, 3 packets received",
+            ),
+            JumboProbe(
+                label=f"{mtu}-byte frames A→B",
+                command=f"vmkping -s {mtu - 28}",
+                expect_success=True,
+                exit_code=1 if drops else 0,
+                passed=not drops,
+                output="3 packets transmitted, 0 packets received"
+                if drops
+                else "3 packets transmitted, 3 packets received",
+            ),
+        ]
+        ok = all(p.passed for p in probes)
+        summary = (
+            f"{mtu}-byte frames pass {uplinks[0]} ↔ {uplinks[1]} through the switch on VLAN {vlan}"
+            if ok
+            else f"{mtu}-byte frames do not pass through the switch: check jumbo frames on the switch ports"
+        )
+        return JumboResult(
+            ok=ok,
+            summary=summary,
+            vswitch=vswitch,
+            uplinks=list(uplinks),
+            vlan=vlan,
+            mtu=mtu,
+            probes=probes,
+            restored=True,
+            ssh_host_key="SHA256:simulated-host-key",
+        )
 
     def _reachable(self, address: str) -> None:
         if self.unreachable or self.about is None:
@@ -116,6 +289,10 @@ class SimulatedEsxi:
                 "default_gateway": net["gateway"],
                 "dns_servers": net["nameserver"].split(","),
                 "ntp_servers": ntp,
+                "ntp_running": bool(
+                    ntp
+                ),  # firstboot starts ntpd but leaves its startup policy off (seen live)
+                "ntp_policy": "off" if ntp else None,
                 "portgroups": portgroups,  # a fresh install has only the management network
                 "vmkernel": [
                     VmkInterface(

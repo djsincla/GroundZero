@@ -35,6 +35,8 @@ class JobKind(StrEnum):
     INSTALL = "install"
     OS_CAPTURE = "os_capture"
     ASSESS = "assess"
+    HOST_PREP = "host_prep"
+    VERIFY_JUMBO = "verify_jumbo"
 
 
 class OsAccessSet(BaseModel):
@@ -99,6 +101,8 @@ def task_id_for(kind: JobKind, params: dict[str, Any]) -> str:
         JobKind.OS_NETWORK: "os.read",
         JobKind.OS_CAPTURE: "os.capture",
         JobKind.ASSESS: "host.assess",
+        JobKind.HOST_PREP: "host.prep",
+        JobKind.VERIFY_JUMBO: "net.verify_jumbo",
     }.get(kind, kind.value)
 
 

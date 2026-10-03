@@ -198,7 +198,7 @@ def test_certificate_routes(api: TestClient) -> None:
     host_id = _host(api, with_os=False)
     assert api.get(f"/api/v1/hosts/{host_id}/certificates").json() == []
     resp = api.post(f"/api/v1/hosts/{host_id}/certificates/printer/trust")
-    assert resp.status_code == 404 and "bmc or os" in resp.json()["detail"]
+    assert resp.status_code == 404 and "bmc, os or os-ssh" in resp.json()["detail"]
 
 
 def test_isos_are_listed_after_a_restart_without_a_rescan(api: TestClient) -> None:

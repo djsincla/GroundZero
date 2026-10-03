@@ -156,7 +156,7 @@ export function stepsList(steps) {
       h("span", { class: "step-icon", "aria-hidden": "true" }, STEP_ICON[s.status] || "○"),
       h("span", { class: "step-title" }, s.title, h("span", { class: "visually-hidden" }, `: ${s.status}`)),
       h("span", { class: "muted small-text" }, stepDuration(s)),
-      s.message && s.status !== "succeeded" ? h("div", { class: "step-msg small-text" }, s.message) : null)));
+      s.message ? h("div", { class: "step-msg small-text" }, s.message) : null)));
 }
 
 export async function downloadDiagnostics(jobId) {

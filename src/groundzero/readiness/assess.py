@@ -46,6 +46,7 @@ class Action(BaseModel):
     destructive: bool = False
     confirm_phrase: str | None = Field(default=None, description="Typed confirmation for destructive actions")
     recommended: bool = Field(default=True, description="Selected by default in the UI")
+    task: str = Field(default="host.prep", description="The pipeline task that applies this action")
 
 
 class StorageProposal(BaseModel):
@@ -445,6 +446,7 @@ def _check_jumbo(jumbo: dict[str, Any] | None, plan: list[Action]) -> Check:
     plan.append(
         Action(
             id="verify_jumbo",
+            task="net.verify_jumbo",
             check="network.jumbo",
             title="Verify jumbo frames through the switch",
             why="An MTU of 9000 on the host is not enough if the physical switch ports drop jumbo "

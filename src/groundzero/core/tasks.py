@@ -80,10 +80,10 @@ CATALOG: tuple[TaskSpec, ...] = (
              produces="readiness", requires=("preflight", OS_ACCESS), os_bound=True),
     TaskSpec("host.prep", "Prepare host", Stage.PREP,
              "Apply the planned fixes: MTU, trunk and external port groups, NTP, Holodeck datastore.",
-             produces="host_prep", requires=("readiness",), os_bound=True, destructive=True, available=False),
+             produces="host_prep", requires=("readiness",), os_bound=True, destructive=True),
     TaskSpec("net.verify_jumbo", "Verify jumbo frames", Stage.PREP,
              "Send 9000-byte frames out of one uplink and back in the other through the physical switch.",
-             produces="jumbo", requires=("host_prep",), os_bound=True, available=False),
+             produces="jumbo", requires=("host_prep",), os_bound=True),
     TaskSpec("holodeck.router", "Deploy Holorouter", Stage.HOLODECK,
              "Deploy and start the Holorouter appliance on the prepared datastore and port groups.",
              produces="holorouter", requires=("readiness", "host_prep"), os_bound=True, available=False),
@@ -191,6 +191,11 @@ def summarize(kind: str, data: dict[str, Any]) -> str:
             if data.get("installed_build") and all(c.get("ok") for c in data.get("validation", [])):
                 return f"{target} installed and validated"
             return f"{target}: did not complete (still on {data.get('previous_build') or '?'})"
+        if kind == "host_prep":
+            changed = [c for c in data.get("applied", []) if c.get("changed")]
+            return f"{len(changed)} change(s) applied · datastore {data.get('datastore') or '?'}"
+        if kind == "jumbo":
+            return str(data.get("summary", "jumbo"))
         if kind == "readiness":
             if data.get("ready"):
                 return f"Ready for {data['variant_title']}" + (

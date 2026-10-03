@@ -44,7 +44,8 @@ def test_a_new_host_starts_with_preflight() -> None:
     assert p.next.task == "preflight"
     assert _state(p, "os.read") == "blocked"
     assert _state(p, "host.assess") == "blocked"
-    assert _state(p, "host.prep") == "planned"
+    assert _state(p, "host.prep") == "blocked"
+    assert _state(p, "holodeck.router") == "planned"
     assert [s.id for s in p.stages] == ["hardware", "os", "readiness", "prep", "holodeck"]
 
 
@@ -77,7 +78,7 @@ def test_outputs_feed_the_next_task_and_go_stale_after_a_reinstall() -> None:
     assert _state(p, "host.assess") == "done" and _state(p, "os.read") == "done"
     assess = next(t for t in p.stages[2].tasks if t.id == "host.assess")
     assert assess.output is not None and assess.output.summary == "3 to fix for VCF 9.0 · 2 planned actions"
-    assert p.next.task is None and "Prepare host" in p.next.reason  # the next stage is planned
+    assert p.next.task == "host.prep"  # the readiness output is its input
 
     reinstalled = _pipeline(jobs, outputs, epoch=1)  # an install bumped the OS epoch
     assert _state(reinstalled, "host.assess") == "stale" and _state(reinstalled, "os.read") == "stale"

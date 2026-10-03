@@ -565,6 +565,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "paramiko" },
     { name = "pycdlib" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -576,11 +577,11 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
-    { name = "paramiko" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-playwright" },
     { name = "ruff" },
+    { name = "types-paramiko" },
 ]
 
 [package.metadata]
@@ -588,6 +589,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=43" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "paramiko", specifier = ">=5.0.0" },
     { name = "pycdlib", specifier = ">=1.21.0" },
     { name = "pydantic", specifier = ">=2.8" },
     { name = "pydantic-settings", specifier = ">=2.4" },
@@ -599,11 +601,11 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=1.11" },
-    { name = "paramiko", specifier = ">=5.0.0" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "pytest-playwright", specifier = ">=0.9.0" },
     { name = "ruff", specifier = ">=0.6" },
+    { name = "types-paramiko", specifier = ">=5.0.0.20260724" },
 ]
 
 [[package]]
@@ -1289,6 +1291,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/16/f7/57713ba479fd405eb76de31404b2c744c289e336b2d999511ebf51e496f7/typer-0.27.2.tar.gz", hash = "sha256:269b7eb9d3c202ca84b4bc9618cb04ebb43d3d4d1e567e4c768607232c05f945", size = 204045, upload-time = "2026-08-28T10:26:55.046Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/bf/205d0004930ede8f542fb58f601526fccf4ae7626075ca1e6c4de5d3d652/typer-0.27.2-py3-none-any.whl", hash = "sha256:b3a5fc4342d5fc8fda8fc3010b1cf117e9249aab7fae800c2eff62fd3842d97d", size = 123130, upload-time = "2026-08-28T10:26:53.752Z" },
+]
+
+[[package]]
+name = "types-paramiko"
+version = "5.0.0.20260724"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/66/c2/445549ed6f0944352f2b91d88d16bbdc3993a4d6dbbedb81c557b3cad85a/types_paramiko-5.0.0.20260724.tar.gz", hash = "sha256:37e7f3f2196cf187c89649ad836621c675bc318369d80fa78051507a4ae770c9", size = 28548, upload-time = "2026-07-24T04:59:59.889Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/16/fca52784f979821e2205ff514322d0e83452536acc4807a79ddb2085bbb2/types_paramiko-5.0.0.20260724-py3-none-any.whl", hash = "sha256:40c7083803a5a28ab7a8d2fe4cd9b7746d0a03538598582ce68f60967a2ad272", size = 37125, upload-time = "2026-07-24T04:59:58.955Z" },
 ]
 
 [[package]]

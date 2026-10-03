@@ -146,3 +146,128 @@ def test_assess_reads_the_os_and_plans_fixes(api: TestClient) -> None:
     assess = _task(p, "host.assess")
     assert assess["state"] == "done" and "to fix for VCF 9.0" in assess["output"]["summary"]
     assert _task(p, "os.read")["state"] == "done"  # the assessment's fresh OS read is reused
+
+
+def _app(tmp_path: Path, idrac9: dict[str, Any], esxi: SimulatedEsxi) -> TestClient:
+    settings = Settings(home=tmp_path / "home2", api_token=TOKEN, iso_repository=tmp_path / "isos")
+    client = TestClient(create_app(settings, client_factory=lambda h, p: make_client(idrac9), esxi=esxi))
+    client.headers["Authorization"] = f"Bearer {TOKEN}"
+    return client
+
+
+def _assessed(api: TestClient) -> str:
+    host = _host(api)
+    api.put(f"/api/v1/hosts/{host}/os", json={"address": "192.0.2.101", "password": "esxi-pw"})
+    assert (
+        _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/preflight", json={}).json()["id"])["status"]
+        == "succeeded"
+    )
+    assert (
+        _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/host.assess", json={}).json()["id"])["status"]
+        == "succeeded"
+    )
+    return host
+
+
+def test_prepare_then_verify_makes_the_host_ready(tmp_path: Path, idrac9: dict[str, Any]) -> None:
+    esxi = SimulatedEsxi(ESXI1)
+    with _app(tmp_path, idrac9, esxi) as api:
+        host = _assessed(api)
+        jumbo_early = api.post(f"/api/v1/hosts/{host}/tasks/net.verify_jumbo", json={})
+        assert jumbo_early.status_code == 409 and "Prepare host" in jumbo_early.json()["detail"]
+
+        bad = api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={"params": {"checks": ["nope"]}})
+        assert bad.status_code == 422 and "Not in the current plan" in bad.json()["detail"]
+
+        plan = api.get(f"/api/v1/hosts/{host}/readiness").json()["plan"]
+        checks = [
+            a["check"] for a in plan if a["task"] == "host.prep"
+        ]  # incl. the optional VLAN 100 external
+        assert checks == ["ntp", "network.mtu", "network.external"]  # this esxi1 capture already has trunks
+        job = _wait(
+            api,
+            api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={"params": {"checks": checks}}).json()[
+                "id"
+            ],
+        )
+        assert job["status"] == "succeeded", job
+        assert [s["key"] for s in job["steps"]] == [*checks, "reassess"]
+        assert all(s["status"] == "succeeded" for s in job["steps"])
+        assert {c.action for c in esxi.changes} == {"configure_ntp", "set_mtu", "ensure_portgroup"}
+        prep = job["result"]["host_prep"]
+        assert (
+            prep["trunk_portgroup"].startswith(("HoloDeck", "holo"))
+            and prep["external_portgroup"] == "Holodeck-External"
+        )
+        assert prep["datastore"] == "localHolodeck" and prep["vswitch"] == "vSwitch0"
+
+        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        status = {c["id"]: c["status"] for c in report["checks"]}
+        assert (
+            status["network.mtu"]
+            == status["network.trunk"]
+            == status["ntp"]
+            == status["network.external"]
+            == "pass"
+        )
+        assert [a["id"] for a in report["plan"]] == ["verify_jumbo"]
+
+        assert (
+            api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={"params": {"checks": []}}).status_code
+            == 422
+        )
+
+        job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/net.verify_jumbo", json={}).json()["id"])
+        assert job["status"] == "succeeded", job
+        assert (
+            job["result"]["jumbo"]["uplinks"] == ["vmnic1", "vmnic0"]
+            and job["result"]["jumbo"]["vlan"] == 100
+        )
+        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        assert report["ready"] and report["plan"] == []
+        pins = {c["role"]: c["fingerprint"] for c in api.get(f"/api/v1/hosts/{host}/certificates").json()}
+        assert pins["os-ssh"] == "SHA256:simulated-host-key"
+
+        p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
+        assert _task(p, "host.prep")["state"] == "done" and _task(p, "net.verify_jumbo")["state"] == "done"
+        assert "Deploy Holorouter" in p["next"]["reason"]
+
+
+def test_formatting_a_disk_needs_its_typed_phrase(tmp_path: Path, idrac9: dict[str, Any]) -> None:
+    esxi = SimulatedEsxi(ESXI1)
+    big = next(d for d in esxi.storage.disks if "4TB" in (d.model or ""))  # free the 4 TB disk for the test
+    esxi.storage.datastores = [d for d in esxi.storage.datastores if d.name != "localHolodeck"]
+    big.datastores, big.partitions = [], 0
+    with _app(tmp_path, idrac9, esxi) as api:
+        host = _assessed(api)
+        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        action = next(a for a in report["plan"] if a["id"] == "create_datastore")
+        assert action["destructive"] and action["params"]["disk"] == big.name
+        body = {"params": {"checks": ["storage.datastore"]}, "confirm": "format it"}
+        refused = api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json=body)
+        assert refused.status_code == 422 and action["confirm_phrase"] in refused.json()["detail"]
+        assert esxi.changes == []
+
+        body["confirm"] = action["confirm_phrase"]
+        job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json=body).json()["id"])
+        assert job["status"] == "succeeded", job
+        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        assert report["storage"]["kind"] == "existing" and report["storage"]["datastore"] == "holodeck"
+        assert job["result"]["host_prep"]["datastore"] == "holodeck"
+
+
+def test_a_switch_dropping_jumbo_frames_fails_the_check(tmp_path: Path, idrac9: dict[str, Any]) -> None:
+    esxi = SimulatedEsxi(ESXI1, faults=frozenset({"jumbo-drops"}))
+    with _app(tmp_path, idrac9, esxi) as api:
+        host = _assessed(api)
+        assert (
+            _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={}).json()["id"])["status"]
+            == "succeeded"
+        )
+        job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/net.verify_jumbo", json={}).json()["id"])
+        assert job["status"] == "failed" and "do not pass through the switch" in job["error"]["message"]
+        loop = next(s for s in job["steps"] if s["key"] == "loop")
+        assert loop["status"] == "succeeded"  # the test ran; it is the result that failed
+        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        jumbo_check = next(c for c in report["checks"] if c["id"] == "network.jumbo")
+        assert jumbo_check["status"] == "fail" and not report["ready"]
