@@ -48,7 +48,6 @@ select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "RUF", "T20", "S110", "S11
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S"]
-"tools/**" = ["T20", "E501"]  # operator-run lab diagnostics print their progress
 
 [tool.mypy]
 python_version = "3.12"

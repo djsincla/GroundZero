@@ -218,6 +218,9 @@ def verify_jumbo(
         time.sleep(5)  # let the uplinks settle
 
         payload = mtu - 28  # IP + ICMP headers
+        # Unscored warm-up: the first frames after the test ports appear are lost to ARP and switch MAC
+        # learning (seen live: 1 of 3 replies), which says nothing about the MTU.
+        shell.run(f"vmkping -I {VMK_A} -c 3 {IP_B}")
         for label, cmd, expect in [
             ("1500-byte frames A→B", f"vmkping -I {VMK_A} -d -s 1472 -c 3 {IP_B}", True),
             (f"{mtu}-byte frames A→B", f"vmkping -I {VMK_A} -d -s {payload} -c 3 {IP_B}", True),
@@ -229,6 +232,9 @@ def verify_jumbo(
             ),
         ]:
             code, out = shell.run(cmd)
+            if expect and code != 0:  # one retry for a transient loss; a real MTU problem fails both times
+                time.sleep(2)
+                code, out = shell.run(cmd)
             summary = next((ln.strip() for ln in out.splitlines() if "packets transmitted" in ln), out[-200:])
             probes.append(
                 JumboProbe(

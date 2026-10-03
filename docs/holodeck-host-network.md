@@ -44,8 +44,20 @@ this layout.
   Installed on vmnic0; vmnic1 is added as a second active uplink on first boot.
 - NTP: `pool.ntp.org`
 - After install: vSwitch MTU 9000, the trunk port groups (VLAN 4095, security set to Accept), NTP enabled
-- Post-install validation: jumbo-frame loop test vmnic0 ↔ vmnic1 across Te1/0/11 ↔ Te1/0/12
-  (`tools/esxi_mtu_loop_test.py`). It is deferred to after the reinstall because the current install's
-  evaluation license expired on 2026-09-14, and an expired evaluation rejects configuration changes.
+- Post-install validation: jumbo-frame loop test vmnic0 ↔ vmnic1 across Te1/0/11 ↔ Te1/0/12.
 
 A reinstall resets all of this. Post-install configuration must recreate requirements 1, 2, 3, 6 and 7.
+GroundZero does it with pipeline tasks: **Assess Holodeck readiness** (`host.assess`, read-only),
+**Prepare host** (`host.prep`) and **Verify jumbo frames** (`net.verify_jumbo`, which replaces the former
+`tools/esxi_mtu_loop_test.py`; the old tool reset the MTU to 1500 when it finished).
+
+## Status after the 9.1.1 reinstall and GroundZero host prep (2026-10-02)
+
+| # | Status | Detail |
+|---|---|---|
+| 1 | OK | vSwitch0 MTU 9000 (was 1500) |
+| 2/3 | OK | `Holodeck-Trunk`, VLAN 4095, Promiscuous / MAC changes / Forged transmits = Accept |
+| 6 | OK | `Holodeck-External` on VLAN 100 (the management VLAN) for the Holorouter |
+| 7 | OK | NTP `pool.ntp.org`, running, startup policy on (the kickstart left the policy off) |
+| | OK | Jumbo frames verified: 9000-byte frames pass vmnic0 ↔ vmnic1 through the switch on VLAN 100; 9001 refused |
+| | OK | Holodeck datastore: existing `localHolodeck` (4 TB NVMe, 3.9 TB free) |

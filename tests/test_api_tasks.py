@@ -220,7 +220,7 @@ def test_prepare_then_verify_makes_the_host_ready(tmp_path: Path, idrac9: dict[s
         job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/net.verify_jumbo", json={}).json()["id"])
         assert job["status"] == "succeeded", job
         assert (
-            job["result"]["jumbo"]["uplinks"] == ["vmnic1", "vmnic0"]
+            job["result"]["jumbo"]["uplinks"] == ["vmnic0", "vmnic1"]  # keep mgmt NIC, borrow vmnic1
             and job["result"]["jumbo"]["vlan"] == 100
         )
         report = api.get(f"/api/v1/hosts/{host}/readiness").json()

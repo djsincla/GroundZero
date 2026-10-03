@@ -74,10 +74,11 @@ class FakeNetwork:
 
 
 class FakeShell:
-    def __init__(self, *args: Any, drops: bool = False) -> None:
+    def __init__(self, *args: Any, drops: bool = False, learning: int = 2) -> None:
         self.policy = NS(seen="SHA256:fake")
         self.commands: list[str] = []
         self.drops = drops
+        self.learning = learning  # the first pings are lost to ARP/MAC learning, as seen live
 
     def connect(self) -> None: ...
 
@@ -86,7 +87,10 @@ class FakeShell:
     def run(self, cmd: str) -> tuple[int, str]:
         self.commands.append(cmd)
         if cmd.startswith("vmkping"):
-            size = int(cmd.split(" -s ")[1].split()[0])
+            if self.learning:
+                self.learning -= 1
+                return 1, "3 packets transmitted, 1 packets received, 66.6667% packet loss"
+            size = int(cmd.split(" -s ")[1].split()[0]) if " -s " in cmd else 56
             ok = size <= 8972 and not (self.drops and size > 1472)
             return (0 if ok else 1), f"3 packets transmitted, {3 if ok else 0} packets received"
         return 0, ""

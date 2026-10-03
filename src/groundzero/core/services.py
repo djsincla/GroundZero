@@ -662,7 +662,11 @@ class Services:
                 )
                 if vswitch is None or len(vswitch.uplinks) < 2:
                     raise OsConfigError("The jumbo-frame test needs a standard switch with two uplinks")
-                uplinks = (vswitch.uplinks[0], vswitch.uplinks[1])
+                # Management stays on the NIC whose MAC vmk0 uses; the other uplink is borrowed for the test.
+                keep = network.install_nic()
+                keep = keep if keep in vswitch.uplinks else vswitch.uplinks[0]
+                borrow = next(u for u in vswitch.uplinks if u != keep)
+                uplinks = (keep, borrow)
                 vlan = network.management_vlan()
             async with ctx.step("loop", "Loop test through the switch") as step:
                 result = await self.esxi.verify_jumbo(
