@@ -1462,7 +1462,8 @@
           "os_capture",
           "assess",
           "host_prep",
-          "verify_jumbo"
+          "verify_jumbo",
+          "holorouter"
         ],
         "title": "JobKind",
         "type": "string"

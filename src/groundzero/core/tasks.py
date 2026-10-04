@@ -87,7 +87,7 @@ CATALOG: tuple[TaskSpec, ...] = (
              produces="jumbo", requires=("host_prep",), os_bound=True),
     TaskSpec("holodeck.router", "Deploy Holorouter", Stage.HOLODECK,
              "Deploy and start the Holorouter appliance on the prepared datastore and port groups.",
-             produces="holorouter", requires=("readiness", "host_prep"), os_bound=True, available=False),
+             produces="holorouter", requires=("readiness", "host_prep"), os_bound=True),
     TaskSpec("holodeck.stage", "Stage binaries", Stage.HOLODECK,
              "Copy the ESX ISO and VCF Installer OVA to the Holorouter.",
              produces="staged", requires=("holorouter",), os_bound=True, available=False),
@@ -195,6 +195,8 @@ def summarize(kind: str, data: dict[str, Any]) -> str:
         if kind == "host_prep":
             changed = [c for c in data.get("applied", []) if c.get("changed")]
             return f"{len(changed)} change(s) applied · datastore {data.get('datastore') or '?'}"
+        if kind == "holorouter":
+            return f"{data.get('vm_name')} at {data.get('ip')} · Holorouter {data.get('version')}"
         if kind == "jumbo":
             return str(data.get("summary", "jumbo"))
         if kind == "readiness":

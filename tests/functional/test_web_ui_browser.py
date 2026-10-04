@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -385,7 +386,7 @@ def test_pipeline_guides_through_the_next_steps(page: Page, simulated_r740xd: Gr
     page.get_by_role("link", name="esxi1").click()  # the Pipeline tab is the default
     nxt = page.locator('[data-role="next-step"]')
     expect(nxt).to_contain_text("Holodeck preflight")
-    expect(page.locator('[data-task="holodeck.router"]')).to_have_attribute("data-state", "planned")
+    expect(page.locator('[data-task="holodeck.stage"]')).to_have_attribute("data-state", "planned")
 
     nxt.get_by_role("button", name="Holodeck preflight").click()
     drawer = page.locator("#drawer")
@@ -455,3 +456,55 @@ def test_readiness_report_shows_checks_storage_and_planned_fixes(
     expect(page.locator('[data-panel="readiness"]')).to_contain_text("ready")
     expect(page.locator('[data-panel="readiness"] [data-status="pass"]').first).to_have_text("ready")
     expect(plan).to_contain_text("Nothing to fix")
+
+
+def test_deploy_holorouter_from_the_pipeline(page: Page, simulated_r740xd: GroundZero) -> None:
+    import tarfile
+
+    gz = simulated_r740xd
+    ovf = gz.home / "holorouter-9.1.1.0456.ovf"
+    ovf.write_text("<Envelope><ProductSection><Product>HoloRouter</Product></ProductSection></Envelope>")
+    (gz.home / "isos").mkdir(exist_ok=True)
+    with tarfile.open(gz.home / "isos" / "holorouter-9.1.1.0456.ova", "w") as tar:
+        tar.add(ovf, arcname=ovf.name)
+    _host_with_os(gz)
+    for task in ("preflight", "host.assess"):
+        assert gz.cli("run", "esxi1", task, timeout=120).code == 0
+    with gz.api() as api:
+        host = api.get("/api/v1/hosts").json()[0]["id"]
+        plan = api.get(f"/api/v1/hosts/{host}/readiness").json()["plan"]
+        checks = [a["check"] for a in plan if a["task"] == "host.prep"]
+        job = api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={"params": {"checks": checks}}).json()
+        for _ in range(100):  # prep runs in the server
+            if api.get(f"/api/v1/jobs/{job['id']}").json()["status"] not in ("queued", "running"):
+                break
+            time.sleep(0.2)
+        assert api.get(f"/api/v1/jobs/{job['id']}").json()["status"] == "succeeded"
+    assert gz.cli("run", "esxi1", "net.verify_jumbo", timeout=120).code == 0
+    with gz.api() as api:
+        settings = {"holorouter_gateway": "192.0.2.1", "holorouter_dns": "8.8.8.8"}
+        api.post(
+            "/api/v1/config-sets",
+            json={
+                "name": "lab-holo",
+                "os_family": "holodeck",
+                "settings": settings,
+                "secrets": {"holorouter_password": "Holo-pass1!"},
+            },
+        )
+        api.post("/api/v1/isos/rescan")
+
+    _open(page, gz)
+    page.get_by_role("link", name="esxi1").click()
+    nxt = page.locator('[data-role="next-step"]')
+    nxt.get_by_role("button", name="Deploy Holorouter").click()
+    dialog = page.locator("dialog")
+    expect(dialog).to_contain_text("holorouter-9.1.1.0456.ova")
+    dialog.get_by_label("Holorouter IP").fill("192.0.2.150")
+    dialog.get_by_role("button", name="Deploy").click()
+    drawer = page.locator("#drawer")
+    expect(drawer.locator('[data-step="ssh"]')).to_have_attribute("data-status", "succeeded", timeout=20_000)
+    page.reload()
+    expect(page.locator('[data-task="holodeck.router"] [data-role="output"]')).to_contain_text(
+        "holo1-holorouter at 192.0.2.150"
+    )

@@ -31,6 +31,7 @@ from groundzero.esxi.models import (
     SecurityPolicy,
     VmkInterface,
 )
+from groundzero.esxi.ovf import OvaDeployResult
 from groundzero.esxi.reader import EsxiError
 
 
@@ -66,6 +67,7 @@ class SimulatedEsxi:
         self.unreachable = unreachable_until_installed
         self.faults = faults  # ntp-fails, datastore-create-fails, jumbo-drops
         self.changes: list[ChangeRecord] = []
+        self.vms: dict[str, dict[str, Any]] = {}  # deployed appliances (e.g. the Holorouter)
         self.network = EsxiNetworkConfig.model_validate_json((capture_dir / "network.json").read_text())
         self.storage = EsxiStorage.model_validate_json((capture_dir / "storage.json").read_text())
         self.about: EsxiAbout | None = EsxiAbout.model_validate_json((capture_dir / "about.json").read_text())
@@ -237,6 +239,38 @@ class SimulatedEsxi:
             restored=True,
             ssh_host_key="SHA256:simulated-host-key",
         )
+
+    async def deploy_ova(
+        self,
+        access: OsAccess,
+        password: str,
+        ova: Path,
+        *,
+        vm_name: str,
+        datastore: str,
+        networks: dict[str, str],
+        properties: dict[str, str],
+        progress: Callable[[float, str], None],
+    ) -> OvaDeployResult:
+        self._reachable(access.address)
+        if vm_name in self.vms:
+            return OvaDeployResult(vm_name=vm_name, created=False, powered_on=True)
+        if not any(d.name == datastore for d in self.storage.datastores):
+            raise EsxiError(f"Datastore {datastore} not found on the host")
+        missing = sorted(
+            pg for pg in networks.values() if pg not in {p.name for p in self.network.portgroups}
+        )
+        if missing:
+            raise EsxiError(f"Port group(s) not found on the host: {', '.join(missing)}")
+        size = ova.stat().st_size
+        progress(0.5, f"Uploading {size / 1e9:.2f} GB (simulated)")
+        self.vms[vm_name] = {
+            "ova": ova.name,
+            "datastore": datastore,
+            "networks": networks,
+            "properties": properties,
+        }
+        return OvaDeployResult(vm_name=vm_name, created=True, powered_on=True, uploaded_bytes=size)
 
     def _reachable(self, address: str) -> None:
         if self.unreachable or self.about is None:

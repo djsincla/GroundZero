@@ -230,7 +230,7 @@ def test_prepare_then_verify_makes_the_host_ready(tmp_path: Path, idrac9: dict[s
 
         p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
         assert _task(p, "host.prep")["state"] == "done" and _task(p, "net.verify_jumbo")["state"] == "done"
-        assert "Deploy Holorouter" in p["next"]["reason"]
+        assert p["next"]["task"] == "holodeck.router"  # the Holodeck stage is next
 
 
 def test_formatting_a_disk_needs_its_typed_phrase(tmp_path: Path, idrac9: dict[str, Any]) -> None:
@@ -271,3 +271,96 @@ def test_a_switch_dropping_jumbo_frames_fails_the_check(tmp_path: Path, idrac9: 
         report = api.get(f"/api/v1/hosts/{host}/readiness").json()
         jumbo_check = next(c for c in report["checks"] if c["id"] == "network.jumbo")
         assert jumbo_check["status"] == "fail" and not report["ready"]
+
+
+def _fake_ova(isos: Path, name: str = "holorouter-9.1.1.0456.ova") -> None:
+    import tarfile
+
+    isos.mkdir(parents=True, exist_ok=True)
+    ovf = isos.parent / name.replace(".ova", ".ovf")
+    ovf.write_text("<Envelope><ProductSection><Product>HoloRouter</Product></ProductSection></Envelope>")
+    with tarfile.open(isos / name, "w") as tar:
+        tar.add(ovf, arcname=ovf.name)
+
+
+def test_deploy_holorouter_after_prep(tmp_path: Path, idrac9: dict[str, Any]) -> None:
+    esxi = SimulatedEsxi(ESXI1)
+    _fake_ova(tmp_path / "isos")
+    with _app(tmp_path, idrac9, esxi) as api:
+        host = _assessed(api)
+        settings = {"holorouter_gateway": "192.0.2.1", "holorouter_dns": "8.8.8.8"}
+        cs = api.post(
+            "/api/v1/config-sets", json={"name": "lab-holo", "os_family": "holodeck", "settings": settings}
+        ).json()
+
+        def run() -> Any:
+            return api.post(
+                f"/api/v1/hosts/{host}/tasks/holodeck.router",
+                json={"params": {"config_set_id": cs["id"]}},
+            )
+
+        assert run().status_code == 409  # readiness/prep first (pipeline inputs)
+        checks = [
+            a["check"]
+            for a in api.get(f"/api/v1/hosts/{host}/readiness").json()["plan"]
+            if a["task"] == "host.prep"
+        ]
+        prep = _wait(
+            api,
+            api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={"params": {"checks": checks}}).json()[
+                "id"
+            ],
+        )
+        assert prep["status"] == "succeeded"
+        assert (
+            _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/net.verify_jumbo", json={}).json()["id"])[
+                "status"
+            ]
+            == "succeeded"
+        )
+
+        no_values = run()
+        assert no_values.status_code == 422 and "Holodeck values" in no_values.json()["detail"]
+        api.put(f"/api/v1/hosts/{host}/host-values/holodeck", json={"holorouter_ip": "192.0.2.150"})
+        no_password = run()
+        assert no_password.status_code == 422 and "Holorouter password" in no_password.json()["detail"]
+        api.put(
+            f"/api/v1/config-sets/{cs['id']}",
+            json={
+                "name": "lab-holo",
+                "os_family": "holodeck",
+                "settings": settings,
+                "secrets": {"holorouter_password": "Holo-pass1!"},
+            },
+        )
+
+        job = _wait(api, run().json()["id"])
+        assert job["status"] == "succeeded", job
+        assert [s["key"] for s in job["steps"]] == ["deploy", "ssh"]
+        vm = esxi.vms["holo1-holorouter"]
+        assert vm["datastore"] == "localHolodeck"
+        assert vm["networks"] == {
+            "VM Management Network": "Holodeck-External",
+            "Trunk Portgroup for Site A": vm["networks"]["Trunk Portgroup for Site A"],
+            "Trunk Portgroup for Site B": vm["networks"]["Trunk Portgroup for Site A"],
+        }
+        props = vm["properties"]
+        assert (props["ip"], props["mask"], props["gateway"], props["dns_server"]) == (
+            "192.0.2.150",
+            "24",
+            "192.0.2.1",
+            "8.8.8.8",
+        )
+        assert props["ssh_enabled"] == "True" and props["password"] == "Holo-pass1!"
+        assert (
+            "Holo-pass1!" not in json.dumps(job)
+            and "Holo-pass1!" not in api.get(f"/api/v1/jobs/{job['id']}/diagnostics").text
+        )
+
+        p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
+        router = _task(p, "holodeck.router")
+        assert router["state"] == "done" and router["output"]["summary"].startswith(
+            "holo1-holorouter at 192.0.2.150"
+        )
+        again = _wait(api, run().json()["id"])  # idempotent: the VM exists
+        assert again["status"] == "succeeded" and again["steps"][0]["message"].endswith("left as is")

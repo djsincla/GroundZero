@@ -1,6 +1,7 @@
 // Hosts list and the tabbed host page (Overview · Preflight · Networking · Install · Jobs).
+import { schemaForm } from "../forms.js";
 import {
-  api, badge, card, empty, fmtTime, h, isActive, jobCard, maybe, mount, openDialog, pageHeader, showJobDrawer,
+  api, badge, card, empty, fmtBytes, fmtTime, h, isActive, jobCard, maybe, mount, openDialog, pageHeader, showJobDrawer,
   startJob, table, toast,
 } from "../core.js";
 
@@ -101,6 +102,7 @@ function runTask(ctx, task) {
   if (task.id === "os.custom") { location.hash = `#/hosts/${id}/deploy`; return; }
   if (task.id === "os.reimage") { location.hash = `#/hosts/${id}/deploy?mode=keep`; return; }
   if (task.id === "os.capture") { captureDialog(host); return; }
+  if (task.id === "holodeck.router") { holorouterDialog(ctx); return; }
   startJob("POST", `/hosts/${id}/tasks/${task.id}`, {}, { onDone: refresh });
 }
 
@@ -208,6 +210,55 @@ function readinessTab(ctx) {
       h("p", { class: "muted small-text" }, "Each fix changes only what is listed, checks the live state first, and is skipped if already done. GroundZero re-assesses afterwards."),
       planList),
   ];
+}
+
+// Deploy Holorouter: pick the Holodeck config set and this host's values (all editable here).
+async function holorouterDialog(ctx) {
+  const { id, host } = ctx;
+  const [families, sets, stored, isos] = await Promise.all([
+    api("GET", "/os-families"), api("GET", "/config-sets"), maybe(api("GET", `/hosts/${id}/host-values/holodeck`)),
+    api("GET", "/isos"),
+  ]);
+  const holodeck = families.find((f) => f.family === "holodeck");
+  const choices = sets.filter((s) => s.os_family === "holodeck");
+  const image = isos.filter((i) => i.os_family === "holorouter").sort((a, b) => (b.version || "").localeCompare(a.version || ""))[0];
+  if (!choices.length || !image) {
+    openDialog("Deploy Holorouter", [h("p", {}, !image
+      ? "Put the Holorouter OVA in the image repository first (ISOs page)."
+      : "Create a Holodeck config set first (Config sets → New, family VMware Holodeck).")],
+      { submitLabel: "OK", onSubmit: async () => {} });
+    return;
+  }
+  const select = h("select", { id: "hr-set" }, choices.map((s) => h("option", { value: s.id }, s.name)));
+  const values = schemaForm(holodeck.host_values_schema, stored || {}, { idPrefix: "hr", where: "host_values" });
+  const missing = h("p", { class: "notice" });
+  const check = () => {
+    const s = choices.find((c) => c.id === select.value);
+    const gaps = ["holorouter_password"].filter((k) => !(s.secrets_set || []).includes(k));
+    missing.hidden = !gaps.length;
+    missing.replaceChildren("This config set has no Holorouter password yet. ",
+      h("a", { href: `#/config-sets/${s.id}` }, "Set it in the config set"), ".");
+  };
+  select.addEventListener("change", check);
+  check();
+  openDialog(`Deploy the Holorouter on ${host.name}`, [
+    h("p", { class: "muted" }, `Image: ${image.filename} (${fmtBytes(image.size)}). It is uploaded from this machine to the host; over a VPN this can take hours (SSL mode is much faster than IPsec, see Info).`),
+    h("label", { for: "hr-set" }, "Holodeck config set"), select, missing,
+    h("h3", {}, "This host"), values.el,
+  ], {
+    submitLabel: "Deploy", wide: true,
+    onSubmit: async () => {
+      values.clearErrors();
+      try {
+        await api("PUT", `/hosts/${id}/host-values/holodeck`, values.value());
+      } catch (e) {
+        if (e.problem?.errors && values.setErrors(e.problem.errors)) throw new Error("Fix the highlighted values.");
+        throw e;
+      }
+      const job = await api("POST", `/hosts/${id}/tasks/holodeck.router`, { params: { config_set_id: select.value } });
+      showJobDrawer(job, { title: `Deploy the Holorouter on ${host.name}`, onDone: refresh });
+    },
+  });
 }
 
 // Confirm exactly what will change on the server; erasing a disk needs its typed phrase.

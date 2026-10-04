@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import ssl
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any, Protocol
 
 from pydantic import BaseModel
 
 from groundzero.core import diagnostics
 from groundzero.core.models import OsAccess
-from groundzero.esxi import jumbo, writer
+from groundzero.core.tls import pinned_context
+from groundzero.esxi import jumbo, ovf, writer
 from groundzero.esxi.models import ChangeRecord, EsxiAbout, EsxiNetworkConfig, EsxiStorage, JumboResult
+from groundzero.esxi.ovf import OvaDeployResult
 from groundzero.esxi.reader import EsxiError, connect_host, probe_about, read_network, read_storage
 
 
@@ -42,11 +46,34 @@ class EsxiOps(Protocol):
         log: Callable[[str], None],
     ) -> JumboResult: ...
 
+    async def deploy_ova(
+        self,
+        access: OsAccess,
+        password: str,
+        ova: Path,
+        *,
+        vm_name: str,
+        datastore: str,
+        networks: dict[str, str],
+        properties: dict[str, str],
+        progress: Callable[[float, str], None],
+    ) -> OvaDeployResult:
+        """Deploy (or find) a VM from an OVA, powered on."""
+        ...
+
 
 class OsTarget(OsAccess):
     """OsAccess plus the pinned certificate to trust (internal; never serialised to the API)."""
 
     pinned_pem: str | None = None
+
+
+def _insecure_context() -> ssl.SSLContext:
+    """Used only when nothing is pinned and CA validation is off (the operator's choice)."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 def _pin(access: OsAccess) -> str | None:
@@ -134,6 +161,38 @@ class LiveEsxiOps:
                 raise EsxiError(f"Unknown host-prep action {action}")
 
         return await _traced(action, access.address, asyncio.to_thread(run))
+
+    async def deploy_ova(
+        self,
+        access: OsAccess,
+        password: str,
+        ova: Path,
+        *,
+        vm_name: str,
+        datastore: str,
+        networks: dict[str, str],
+        properties: dict[str, str],
+        progress: Callable[[float, str], None],
+    ) -> OvaDeployResult:
+        diagnostics.add_secret(password, *[v for k, v in properties.items() if "password" in k.lower()])
+
+        def run() -> OvaDeployResult:
+            pem = _pin(access)
+            ctx = pinned_context(pem) if pem else _insecure_context()
+            with connect_host(access.address, access.username, password, access.verify_tls, pem) as host:
+                return ovf.deploy_ova(
+                    host,
+                    access.address,
+                    ova,
+                    vm_name=vm_name,
+                    datastore=datastore,
+                    networks=networks,
+                    properties=properties,
+                    ssl_context=ctx,
+                    progress=progress,
+                )
+
+        return await _traced("deploy_ova", access.address, asyncio.to_thread(run))
 
     async def verify_jumbo(
         self,

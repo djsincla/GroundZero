@@ -51,6 +51,7 @@ from groundzero.isos import IsoImage, IsoRepository
 from groundzero.media.registry import MediaRegistry
 from groundzero.osconfig import PLUGINS, OsConfigError, plugin_for
 from groundzero.osconfig.esxi import EsxiHostValues, EsxiPlugin, EsxiSettings
+from groundzero.osconfig.holodeck import HolodeckHostValues, HolodeckPlugin, HolodeckSettings
 from groundzero.preflight.evaluate import PreflightReport, UnknownProfileError, evaluate, load_profile
 from groundzero.readiness import ReadinessReport, assess
 from groundzero.redfish.capture import load_recording
@@ -214,8 +215,13 @@ class Services:
         password = self._cipher.decrypt(secret)
 
         async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.plan([("connect", "Connect to the OS"), ("network", "Read network and NTP"),
-                      ("storage", "Read disks and datastores")])  # fmt: skip
+            ctx.plan(
+                [
+                    ("connect", "Connect to the OS"),
+                    ("network", "Read network and NTP"),
+                    ("storage", "Read disks and datastores"),
+                ]
+            )
             async with ctx.step("connect", "Connect to the OS"):
                 target = await asyncio.to_thread(self.os_target, host_id, access)
             async with ctx.step("network", "Read network and NTP"):
@@ -548,6 +554,8 @@ class Services:
             return self.start_prep(host_id, list(checks) if checks is not None else None, run.confirm)
         if task_id == "net.verify_jumbo":
             return self.start_verify_jumbo(host_id)
+        if task_id == "holodeck.router":
+            return self.start_holorouter(host_id, str(p.get("config_set_id") or ""))
         raise ConflictError(f"“{spec.title}” has no runner")  # pragma: no cover - catalog/dispatch mismatch
 
     def start_assess(self, host_id: str, variant: str | None = None) -> Job:
@@ -580,8 +588,14 @@ class Services:
                     host_id=host_id, kind=kind, job_id=ctx.job.id, data=model.model_dump(mode="json")
                 )
             async with ctx.step("evaluate", "Evaluate Holodeck readiness"):
-                report = assess(profile=profile, variant=variant, network=network, storage=storage,
-                                preflight=preflight, jumbo=jumbo)  # fmt: skip
+                report = assess(
+                    profile=profile,
+                    variant=variant,
+                    network=network,
+                    storage=storage,
+                    preflight=preflight,
+                    jumbo=jumbo,
+                )
                 data = report.model_dump(mode="json")
                 self.store.save_result(host_id=host_id, kind="readiness", job_id=ctx.job.id, data=data)
             return {"readiness": data}
@@ -604,8 +618,14 @@ class Services:
         jumbo_meta = self.store.latest_output(host_id=host_id, kind="jumbo")
         epoch = self.store.os_epoch(host_id)
         jumbo = jumbo_meta.data if jumbo_meta and jumbo_meta.epoch >= epoch else None
-        report = assess(profile=load_profile(previous.profile), variant=previous.variant, network=network,
-                        storage=storage, preflight=preflight, jumbo=jumbo)  # fmt: skip
+        report = assess(
+            profile=load_profile(previous.profile),
+            variant=previous.variant,
+            network=network,
+            storage=storage,
+            preflight=preflight,
+            jumbo=jumbo,
+        )
         self.store.save_result(
             host_id=host_id, kind="readiness", job_id=job_id, data=report.model_dump(mode="json")
         )
@@ -659,8 +679,14 @@ class Services:
                     )
                 after = self._reassess(host_id, network, storage, ctx.job.id)
             vswitch = after.target_vswitch
-            trunk = next((pg.name for pg in network.portgroups if pg.is_trunk and pg.vswitch == vswitch
-                          and pg.security.accepts_all), None)  # fmt: skip
+            trunk = next(
+                (
+                    pg.name
+                    for pg in network.portgroups
+                    if pg.is_trunk and pg.vswitch == vswitch and pg.security.accepts_all
+                ),
+                None,
+            )
             external = next((pg.name for pg in network.portgroups if pg.name == "Holodeck-External"), None)
             data = {
                 "applied": [r.model_dump(mode="json") for r in applied],
@@ -673,8 +699,9 @@ class Services:
             self.store.save_result(host_id=host_id, kind="host_prep", job_id=ctx.job.id, data=data)
             return {"host_prep": data, "readiness": after.model_dump(mode="json")}
 
-        return self.runner.submit(kind=JobKind.HOST_PREP, host_id=host_id,
-                                  params={"checks": [a.check for a in selected]}, func=run)  # fmt: skip
+        return self.runner.submit(
+            kind=JobKind.HOST_PREP, host_id=host_id, params={"checks": [a.check for a in selected]}, func=run
+        )
 
     def start_verify_jumbo(self, host_id: str) -> Job:
         """Loop test 9000-byte frames through the physical switch (temporary changes, always reverted)."""
@@ -685,8 +712,13 @@ class Services:
         pinned = self.store.get_pin(host_id, "os-ssh")
 
         async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.plan([("read", "Read the network"), ("loop", "Loop test through the switch"),
-                      ("reassess", "Update the readiness report")])  # fmt: skip
+            ctx.plan(
+                [
+                    ("read", "Read the network"),
+                    ("loop", "Loop test through the switch"),
+                    ("reassess", "Update the readiness report"),
+                ]
+            )
             target = await asyncio.to_thread(self.os_target, host_id, access)
             async with ctx.step("read", "Read the network"):
                 network = await self.esxi.read_network(target, password)
@@ -703,9 +735,15 @@ class Services:
                 vlan = network.management_vlan()
             async with ctx.step("loop", "Loop test through the switch") as step:
                 result = await self.esxi.verify_jumbo(
-                    target, password, vswitch=vswitch.name, uplinks=uplinks, vlan=vlan, mtu=9000,
-                    pinned_ssh_key=pinned[1] if pinned else None, log=lambda m: ctx.progress(0.5, m),
-                )  # fmt: skip
+                    target,
+                    password,
+                    vswitch=vswitch.name,
+                    uplinks=uplinks,
+                    vlan=vlan,
+                    mtu=9000,
+                    pinned_ssh_key=pinned[1] if pinned else None,
+                    log=lambda m: ctx.progress(0.5, m),
+                )
                 if result.ssh_host_key and not pinned:
                     self.store.set_pin(host_id, "os-ssh", access.address, result.ssh_host_key)
                 self.store.save_result(
@@ -725,6 +763,130 @@ class Services:
             return {"jumbo": result.model_dump(mode="json")}
 
         return self.runner.submit(kind=JobKind.VERIFY_JUMBO, host_id=host_id, params={}, func=run)
+
+    def _holodeck_inputs(
+        self, host_id: str, config_set_id: str
+    ) -> tuple[ConfigSet, HolodeckSettings, HolodeckHostValues, dict[str, str]]:
+        if not config_set_id:
+            raise OsConfigError("Choose a Holodeck config set (params.config_set_id)")
+        config_set = self.get_config_set(config_set_id)
+        if config_set.os_family != HolodeckPlugin.family:
+            raise OsConfigError(f"{config_set.name} is not a Holodeck config set")
+        values = self.store.get_host_values(host_id, HolodeckPlugin.family)
+        if values is None:
+            raise OsConfigError("Set this host's Holodeck values first (Holorouter IP, instance ID)")
+        return (
+            config_set,
+            HolodeckSettings.model_validate(config_set.settings),
+            HolodeckHostValues.model_validate(values),
+            self.config_set_secrets(config_set_id),
+        )
+
+    def start_holorouter(self, host_id: str, config_set_id: str) -> Job:
+        """Deploy the Holorouter OVA on the prepared datastore and port groups, then wait for SSH."""
+        host = self.get_host(host_id)
+        access, secret = self._os_access(host_id)
+        password = self._cipher.decrypt(secret)
+        config_set, settings, values, secrets = self._holodeck_inputs(host_id, config_set_id)
+        if not secrets.get("holorouter_password"):
+            raise OsConfigError(f"Set the Holorouter password in config set {config_set.name}")
+        readiness = self._readiness(host_id)
+        if not readiness.ready:
+            raise ConflictError("The host is not ready for Holodeck yet; see the readiness report")
+        prep = self.store.latest_output(host_id=host_id, kind="host_prep")
+        if prep is None or not prep.data.get("trunk_portgroup") or not prep.data.get("external_portgroup"):
+            raise ConflictError("Prepare host must have created the trunk and external port groups")
+        datastore = prep.data.get("datastore") or readiness.storage.datastore
+        images = [i for i in self.isos.list() if i.os_family == "holorouter"]
+        if not images:
+            raise NotFoundError(f"No Holorouter OVA in the image repository ({self.settings.iso_dir})")
+        image = max(images, key=lambda i: (i.version or "", i.build or ""))
+        resolved = self.isos.resolve(image.id)
+        assert resolved is not None
+        ova = resolved[1]
+        bools = {True: "True", False: "False"}
+        properties = {
+            "hostname": values.holorouter_hostname,
+            "password": secrets["holorouter_password"],
+            "ip": values.holorouter_ip,
+            "mask": str(settings.holorouter_prefix),
+            "gateway": settings.holorouter_gateway,
+            "dns_server": settings.holorouter_dns,
+            "ntp_server": settings.holorouter_ntp,
+            "ssh_enabled": "True",
+            "webtop_enabled": bools[settings.webtop],
+            "gitops_enabled": bools[settings.gitops],
+        }
+        networks = {
+            "VM Management Network": prep.data["external_portgroup"],
+            "Trunk Portgroup for Site A": prep.data["trunk_portgroup"],
+            "Trunk Portgroup for Site B": prep.data["trunk_portgroup"],
+        }
+        vm_name = f"{values.instance_id}-holorouter"
+
+        async def run(ctx: JobContext) -> dict[str, Any]:
+            ctx.plan(
+                [("deploy", f"Deploy {image.filename}"), ("ssh", "Wait for the Holorouter to answer on SSH")]
+            )
+            loop = asyncio.get_running_loop()
+
+            def progress(fraction: float, message: str) -> None:  # called from the upload thread
+                loop.call_soon_threadsafe(ctx.progress, fraction, message)
+
+            target = await asyncio.to_thread(self.os_target, host_id, access)
+            async with ctx.step("deploy", f"Deploy {image.filename}") as step:
+                result = await self.esxi.deploy_ova(
+                    target,
+                    password,
+                    ova,
+                    vm_name=vm_name,
+                    datastore=datastore or "",
+                    networks=networks,
+                    properties=properties,
+                    progress=progress,
+                )
+                step.message = (
+                    f"uploaded {result.uploaded_bytes / 1e9:.2f} GB in {result.seconds / 60:.0f} min"
+                    if result.created
+                    else f"{vm_name} already exists; left as is"
+                )
+            async with ctx.step("ssh", "Wait for the Holorouter to answer on SSH") as step:
+                await self._wait_for_port(values.holorouter_ip, 22, minutes=20, ctx=ctx)
+                step.message = f"{values.holorouter_ip}:22 answers"
+            data = {
+                "vm_name": vm_name,
+                "ip": values.holorouter_ip,
+                "hostname": values.holorouter_hostname,
+                "version": image.version,
+                "image": image.filename,
+                "config_set_id": config_set.id,
+                "datastore": datastore,
+                "networks": networks,
+                "created": result.created,
+                "webtop_url": f"http://{values.holorouter_ip}:30000" if settings.webtop else None,
+            }
+            self.store.save_result(host_id=host_id, kind="holorouter", job_id=ctx.job.id, data=data)
+            return {"holorouter": data}
+
+        params = {"config_set_id": config_set.id, "vm_name": vm_name, "image": image.filename}
+        return self.runner.submit(kind=JobKind.HOLOROUTER, host_id=host.id, params=params, func=run)
+
+    async def _wait_for_port(self, address: str, port: int, *, minutes: float, ctx: JobContext) -> None:
+        if not isinstance(self.esxi, LiveEsxiOps):
+            return  # simulated appliances have no real network presence
+        deadline = asyncio.get_running_loop().time() + minutes * 60
+        while True:
+            try:
+                _, writer = await asyncio.wait_for(asyncio.open_connection(address, port), timeout=5)
+                writer.close()
+                return
+            except (OSError, TimeoutError):
+                if asyncio.get_running_loop().time() > deadline:
+                    raise OsConfigError(
+                        f"{address}:{port} did not answer within {minutes:.0f} minutes"
+                    ) from None
+                ctx.progress(0.95, f"Waiting for {address}:{port}")
+                await asyncio.sleep(10)
 
     def job_diagnostics(self, job_id: str) -> dict[str, Any]:
         """Everything needed to debug a job from a file: job, host, BMC identity and the redacted log."""
@@ -800,8 +962,9 @@ class Services:
         client = self._client_factory(host, password)
         async with client:
             identity, inventory = await collect_inventory(client, ctx.progress)
-        diagnostics.record("bmc_identity", **identity.model_dump(mode="json"),
-                           firmware=inventory.bmc.model_dump(mode="json"))  # fmt: skip
+        diagnostics.record(
+            "bmc_identity", **identity.model_dump(mode="json"), firmware=inventory.bmc.model_dump(mode="json")
+        )
         audit = BmcAudit(
             requests=len(client.request_log),
             non_get=[f"{r.method} {r.path}" for r in client.request_log if r.method != "GET"],
@@ -864,8 +1027,9 @@ class Services:
         elif role == "os-ssh":  # an SSH key can only be seen by logging in: pinned again on next use
             address = self._os_access(host_id)[0].address
             self.store.delete_pin(host_id, role)
-            return PinnedCertificate(role=role, address=address, fingerprint="(pinned again on next use)",
-                                     pinned_at=utcnow())  # fmt: skip
+            return PinnedCertificate(
+                role=role, address=address, fingerprint="(pinned again on next use)", pinned_at=utcnow()
+            )
         else:
             raise NotFoundError(f"Unknown certificate role '{role}' (bmc, os or os-ssh)")
         self.pinned_pem(host_id, role, address, repin=True)
