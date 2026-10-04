@@ -153,6 +153,17 @@ class ConfigSetWrite(BaseModel):
         default=None,
         description="Root/admin password set by the install. On update, omit to keep the stored one.",
     )
+    secrets: dict[str, SecretStr] | None = Field(
+        default=None,
+        description="Secret fields of the family (see secret_fields in GET /os-families), e.g. "
+        "holorouter_password, download_token. Write-only; on update, omitted ones are kept.",
+    )
+
+    def secret_values(self) -> dict[str, str]:
+        values = {k: v.get_secret_value() for k, v in (self.secrets or {}).items() if v.get_secret_value()}
+        if self.root_password and self.root_password.get_secret_value():
+            values["root_password"] = self.root_password.get_secret_value()
+        return values
 
 
 class ConfigSet(BaseModel):
@@ -161,6 +172,9 @@ class ConfigSet(BaseModel):
     os_family: str
     settings: dict[str, Any]
     has_root_password: bool
+    secrets_set: list[str] = Field(
+        default_factory=list, description="Names of the secrets stored (never values)"
+    )
     source: str = Field(description='"manual" or "captured from <host> (<address>)"')
     created_at: datetime
     updated_at: datetime

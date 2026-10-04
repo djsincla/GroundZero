@@ -387,11 +387,13 @@ class Services:
         settings = self._validated_settings(req.os_family, req.settings)
         if self.store.find_config_set_by_name(req.name):
             raise ConflictError(f"A config set named '{req.name}' already exists")
+        values = self._secret_values(req)
         return self.store.add_config_set(
             name=req.name,
             os_family=req.os_family,
             settings=settings,
-            secrets=self._seal(req.root_password.get_secret_value()) if req.root_password else None,
+            secrets=self._seal_all(values) if values else None,
+            secret_names=sorted(values),
             source=source,
         )
 
@@ -403,14 +405,41 @@ class Services:
         if other is not None and other.id != set_id:
             raise ConflictError(f"A config set named '{req.name}' already exists")
         settings = self._validated_settings(req.os_family, req.settings)
-        self.store.update_config_set(
-            set_id,
-            name=req.name,
-            settings=settings,
-            secrets=self._seal(req.root_password.get_secret_value()) if req.root_password else None,
-            keep_secrets=req.root_password is None,
-        )
+        values = self._secret_values(req)
+        if values:  # merge: secrets not sent are kept
+            stored = self.store.get_config_set(set_id)
+            merged = {**(self._unseal(stored[1]) if stored and stored[1] else {}), **values}
+            sealed = self._seal_all(merged)
+            self.store.update_config_set(
+                set_id,
+                name=req.name,
+                settings=settings,
+                secrets=sealed,
+                secret_names=sorted(merged),
+                keep_secrets=False,
+            )
+        else:
+            self.store.update_config_set(
+                set_id, name=req.name, settings=settings, secrets=None, keep_secrets=True
+            )
         return self.get_config_set(set_id)
+
+    def config_set_secrets(self, set_id: str) -> dict[str, str]:
+        """Decrypted secrets of a config set (internal use only; never returned by the API)."""
+        stored = self.store.get_config_set(set_id)
+        if stored is None:
+            raise NotFoundError(f"Config set {set_id} not found")
+        return self._unseal(stored[1]) if stored[1] else {}
+
+    def _secret_values(self, req: ConfigSetWrite) -> dict[str, str]:
+        values = req.secret_values()
+        allowed = set(plugin_for(req.os_family).secret_fields)
+        unknown = sorted(set(values) - allowed)
+        if unknown:
+            raise OsConfigError(
+                f"Unknown secret(s) for {req.os_family}: {', '.join(unknown)}; allowed: {sorted(allowed)}"
+            )
+        return values
 
     def delete_config_set(self, set_id: str) -> None:
         if not self.store.delete_config_set(set_id):
@@ -904,7 +933,10 @@ class Services:
             raise SettingsValidationError(where, exc) from exc
 
     def _seal(self, root_password: str) -> bytes:
-        return self._cipher.encrypt(json.dumps({"root_password": root_password}))
+        return self._seal_all({"root_password": root_password})
+
+    def _seal_all(self, values: dict[str, str]) -> bytes:
+        return self._cipher.encrypt(json.dumps(values))
 
     def _unseal(self, sealed: bytes) -> dict[str, str]:
         data: dict[str, str] = json.loads(self._cipher.decrypt(sealed))

@@ -406,6 +406,14 @@
             "title": "Os Family",
             "type": "string"
           },
+          "secrets_set": {
+            "description": "Names of the secrets stored (never values)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Secrets Set",
+            "type": "array"
+          },
           "settings": {
             "additionalProperties": true,
             "title": "Settings",
@@ -462,6 +470,23 @@
             ],
             "description": "Root/admin password set by the install. On update, omit to keep the stored one.",
             "title": "Root Password"
+          },
+          "secrets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Secret fields of the family (see secret_fields in GET /os-families), e.g. holorouter_password, download_token. Write-only; on update, omitted ones are kept.",
+            "title": "Secrets"
           },
           "settings": {
             "additionalProperties": true,
@@ -1237,6 +1262,11 @@
             "title": "Id",
             "type": "string"
           },
+          "kind": {
+            "default": "iso",
+            "title": "Kind",
+            "type": "string"
+          },
           "modified_at": {
             "format": "date-time",
             "title": "Modified At",
@@ -1252,6 +1282,17 @@
               }
             ],
             "title": "Os Family"
+          },
+          "product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product"
           },
           "sha256": {
             "title": "Sha256",

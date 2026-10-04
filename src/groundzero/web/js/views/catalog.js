@@ -4,6 +4,15 @@ import {
 } from "../core.js";
 import { schemaForm } from "../forms.js";
 
+const SECRET_LABELS = {
+  root_password: "Root password", holorouter_password: "Holorouter password",
+  download_token: "Broadcom download token", offline_depot_password: "Offline depot password",
+};
+const SECRET_HELP = {
+  root_password: "Set on the installed OS. Encrypted at rest and never shown again.",
+  download_token: "Needed for the Online depot. Encrypted at rest and never shown again.",
+};
+
 // ── config sets ──
 export async function viewConfigSets(app) {
   const [sets, families] = await Promise.all([api("GET", "/config-sets"), api("GET", "/os-families")]);
@@ -13,12 +22,13 @@ export async function viewConfigSets(app) {
       h("button", { onclick: captureFromServerDialog }, "From a running server…"),
       h("a", { class: "button primary", href: "#/config-sets/new" }, "New config set")),
     card({}, sets.length
-      ? table(["Name", "OS", "Source", "Root password", "Updated"], sets.map((s) =>
+      ? table(["Name", "Family", "Source", "Secrets", "Updated"], sets.map((s) =>
           h("tr", { "data-config-set": s.name },
             h("td", {}, h("a", { href: `#/config-sets/${s.id}` }, s.name)),
             h("td", {}, title[s.os_family] || s.os_family),
             h("td", { class: "muted" }, s.source),
-            h("td", {}, s.has_root_password ? badge("pass", "stored") : badge("none", "not set")),
+            h("td", {}, (s.secrets_set || []).length
+              ? badge("pass", `${s.secrets_set.length} stored`) : badge("none", "not set")),
             h("td", { class: "muted" }, fmtTime(s.updated_at)))))
       : empty("No config sets yet. Build one from a running server, or create one from scratch.",
           h("button", { onclick: captureFromServerDialog }, "From a running server…"),
@@ -92,8 +102,19 @@ export async function viewConfigSet(app, id, query) {
   const nameError = h("p", { class: "field-error", role: "alert" });
   const familySelect = h("select", { id: "cs-family", disabled: !isNew },
     families.map((f) => h("option", { value: f.family, selected: f.family === family.family }, f.title)));
-  const password = h("input", { id: "cs-password", type: "password", autocomplete: "new-password",
-    placeholder: existing?.has_root_password ? "stored: leave blank to keep" : "" });
+  const secretsSlot = h("div");
+  let secretInputs = {};
+  const renderSecrets = () => {
+    secretInputs = {};
+    secretsSlot.replaceChildren(...family.secret_fields.map((name) => {
+      const stored = (existing?.secrets_set || []).includes(name) && existing.os_family === family.family;
+      const input = h("input", { id: `cs-secret-${name}`, type: "password", autocomplete: "new-password",
+        placeholder: stored ? "stored: leave blank to keep" : "" });
+      secretInputs[name] = input;
+      return h("div", { class: "field" }, h("label", { for: input.id }, SECRET_LABELS[name] || name), input,
+        h("p", { class: "help" }, SECRET_HELP[name] || "Encrypted at rest and never shown again."));
+    }));
+  };
   const formSlot = h("div");
   let form;
   const renderForm = () => {
@@ -104,16 +125,19 @@ export async function viewConfigSet(app, id, query) {
   familySelect.addEventListener("change", () => {
     family = families.find((f) => f.family === familySelect.value);
     renderForm();
+    renderSecrets();
   });
   renderForm();
+  renderSecrets();
 
   const status = h("div");
   const save = async () => {
     form.clearErrors();
     nameError.textContent = "";
     status.replaceChildren();
+    const secrets = Object.fromEntries(Object.entries(secretInputs).filter(([, i]) => i.value).map(([k, i]) => [k, i.value]));
     const body = { name: name.value.trim(), os_family: family.family, settings: form.value(),
-      root_password: password.value || null };
+      secrets: Object.keys(secrets).length ? secrets : null };
     try {
       const saved = await api(isNew ? "POST" : "PUT", isNew ? "/config-sets" : `/config-sets/${id}`, body);
       toast(`Saved ${saved.name}`, "success");
@@ -137,7 +161,6 @@ export async function viewConfigSet(app, id, query) {
     },
   });
 
-  const secrets = family.secret_fields.includes("root_password");
   mount(app, 
     pageHeader(isNew ? "New config set" : existing.name,
       existing ? `${family.title} · ${existing.source} · updated ${fmtTime(existing.updated_at)}` : family.title,
@@ -149,9 +172,7 @@ export async function viewConfigSet(app, id, query) {
         h("div", { class: "field" }, h("label", { for: "cs-name" }, "Name", h("span", { class: "req" }, " *")), name, nameError),
         h("div", { class: "field" }, h("label", { for: "cs-family" }, "OS family"), familySelect)),
       formSlot,
-      secrets ? h("div", { class: "field" },
-        h("label", { for: "cs-password" }, "Root password"), password,
-        h("p", { class: "help" }, "Set on the installed OS. Encrypted at rest and never shown again.")) : null,
+      secretsSlot,
       status,
       h("div", { class: "actions" }, h("a", { class: "button", href: "#/config-sets" }, "Back"),
         h("button", { class: "primary", onclick: save }, isNew ? "Create" : "Save"))));

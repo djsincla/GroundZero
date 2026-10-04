@@ -93,6 +93,7 @@ _MIGRATIONS = (
     ("jobs", "steps", "TEXT NOT NULL DEFAULT '[]'"),
     ("hosts", "os_epoch", "INTEGER NOT NULL DEFAULT 0"),  # bumped by every successful OS install
     ("results", "epoch", "INTEGER NOT NULL DEFAULT 0"),  # the host's os_epoch when the result was made
+    ("config_sets", "secret_names", "TEXT"),  # names of the sealed secrets (values stay encrypted)
 )
 
 
@@ -217,15 +218,24 @@ class Store:
 
     # ── config sets ──────────────────────────────────────────────────────
     def add_config_set(
-        self, *, name: str, os_family: str, settings: dict[str, Any], secrets: bytes | None, source: str
+        self,
+        *,
+        name: str,
+        os_family: str,
+        settings: dict[str, Any],
+        secrets: bytes | None,
+        source: str,
+        secret_names: list[str] | None = None,
     ) -> ConfigSet:
         now = utcnow()
+        names = sorted(secret_names or ([] if secrets is None else ["root_password"]))
         cs = ConfigSet(
             id=new_id(),
             name=name,
             os_family=os_family,
             settings=settings,
-            has_root_password=secrets is not None,
+            has_root_password="root_password" in names,
+            secrets_set=names,
             source=source,
             created_at=now,
             updated_at=now,
@@ -233,14 +243,15 @@ class Store:
         with self._tx() as cur:
             cur.execute(
                 "INSERT INTO config_sets"
-                " (id, name, os_family, settings, secrets, source, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " (id, name, os_family, settings, secrets, secret_names, source, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     cs.id,
                     name,
                     os_family,
                     json.dumps(settings),
                     secrets,
+                    json.dumps(names),
                     source,
                     now.isoformat(),
                     now.isoformat(),
@@ -249,7 +260,14 @@ class Store:
         return cs
 
     def update_config_set(
-        self, set_id: str, *, name: str, settings: dict[str, Any], secrets: bytes | None, keep_secrets: bool
+        self,
+        set_id: str,
+        *,
+        name: str,
+        settings: dict[str, Any],
+        secrets: bytes | None,
+        keep_secrets: bool,
+        secret_names: list[str] | None = None,
     ) -> None:
         with self._tx() as cur:
             if keep_secrets:
@@ -258,9 +276,11 @@ class Store:
                     (name, json.dumps(settings), utcnow().isoformat(), set_id),
                 )
             else:
+                names = sorted(secret_names or ([] if secrets is None else ["root_password"]))
                 cur.execute(
-                    "UPDATE config_sets SET name = ?, settings = ?, secrets = ?, updated_at = ? WHERE id = ?",
-                    (name, json.dumps(settings), secrets, utcnow().isoformat(), set_id),
+                    "UPDATE config_sets SET name = ?, settings = ?, secrets = ?, secret_names = ?,"
+                    " updated_at = ? WHERE id = ?",
+                    (name, json.dumps(settings), secrets, json.dumps(names), utcnow().isoformat(), set_id),
                 )
 
     def get_config_set(self, set_id: str) -> tuple[ConfigSet, bytes | None] | None:
@@ -511,8 +531,16 @@ def _row_to_config_set(row: sqlite3.Row) -> ConfigSet:
         name=row["name"],
         os_family=row["os_family"],
         settings=json.loads(row["settings"]),
-        has_root_password=row["secrets"] is not None,
+        has_root_password="root_password" in _secret_names(row),
+        secrets_set=_secret_names(row),
         source=row["source"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
     )
+
+
+def _secret_names(row: sqlite3.Row) -> list[str]:
+    if row["secret_names"]:
+        names: list[str] = json.loads(row["secret_names"])
+        return names
+    return ["root_password"] if row["secrets"] is not None else []  # rows from before named secrets

@@ -105,7 +105,8 @@ def test_config_set_crud_never_returns_the_password(api: TestClient) -> None:
     )
 
     for resp in (api.get("/api/v1/config-sets"), api.get(f"/api/v1/config-sets/{cs['id']}"), upd):
-        assert SECRET not in resp.text and '"root_password"' not in resp.text
+        assert SECRET not in resp.text and '"root_password":' not in resp.text  # names only, never values
+    assert cs["secrets_set"] == ["root_password"]
 
     assert api.delete(f"/api/v1/config-sets/{cs['id']}").status_code == 204
     assert api.get(f"/api/v1/config-sets/{cs['id']}").status_code == 404
@@ -205,3 +206,81 @@ def test_isos_are_listed_after_a_restart_without_a_rescan(api: TestClient) -> No
     """Regression: GET /isos was empty after every server start until someone pressed Rescan."""
     names = [i["filename"] for i in api.get("/api/v1/isos").json()]
     assert "VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso" in names
+
+
+HOLODECK = {"holorouter_gateway": "192.0.2.1", "holorouter_dns": "8.8.8.8"}
+
+
+def test_holodeck_settings_are_a_config_set_family_with_named_secrets(api: TestClient) -> None:
+    fam = next(f for f in api.get("/api/v1/os-families").json() if f["family"] == "holodeck")
+    assert fam["install_supported"] is False
+    assert fam["secret_fields"] == ["holorouter_password", "download_token", "offline_depot_password"]
+    assert {"version", "depot_type", "holorouter_gateway"} <= set(fam["settings_schema"]["properties"])
+    assert set(fam["host_values_schema"]["required"]) == {"holorouter_ip"}
+
+    body = {"name": "lab-holodeck", "os_family": "holodeck", "settings": HOLODECK,
+            "secrets": {"holorouter_password": "Holo-pass1!", "download_token": "tok-123456"}}  # fmt: skip
+    created = api.post("/api/v1/config-sets", json=body)
+    assert created.status_code == 201, created.text
+    cs = created.json()
+    assert cs["secrets_set"] == ["download_token", "holorouter_password"]
+    assert cs["settings"]["version"] == "9.1.1.0" and cs["settings"]["management_only"] is True
+
+    # Updating one secret keeps the others; values never come back
+    upd = api.put(f"/api/v1/config-sets/{cs['id']}",
+                  json={**body, "secrets": {"offline_depot_password": "depot-pw"}})  # fmt: skip
+    assert upd.json()["secrets_set"] == ["download_token", "holorouter_password", "offline_depot_password"]
+    for resp in (created, upd, api.get(f"/api/v1/config-sets/{cs['id']}"), api.get("/api/v1/config-sets")):
+        assert (
+            "Holo-pass1!" not in resp.text and "tok-123456" not in resp.text and "depot-pw" not in resp.text
+        )
+
+    wrong = api.post(
+        "/api/v1/config-sets", json={**body, "name": "x", "secrets": {"root_password": "nope1234"}}
+    )
+    assert wrong.status_code == 422 and "Unknown secret" in wrong.json()["detail"]
+    bad = api.post(
+        "/api/v1/config-sets", json={**body, "name": "y", "settings": {**HOLODECK, "cidr": "10.1.0.0/24"}}
+    )
+    assert bad.status_code == 422 and ("settings", "cidr") in {tuple(e["loc"]) for e in bad.json()["errors"]}
+
+
+def test_holodeck_host_values(api: TestClient) -> None:
+    host_id = _host(api, with_os=False)
+    ok = api.put(f"/api/v1/hosts/{host_id}/host-values/holodeck", json={"holorouter_ip": "192.0.2.150"})
+    expected = {"instance_id": "holo1", "holorouter_ip": "192.0.2.150", "holorouter_hostname": "holorouter"}
+    assert ok.status_code == 200 and ok.json() == expected
+    bad_values = {"holorouter_ip": "192.0.2.150", "instance_id": "Bad ID!"}
+    bad = api.put(f"/api/v1/hosts/{host_id}/host-values/holodeck", json=bad_values)
+    assert bad.status_code == 422
+
+
+def test_ovas_are_recognised_in_the_image_repository(tmp_path: Path, api: TestClient) -> None:
+    import tarfile
+
+    isos = Path(api.app.state.services.settings.iso_dir)  # type: ignore[attr-defined]
+    for name, product, extra in [
+        ("holorouter-9.1.1.0456.ova", "HoloRouter", ""),
+        ("VCF-SDDC-Manager-Appliance-9.1.1.0.25713928.ova", "VMware VCF SDDC Manager Appliance",
+         "<Version>9.1.1.0</Version><FullVersion>9.1.1.0_Build_25713928</FullVersion>"),
+    ]:  # fmt: skip
+        ovf = tmp_path / name.replace(".ova", ".ovf")
+        ovf.write_text(
+            f"<Envelope><ProductSection><Product>{product}</Product>{extra}</ProductSection></Envelope>"
+        )
+        with tarfile.open(isos / name, "w") as tar:
+            tar.add(ovf, arcname=ovf.name)
+    by_name = {i["filename"]: i for i in api.post("/api/v1/isos/rescan").json()}
+    router = by_name["holorouter-9.1.1.0456.ova"]
+    assert (router["kind"], router["os_family"], router["version"], router["build"]) == (
+        "ova",
+        "holorouter",
+        "9.1.1",
+        "0456",
+    )
+    installer = by_name["VCF-SDDC-Manager-Appliance-9.1.1.0.25713928.ova"]
+    assert (installer["os_family"], installer["version"], installer["build"]) == (
+        "vcf-installer",
+        "9.1.1.0",
+        "25713928",
+    )
