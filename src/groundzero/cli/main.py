@@ -670,6 +670,8 @@ def dev_capture(
     from groundzero.inventory.collect import collect_inventory
     from groundzero.redfish.capture import Recorder
     from groundzero.redfish.client import RedfishClient
+    from groundzero.redfish.detect import detect
+    from groundzero.redfish.storage import read_storage_layout
 
     user, password = _bmc_credentials(user)
     recorder = Recorder()
@@ -678,6 +680,9 @@ def dev_capture(
         client = RedfishClient(bmc, user, password, verify_tls=verify_tls, on_response=recorder)
         async with client:
             await collect_inventory(client, lambda _f, msg: console.print(msg, style="dim"))
+            console.print("Reading the storage layout", style="dim")
+            identity = await detect(client)
+            await read_storage_layout(client, identity.system_path, dell=identity.vendor.value == "dell")
         return [(r.method, r.path, r.status) for r in client.request_log]
 
     log = asyncio.run(run())

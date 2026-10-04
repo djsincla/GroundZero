@@ -1,0 +1,73 @@
+{
+  "@Redfish.Settings": {
+    "@odata.context": "/redfish/v1/$metadata#Settings.Settings",
+    "@odata.type": "#Settings.v1_3_5.Settings",
+    "SettingsObject": {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.6:Enclosure.Internal.0-2:PCIeExtender.Slot.3/Settings"
+    },
+    "SupportedApplyTimes": [
+      "Immediate",
+      "OnReset",
+      "AtMaintenanceWindowStart",
+      "InMaintenanceWindowOnReset"
+    ]
+  },
+  "@odata.context": "/redfish/v1/$metadata#Volume.Volume",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.6:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+  "@odata.type": "#Volume.v1_8_0.Volume",
+  "Actions": {
+    "#Volume.CheckConsistency": {
+      "@Redfish.OperationApplyTimeSupport": {
+        "@odata.type": "#Settings.v1_3_5.OperationApplyTimeSupport",
+        "SupportedValues": [
+          "Immediate",
+          "OnReset"
+        ]
+      },
+      "target": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.6:Enclosure.Internal.0-2:PCIeExtender.Slot.3/Actions/Volume.CheckConsistency"
+    },
+    "#Volume.Initialize": {
+      "@Redfish.OperationApplyTimeSupport": {
+        "@odata.type": "#Settings.v1_3_5.OperationApplyTimeSupport",
+        "SupportedValues": [
+          "Immediate",
+          "OnReset"
+        ]
+      },
+      "InitializeType@Redfish.AllowableValues": [
+        "Fast",
+        "Slow"
+      ],
+      "target": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.6:Enclosure.Internal.0-2:PCIeExtender.Slot.3/Actions/Volume.Initialize"
+    }
+  },
+  "BlockSizeBytes": 0,
+  "CapacityBytes": 1000204886016,
+  "Description": "PCIe SSD in Slot 6 in Bay 2",
+  "DisplayName": null,
+  "Encrypted": null,
+  "EncryptionTypes": [],
+  "Id": "Disk.Bay.6:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+  "Identifiers": [],
+  "Links": {
+    "Drives": [
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Drives/Disk.Bay.6:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+      }
+    ],
+    "Drives@odata.count": 1
+  },
+  "MediaSpanCount": null,
+  "Name": "PCIe SSD in Slot 6 in Bay 2",
+  "Operations": [],
+  "OptimumIOSizeBytes": null,
+  "RAIDType": null,
+  "ReadCachePolicy": null,
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "VolumeType": "RawDevice",
+  "WriteCachePolicy": null
+}

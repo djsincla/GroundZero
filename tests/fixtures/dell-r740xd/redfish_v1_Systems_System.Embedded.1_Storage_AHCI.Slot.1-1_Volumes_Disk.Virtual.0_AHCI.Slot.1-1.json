@@ -1,0 +1,148 @@
+{
+  "@Redfish.Settings": {
+    "@odata.context": "/redfish/v1/$metadata#Settings.Settings",
+    "@odata.type": "#Settings.v1_3_5.Settings",
+    "SettingsObject": {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Volumes/Disk.Virtual.0:AHCI.Slot.1-1/Settings"
+    },
+    "SupportedApplyTimes": [
+      "Immediate",
+      "OnReset",
+      "AtMaintenanceWindowStart",
+      "InMaintenanceWindowOnReset"
+    ]
+  },
+  "@odata.context": "/redfish/v1/$metadata#Volume.Volume",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Volumes/Disk.Virtual.0:AHCI.Slot.1-1",
+  "@odata.type": "#Volume.v1_8_0.Volume",
+  "Actions": {
+    "#Volume.CheckConsistency": {
+      "@Redfish.OperationApplyTimeSupport": {
+        "@odata.type": "#Settings.v1_3_5.OperationApplyTimeSupport",
+        "SupportedValues": [
+          "Immediate",
+          "OnReset"
+        ]
+      },
+      "target": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Volumes/Disk.Virtual.0:AHCI.Slot.1-1/Actions/Volume.CheckConsistency"
+    },
+    "#Volume.Initialize": {
+      "@Redfish.OperationApplyTimeSupport": {
+        "@odata.type": "#Settings.v1_3_5.OperationApplyTimeSupport",
+        "SupportedValues": [
+          "Immediate",
+          "OnReset"
+        ]
+      },
+      "InitializeType@Redfish.AllowableValues": [
+        "Fast",
+        "Slow"
+      ],
+      "target": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Volumes/Disk.Virtual.0:AHCI.Slot.1-1/Actions/Volume.Initialize"
+    }
+  },
+  "BlockSizeBytes": 512,
+  "CapacityBytes": 480036847616,
+  "Description": "Virtual Disk 0 on AHCI Controller in slot 1",
+  "DisplayName": "boss",
+  "Encrypted": false,
+  "EncryptionTypes": [
+    "NativeDriveEncryption"
+  ],
+  "EncryptionTypes@odata.count": 1,
+  "Id": "Disk.Virtual.0:AHCI.Slot.1-1",
+  "Identifiers": [],
+  "Identifiers@odata.count": 0,
+  "Links": {
+    "Drives": [
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Drives/Disk.Direct.0-0:AHCI.Slot.1-1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Drives/Disk.Direct.1-1:AHCI.Slot.1-1"
+      }
+    ],
+    "Drives@odata.count": 2
+  },
+  "MediaSpanCount": 2,
+  "Name": "boss",
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellVolume.v1_0_0.DellVolume",
+      "DellVirtualDisk": {
+        "@odata.context": "/redfish/v1/$metadata#DellVirtualDisk.DellVirtualDisk",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/AHCI.Slot.1-1/Volumes/Disk.Virtual.0:AHCI.Slot.1-1/Oem/Dell/DellVolumes/Disk.Virtual.0:AHCI.Slot.1-1",
+        "@odata.type": "#DellVirtualDisk.v1_2_0.DellVirtualDisk",
+        "BusProtocol": "SATA",
+        "Cachecade": "NonCachecadeVD",
+        "Description": "An instance of DellVirtualDisk will have data specific to the Virtual Disks in the system.",
+        "DiskCachePolicy": "Default",
+        "Id": "Disk.Virtual.0:AHCI.Slot.1-1",
+        "LastSystemInventoryTime": "2025-10-09T03:17:36+00:00",
+        "LastUpdateTime": "2025-10-03T23:57:49+00:00",
+        "LockStatus": "Unlocked",
+        "MediaType": "SolidStateDrive",
+        "Name": "DellVirtualDisk",
+        "ObjectStatus": "Current",
+        "OperationName": "None",
+        "OperationPercentComplete": 0,
+        "PrimaryStatus": "OK",
+        "RaidStatus": "Online",
+        "ReadCachePolicy": "NoReadAhead",
+        "RemainingRedundancy": 1,
+        "SpanDepth": 1,
+        "SpanLength": 2,
+        "StartingLBAinBlocks": 0,
+        "StripeSize": "64KB",
+        "T10PIStatus": "Disabled",
+        "VirtualDiskTargetID": 0,
+        "WriteCachePolicy": "WriteThrough"
+      },
+      "DellVirtualDisk@Redfish.Deprecated": "Please migrate to use DellVolume",
+      "DellVolume": {
+        "BusProtocol": "SATA",
+        "Cachecade": "NonCachecadeVD",
+        "DiskCachePolicy": "Default",
+        "DiskCachePolicy@Redfish.AllowableValues": [
+          "Default",
+          "Disabled",
+          "Enabled"
+        ],
+        "LastSystemInventoryTime": "2025-10-09T03:17:36+00:00",
+        "LastUpdateTime": "2025-10-03T23:57:49+00:00",
+        "LockStatus": "Unlocked",
+        "MediaType": "SolidStateDrive",
+        "ObjectStatus": "Current",
+        "OperationName": "None",
+        "OperationPercentComplete": 0,
+        "PrimaryStatus": "OK",
+        "RaidStatus": "Online",
+        "RemainingRedundancy": 1,
+        "SpanDepth": 1,
+        "SpanLength": 2,
+        "StartingLBAinBlocks": 0,
+        "StripeSize": "64KB",
+        "T10PIStatus": "Disabled",
+        "VirtualDiskTargetID": 0
+      }
+    }
+  },
+  "Operations": [],
+  "Operations@odata.count": 0,
+  "OptimumIOSizeBytes": 65536,
+  "RAIDType": "RAID1",
+  "ReadCachePolicy": "Off",
+  "ReadCachePolicy@Redfish.AllowableValues": [
+    "Off"
+  ],
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  },
+  "VolumeType": "Mirrored",
+  "WriteCachePolicy": "WriteThrough",
+  "WriteCachePolicy@Redfish.AllowableValues": [
+    "WriteThrough"
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "@Redfish.OperationApplyTimeSupport": {
+    "@odata.type": "#Settings.v1_3_5.OperationApplyTimeSupport",
+    "SupportedValues": [
+      "OnReset"
+    ]
+  },
+  "@odata.context": "/redfish/v1/$metadata#VolumeCollection.VolumeCollection",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes",
+  "@odata.type": "#VolumeCollection.VolumeCollection",
+  "Description": "Collection Of Volume",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.3:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.11:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.0:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.1:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.6:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.9:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.5:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.4:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.2:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.10:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.7:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    },
+    {
+      "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/PCIeExtender.Slot.3/Volumes/Disk.Bay.8:Enclosure.Internal.0-2:PCIeExtender.Slot.3"
+    }
+  ],
+  "Members@odata.count": 12,
+  "Name": "Volume Collection"
+}
