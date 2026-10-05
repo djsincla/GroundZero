@@ -251,10 +251,24 @@ class SimulatedEsxi:
         networks: dict[str, str],
         properties: dict[str, str],
         progress: Callable[[float, str], None],
+        reapply: bool = False,
     ) -> OvaDeployResult:
         self._reachable(access.address)
         if vm_name in self.vms:
-            return OvaDeployResult(vm_name=vm_name, created=False, powered_on=True)
+            if reapply:
+                self.vms[vm_name]["properties"] = properties
+                return OvaDeployResult(
+                    vm_name=vm_name,
+                    created=False,
+                    powered_on=True,
+                    message=f"{vm_name} existed; settings written and powered on",
+                )
+            return OvaDeployResult(
+                vm_name=vm_name,
+                created=False,
+                powered_on=True,
+                message=f"{vm_name} already exists; left as is",
+            )
         if not any(d.name == datastore for d in self.storage.datastores):
             raise EsxiError(f"Datastore {datastore} not found on the host")
         missing = sorted(

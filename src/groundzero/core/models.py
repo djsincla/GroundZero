@@ -38,6 +38,7 @@ class JobKind(StrEnum):
     HOST_PREP = "host_prep"
     VERIFY_JUMBO = "verify_jumbo"
     HOLOROUTER = "holorouter"
+    VCF_READINESS = "vcf_readiness"
 
 
 class OsAccessSet(BaseModel):
@@ -105,6 +106,7 @@ def task_id_for(kind: JobKind, params: dict[str, Any]) -> str:
         JobKind.HOST_PREP: "host.prep",
         JobKind.VERIFY_JUMBO: "net.verify_jumbo",
         JobKind.HOLOROUTER: "holodeck.router",
+        JobKind.VCF_READINESS: "vcf.readiness",
     }.get(kind, kind.value)
 
 

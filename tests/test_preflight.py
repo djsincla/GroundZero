@@ -7,8 +7,8 @@ from conftest import make_client
 
 from groundzero.inventory.collect import collect_inventory
 from groundzero.inventory.models import HostInventory
-from groundzero.preflight.cpu import CpuSupport, classify_cpu
 from groundzero.preflight.evaluate import CheckStatus, UnknownProfileError, evaluate, load_profile
+from groundzero.vcf_readiness.cpu import CpuSupport, classify_cpu
 
 
 async def _inventory(data: dict[str, Any]) -> HostInventory:

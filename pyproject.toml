@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,7 +7,8 @@ name = "groundzero"
 version = "0.1.0"
 description = "API-first bare-metal to VMware Holodeck provisioning: BMC preflight, OS install, Holodeck deployment"
 readme = "README.md"
-license = { text = "CA, Inc. Software License Agreement (see LICENSE.md)" }
+license = "Apache-2.0 AND LicenseRef-CA-Inc"
+license-files = ["LICENSE", "NOTICE", "src/groundzero/vcf_readiness/LICENSE.md"]
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",

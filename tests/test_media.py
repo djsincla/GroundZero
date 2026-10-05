@@ -93,7 +93,7 @@ def test_media_url_and_source_address() -> None:
 
 
 def test_tls_certificate_created_once_with_private_key(tmp_path: Path) -> None:
-    cert, key = ensure_tls_certificate(tmp_path / "tls", ["203.0.113.124"])
+    cert, key = ensure_tls_certificate(tmp_path / "tls", ["192.0.2.10"])
     assert key.stat().st_mode & 0o777 == 0o600
     first = cert.read_bytes()
     ensure_tls_certificate(tmp_path / "tls", [])

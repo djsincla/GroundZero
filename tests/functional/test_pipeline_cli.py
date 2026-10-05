@@ -31,7 +31,10 @@ def test_pipeline_run_and_diagnostics(simulated_r740xd: GroundZero) -> None:
     job_id = run.output.split("as job ")[1].split()[0]
 
     p = gz.cli("pipeline", "esxi1")
-    assert "Next: Deploy OS · custom ISO from a config set" in p.output and "12 passed" in p.output
+    assert "Next: VCF 9 readiness" in p.output and "12 passed" in p.output
+    assert gz.cli("run", "esxi1", "vcf.readiness", timeout=60).code == 0
+    p = gz.cli("pipeline", "esxi1")
+    assert "Next: Deploy OS · custom ISO from a config set" in p.output
 
     out = gz.home / "diag.json"
     diag = gz.cli("jobs", "diag", job_id, "--out", str(out))

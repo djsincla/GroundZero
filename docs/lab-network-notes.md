@@ -5,10 +5,10 @@ Findings from 2026-10-01, from the GroundZero ESXi install runs against `esxi1` 
 ## Setup
 
 - GroundZero runs on a Mac and reaches the lab over **GlobalProtect**. The GP client address is
-  `203.0.113.124` and the gateway is `gpu.avtr.com`.
+  `<vpn-client-ip>` and the gateway is your GlobalProtect portal.
 - The iDRAC (`198.51.100.11`) mounts the installer ISO from GroundZero's media server at
-  `https://203.0.113.124:443/media/...`, using Redfish VirtualMedia (a Remote File Share, RFS).
-- A firewall rule allows **TCP 443 from the iDRAC (198.51.100.11) to the GP client (203.0.113.124)**.
+  `https://<vpn-client-ip>:443/media/...`, using Redfish VirtualMedia (a Remote File Share, RFS).
+- A firewall rule allows **TCP 443 from the iDRAC (198.51.100.11) to the GP client (<vpn-client-ip>)**.
   Other ports, such as 80 and 8099, time out.
 
 ## Findings

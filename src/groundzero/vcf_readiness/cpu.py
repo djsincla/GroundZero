@@ -1,7 +1,10 @@
+# SPDX-License-Identifier: LicenseRef-CA-Inc
+# Copyright (c) CA, Inc. All rights reserved. See LICENSE.md in this directory.
 """CPU generation → ESXi 9 support classification.
 
-Ported from the legacy ``compat/cpu.py`` rules (VCF 9.x support tiers). Ordered: first match wins,
-so embedded/microserver parts are matched before the generic Xeon Scalable number patterns.
+Ported from the VCF Readiness Assessment Tool's ``compat/cpu.py`` rules (VCF 9.x support tiers).
+Ordered: first match wins, so embedded/microserver parts are matched before the generic Xeon
+Scalable number patterns.
 """
 
 from __future__ import annotations

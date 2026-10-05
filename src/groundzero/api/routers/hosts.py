@@ -17,6 +17,7 @@ from groundzero.install.job import InstallReport, InstallRequest
 from groundzero.inventory.models import HostInventory
 from groundzero.preflight.evaluate import PreflightReport
 from groundzero.readiness import ReadinessReport
+from groundzero.vcf_readiness.validate import VcfReadinessReport
 
 router = APIRouter(prefix="/hosts", tags=["hosts"])
 
@@ -169,3 +170,9 @@ async def start_task(
 def get_readiness(host_id: str, services: ServicesDep) -> ReadinessReport:
     """Latest Holodeck readiness assessment: checks, the proposed datastore and the planned fixes."""
     return ReadinessReport.model_validate(services.latest_output(host_id, "readiness"))
+
+
+@router.get("/{host_id}/vcf-readiness", response_model=VcfReadinessReport)
+def get_vcf_readiness(host_id: str, services: ServicesDep) -> VcfReadinessReport:
+    """Latest VCF 9 readiness validation (VCF Readiness rules, CA, Inc. licence)."""
+    return VcfReadinessReport.model_validate(services.latest_output(host_id, "vcf_readiness"))

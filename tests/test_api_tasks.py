@@ -84,6 +84,10 @@ def test_pipeline_walks_from_preflight_to_reading_the_os(api: TestClient) -> Non
     p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
     assert _task(p, "preflight")["state"] == "done"
     assert _task(p, "discover")["state"] == "done"  # preflight also produced the inventory
+    assert p["next"]["task"] == "vcf.readiness"  # VCF 9 readiness rules (CA) are their own step
+    job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/vcf.readiness", json={}).json()["id"])
+    assert job["status"] == "succeeded" and job["result"]["vcf_readiness"]["cpu_override_required"] is False
+    p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
     assert p["next"]["task"] == "os.custom"  # no OS access yet
 
     api.put(f"/api/v1/hosts/{host}/os", json={"address": "192.0.2.101", "password": "esxi-pw"})
@@ -162,10 +166,9 @@ def _assessed(api: TestClient) -> str:
         _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/preflight", json={}).json()["id"])["status"]
         == "succeeded"
     )
-    assert (
-        _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/host.assess", json={}).json()["id"])["status"]
-        == "succeeded"
-    )
+    for task in ("vcf.readiness", "host.assess"):
+        job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/{task}", json={}).json()["id"])
+        assert job["status"] == "succeeded", job
     return host
 
 

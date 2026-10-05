@@ -15,6 +15,7 @@ import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape
 
 import httpx
 from pydantic import BaseModel
@@ -31,6 +32,49 @@ class OvaDeployResult(BaseModel):
     powered_on: bool
     uploaded_bytes: int = 0
     seconds: float = 0.0
+    settings_applied: bool = True
+    message: str = ""
+
+
+OVF_ENV_KEY = "guestinfo.ovfEnv"
+
+
+def ovf_environment(properties: dict[str, str]) -> str:
+    """The OVF environment an appliance reads at boot (``vmtoolsd --cmd 'info-get guestinfo.ovfEnv'``).
+
+    A standalone ESXi host does not keep vApp properties from an import, so (like ovftool's
+    --X:injectOvfEnv and the Host Client) the values are written into the VM as this document.
+    """
+    quote = {'"': "&quot;"}  # attribute values: a password may contain a double quote
+    rows = "\n".join(
+        f'    <Property oe:key="{escape(k, quote)}" oe:value="{escape(v, quote)}"/>'
+        for k, v in properties.items()
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" '
+        'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+        'xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" oe:id="">\n'
+        "  <PlatformSection><Kind>VMware ESXi</Kind><Vendor>VMware, Inc.</Vendor><Locale>en</Locale>"
+        "</PlatformSection>\n"
+        f"  <PropertySection>\n{rows}\n  </PropertySection>\n"
+        "</Environment>\n"
+    )
+
+
+def has_ovf_environment(vm: Any) -> bool:
+    return any(o.key == OVF_ENV_KEY for o in (vm.config.extraConfig or []))
+
+
+def inject_ovf_environment(vm: Any, properties: dict[str, str]) -> None:
+    """Write the OVF environment into a powered-off VM (read by the guest on its next boot)."""
+    import pyVmomi
+
+    vim: Any = pyVmomi.vim
+    spec = vim.vm.ConfigSpec(
+        extraConfig=[vim.option.OptionValue(key=OVF_ENV_KEY, value=ovf_environment(properties))]
+    )
+    _wait_task(vm.ReconfigVM_Task(spec=spec))
 
 
 def read_descriptor(ova: Path) -> tuple[str, dict[str, int]]:
@@ -68,6 +112,7 @@ def deploy_ova(
     ssl_context: ssl.SSLContext,
     progress: Callable[[float, str], None] = lambda f, m: None,
     power_on: bool = True,
+    reapply: bool = False,
 ) -> OvaDeployResult:
     """``networks`` maps the OVF network names to port groups; ``properties`` are OVF property values."""
     import pyVmomi
@@ -80,9 +125,36 @@ def deploy_ova(
     )
     if existing is not None:
         on = existing.runtime.powerState == "poweredOn"
-        if power_on and not on:
-            _wait_task(existing.PowerOnVM_Task())
-        return OvaDeployResult(vm_name=vm_name, created=False, powered_on=power_on or on)
+        if has_ovf_environment(existing) and not reapply:
+            if power_on and not on:
+                _wait_task(existing.PowerOnVM_Task())
+            return OvaDeployResult(
+                vm_name=vm_name,
+                created=False,
+                powered_on=power_on or on,
+                message=f"{vm_name} already exists; left as is",
+            )
+        if on and not reapply:
+            return OvaDeployResult(
+                vm_name=vm_name,
+                created=False,
+                powered_on=True,
+                settings_applied=False,
+                message=f"{vm_name} is running without its settings; run again with reapply "
+                "(power-cycles it to apply them)",
+            )
+        if on:
+            progress(0.2, f"Powering off {vm_name} to apply its settings")
+            _wait_task(existing.PowerOffVM_Task())
+        inject_ovf_environment(existing, properties)
+        progress(0.5, f"Powering on {vm_name}")
+        _wait_task(existing.PowerOnVM_Task())
+        return OvaDeployResult(
+            vm_name=vm_name,
+            created=False,
+            powered_on=True,
+            message=f"{vm_name} existed; settings written and powered on",
+        )
 
     descriptor, sizes = read_descriptor(ova)
     ds = next((d for d in host.datastore if d.summary.name == datastore), None)
@@ -156,6 +228,7 @@ def deploy_ova(
                 )
                 if resp.status_code >= 300:
                     raise EsxiError(f"Upload of {path} failed: HTTP {resp.status_code} {resp.text[:200]}")
+        vm = lease.info.entity  # read before completing: ESXi clears lease.info at completion
         lease.HttpNfcLeaseProgress(100)
         lease.HttpNfcLeaseComplete()
     except BaseException as exc:
@@ -166,7 +239,8 @@ def deploy_ova(
         raise
     finally:
         done.set()
-    vm = lease.info.entity
+    progress(0.91, f"Writing {vm_name}'s settings (OVF environment)")
+    inject_ovf_environment(vm, properties)
     if power_on:
         progress(0.92, f"Powering on {vm_name}")
         _wait_task(vm.PowerOnVM_Task())

@@ -135,12 +135,18 @@ def test_sign_in_add_host_and_preflight(page: Page, simulated_r740xd: GroundZero
     page.get_by_role("button", name="Run preflight").click()
     expect(page.locator("#drawer")).to_contain_text("Preflight")  # live progress in the job drawer
     panel = page.locator('[data-panel="preflight"]')
-    expect(panel.locator('[data-status="warn"]').first).to_be_visible(timeout=20_000)
-    expect(panel.locator('tr[data-check="cpu.generation"]')).to_contain_text("Skylake-SP")
-    expect(panel).to_contain_text("12 passed, 1 warnings, 0 failed, 0 unknown")
+    expect(panel.locator('tr[data-check="memory.total"] [data-status="pass"]')).to_be_visible(timeout=20_000)
+    expect(panel).to_contain_text("12 passed, 0 warnings, 0 failed, 0 unknown")
 
     _tab(page, "Overview")
-    expect(page.locator('[data-card="preflight"]')).to_contain_text("12 passed, 1 warnings, 0 failed")
+    expect(page.locator('[data-card="preflight"]')).to_contain_text("12 passed, 0 warnings, 0 failed")
+
+    # VCF 9 readiness (CA rules) is its own pipeline step: it is where Skylake-SP gets flagged
+    _tab(page, "Pipeline")
+    page.locator('[data-task="vcf.readiness"]').get_by_role("button", name="Run").click()
+    expect(page.locator('[data-task="vcf.readiness"] [data-role="output"]')).to_contain_text(
+        "CPU override needed for ESXi 9", timeout=20_000
+    )
     _main_nav(page, "Hosts")
     expect(page.locator('tr[data-host="esxi1"]')).to_contain_text("PowerEdge R740xd")
 
@@ -159,7 +165,7 @@ def test_read_esxi_network(page: Page, simulated_r740xd: GroundZero) -> None:
     net = page.locator('[data-panel="network"]')
     expect(net).to_contain_text("Management Network", timeout=20_000)
     expect(net).to_contain_text("vmnic0, vmnic1")
-    expect(net).to_contain_text("dwayneN4032 Te1/0/11")
+    expect(net).to_contain_text("lab-n4032 Te1/0/11")
     expect(net).to_contain_text("NTP none")
 
 
@@ -402,6 +408,11 @@ def test_pipeline_guides_through_the_next_steps(page: Page, simulated_r740xd: Gr
 
     expect(page.locator('[data-task="preflight"]')).to_have_attribute("data-state", "done")
     expect(page.locator('[data-task="preflight"] [data-role="output"]')).to_contain_text("12 passed")
+    expect(nxt).to_contain_text("VCF 9 readiness")  # the CA readiness rules come next
+    nxt.get_by_role("button", name="VCF 9 readiness").click()
+    expect(page.locator('[data-task="vcf.readiness"]')).to_have_attribute(
+        "data-state", "done", timeout=20_000
+    )
     expect(nxt).to_contain_text("Deploy OS · custom ISO from a config set")  # no OS access yet
     expect(page.locator('[data-task="os.read"]')).to_contain_text("Needs: Set OS access")
 
@@ -418,7 +429,8 @@ def test_readiness_report_shows_checks_storage_and_planned_fixes(
 ) -> None:
     gz = simulated_r740xd
     _host_with_os(gz)
-    assert gz.cli("run", "esxi1", "preflight", timeout=120).code == 0
+    for task in ("preflight", "vcf.readiness"):
+        assert gz.cli("run", "esxi1", task, timeout=120).code == 0
     _open(page, gz)
     page.get_by_role("link", name="esxi1").click()
     nxt = page.locator('[data-role="next-step"]')
@@ -468,7 +480,7 @@ def test_deploy_holorouter_from_the_pipeline(page: Page, simulated_r740xd: Groun
     with tarfile.open(gz.home / "isos" / "holorouter-9.1.1.0456.ova", "w") as tar:
         tar.add(ovf, arcname=ovf.name)
     _host_with_os(gz)
-    for task in ("preflight", "host.assess"):
+    for task in ("preflight", "vcf.readiness", "host.assess"):
         assert gz.cli("run", "esxi1", task, timeout=120).code == 0
     with gz.api() as api:
         host = api.get("/api/v1/hosts").json()[0]["id"]

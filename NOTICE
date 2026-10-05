@@ -1,3 +1,16 @@
-Copyright (c) CA, Inc. All rights reserved.
+GroundZero
+Copyright 2026 Dwayne Sinclair
 
-This product may include a number of subcomponents with separate copyright notices and license terms. Your use of these subcomponents is subject to the terms and conditions of the subcomponent's license, as noted in the THIRD_PARTY_LICENSES.md file.
+Licensed under the Apache License, Version 2.0 (see LICENSE), except for the parts listed below.
+
+GroundZero started as a fork of the VCF Readiness Assessment Tool v9.7.3, Copyright (c) CA, Inc.
+The following parts are that work, or derived from it, and remain under the CA, Inc. Software
+License Agreement in the LICENSE.md file of each directory, not under Apache 2.0:
+
+  legacy/                          The original VCF Readiness Assessment Tool v9.7.3 source,
+                                   kept for reference (with its THIRD_PARTY_LICENSES.md).
+  src/groundzero/vcf_readiness/    VCF 9 readiness rules carried over from that tool
+                                   (CPU generation support tiers).
+
+The CA, Inc. licence permits use, copying, modification and distribution in connection with
+CA, Inc. (Broadcom) products.

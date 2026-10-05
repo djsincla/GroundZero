@@ -1463,7 +1463,8 @@
           "assess",
           "host_prep",
           "verify_jumbo",
-          "holorouter"
+          "holorouter",
+          "vcf_readiness"
         ],
         "title": "JobKind",
         "type": "string"
@@ -2968,6 +2969,47 @@
           "disk_tb"
         ],
         "title": "Variant",
+        "type": "object"
+      },
+      "VcfReadinessReport": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/Check"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "cpu_override_required": {
+            "description": "ESXi 9 installs need the CPU support override (allowLegacyCPU) on this hardware",
+            "title": "Cpu Override Required",
+            "type": "boolean"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "overall": {
+            "$ref": "#/components/schemas/CheckStatus"
+          },
+          "rules": {
+            "default": "VCF Readiness Assessment Tool v9.7.3 rules (CA, Inc.)",
+            "title": "Rules",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PreflightSummary"
+          }
+        },
+        "required": [
+          "generated_at",
+          "overall",
+          "summary",
+          "cpu_override_required",
+          "checks"
+        ],
+        "title": "VcfReadinessReport",
         "type": "object"
       },
       "VirtualMediaSlot": {
@@ -4533,6 +4575,54 @@
           }
         ],
         "summary": "Start Task",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/vcf-readiness": {
+      "get": {
+        "description": "Latest VCF 9 readiness validation (VCF Readiness rules, CA, Inc. licence).",
+        "operationId": "get_vcf_readiness_api_v1_hosts__host_id__vcf_readiness_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VcfReadinessReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Vcf Readiness",
         "tags": [
           "hosts"
         ]

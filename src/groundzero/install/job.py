@@ -40,6 +40,7 @@ from groundzero.redfish.capabilities import VirtualMediaSlot, discover_capabilit
 from groundzero.redfish.client import RedfishClient
 from groundzero.redfish.detect import detect
 from groundzero.redfish.oem import profile_for
+from groundzero.vcf_readiness.validate import validate as vcf_validate
 
 logger = logging.getLogger(__name__)
 
@@ -306,10 +307,9 @@ class Installer:
             if preflight.overall is CheckStatus.FAIL:
                 failed = [c.id for c in preflight.checks if c.status is CheckStatus.FAIL]
                 raise InstallError(f"Preflight failed ({', '.join(failed)}); refusing to install")
-        cpu = next((c for c in preflight.checks if c.id == "cpu.generation"), None)
         legacy_cpu = self.req.allow_legacy_cpu
-        if legacy_cpu is None:
-            legacy_cpu = cpu is not None and cpu.status is CheckStatus.WARN
+        if legacy_cpu is None:  # the VCF 9 readiness rules decide whether the CPU needs the override
+            legacy_cpu = vcf_validate(inventory).cpu_override_required
 
         if self.config is not None:
             spec = EsxiPlugin.build_spec(

@@ -11,6 +11,7 @@ from groundzero.inventory.collect import collect_inventory
 from groundzero.inventory.models import HostInventory
 from groundzero.preflight.evaluate import CheckStatus, evaluate
 from groundzero.redfish.capture import load_recording
+from groundzero.vcf_readiness.validate import validate as vcf_validate
 
 CAPTURE = Path(__file__).parent / "fixtures" / "dell-r740xd"
 
@@ -43,6 +44,12 @@ def test_virtual_media_on_both_manager_and_system_paths(inventory: HostInventory
 def test_holodeck_default_variant(inventory: HostInventory) -> None:
     report = evaluate(inventory, "holodeck-9")
     statuses = {c.id: c.status for c in report.checks}
-    assert statuses.pop("cpu.generation") is CheckStatus.WARN  # Skylake-SP on ESXi 9
+    assert "cpu.generation" not in statuses  # VCF readiness rules (CA) are their own step now
     assert set(statuses.values()) == {CheckStatus.PASS}
-    assert report.overall is CheckStatus.WARN
+    assert report.overall is CheckStatus.PASS
+
+
+def test_vcf_readiness_flags_skylake_for_the_cpu_override(inventory: HostInventory) -> None:
+    report = vcf_validate(inventory)
+    assert report.overall is CheckStatus.WARN and report.cpu_override_required  # Skylake-SP on ESXi 9
+    assert report.checks[0].id == "cpu.generation" and "Skylake-SP" in report.checks[0].observed

@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     iso_repository: Path | None = None  # folder of stock ISOs (default ./images); GROUNDZERO_ISO_REPOSITORY
     media_bind_host: str = "0.0.0.0"
     media_port: int = 443
-    media_public_url: str | None = None  # e.g. https://203.0.113.124; default: auto-detect per BMC
+    media_public_url: str | None = None  # e.g. https://192.0.2.10; default: auto-detect per BMC
     esxi_username: str | None = None
     esxi_password: SecretStr | None = None
 

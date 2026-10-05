@@ -22,7 +22,7 @@ retrieved 2026-09-30.
 ## Lab host `esxi1` (Dell R740xd), read 2026-09-30
 
 Management: `vmk0` on port group "Management Network", **VLAN 100**, uplinks **vmnic0 + vmnic1** (both
-active, 10 GbE). These go to switch `dwayneN4032` ports Te1/0/11 and Te1/0/12. The reinstall must preserve
+active, 10 GbE). These go to switch `lab-n4032` ports Te1/0/11 and Te1/0/12. The reinstall must preserve
 this layout.
 
 | # | Status | Observed |

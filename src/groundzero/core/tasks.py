@@ -56,45 +56,127 @@ class TaskSpec:
 
 
 CATALOG: tuple[TaskSpec, ...] = (
-    TaskSpec("discover", "Discover hardware", Stage.HARDWARE,
-             "Read the server's hardware inventory over Redfish (read-only).",
-             produces="inventory", optional=True),
-    TaskSpec("preflight", "Holodeck preflight", Stage.HARDWARE,
-             "Check CPU, memory, disks, NICs, BIOS and BMC against the Holodeck requirements (read-only).",
-             produces="preflight"),
-    TaskSpec("os.reimage", "Deploy OS · custom ISO from current settings", Stage.OS,
-             "Reinstall ESXi with a custom ISO built from a stock one. Settings come from the running OS "
-             "(IP, VLAN, uplinks, boot disk) plus the options you choose (NTP, CPU override, VMFS).",
-             produces="install", requires=(OS_ACCESS,), optional=True, destructive=True),
-    TaskSpec("os.custom", "Deploy OS · custom ISO from a config set", Stage.OS,
-             "Install ESXi with a custom ISO built from a stock one. Settings come from a saved config set "
-             "plus this server's own values (hostname, IP); no running OS needed.",
-             produces="install", optional=True, destructive=True),
-    TaskSpec("os.read", "Read installed OS", Stage.OS,
-             "Read the running hypervisor's network, NTP and storage (read-only).",
-             produces="os_network", requires=(OS_ACCESS,), os_bound=True, optional=True),
-    TaskSpec("os.capture", "Capture config set", Stage.OS,
-             "Save the running hypervisor's settings as a reusable config set (read-only).",
-             produces=None, requires=(OS_ACCESS,), optional=True),
-    TaskSpec("host.assess", "Assess Holodeck readiness", Stage.READINESS,
-             "Compare drives, datastores, network and NTP with what Holodeck needs, and plan the fixes.",
-             produces="readiness", requires=("preflight", OS_ACCESS), os_bound=True),
-    TaskSpec("host.prep", "Prepare host", Stage.PREP,
-             "Apply the planned fixes: MTU, trunk and external port groups, NTP, Holodeck datastore.",
-             produces="host_prep", requires=("readiness",), os_bound=True, destructive=True),
-    TaskSpec("net.verify_jumbo", "Verify jumbo frames", Stage.PREP,
-             "Send 9000-byte frames out of one uplink and back in the other through the physical switch.",
-             produces="jumbo", requires=("host_prep",), os_bound=True),
-    TaskSpec("holodeck.router", "Deploy Holorouter", Stage.HOLODECK,
-             "Deploy and start the Holorouter appliance on the prepared datastore and port groups.",
-             produces="holorouter", requires=("readiness", "host_prep"), os_bound=True),
-    TaskSpec("holodeck.stage", "Stage binaries", Stage.HOLODECK,
-             "Copy the ESX ISO and VCF Installer OVA to the Holorouter.",
-             produces="staged", requires=("holorouter",), os_bound=True, available=False),
-    TaskSpec("holodeck.deploy", "Deploy Holodeck", Stage.HOLODECK,
-             "Run New-HoloDeckConfig and New-HoloDeckInstance on the Holorouter and follow the deployment.",
-             produces="holodeck", requires=("staged",), os_bound=True, available=False),
-)  # fmt: skip
+    TaskSpec(
+        "discover",
+        "Discover hardware",
+        Stage.HARDWARE,
+        "Read the server's hardware inventory over Redfish (read-only).",
+        produces="inventory",
+        optional=True,
+    ),
+    TaskSpec(
+        "preflight",
+        "Holodeck preflight",
+        Stage.HARDWARE,
+        "Check CPU, memory, disks, NICs, BIOS and BMC against the Holodeck requirements (read-only).",
+        produces="preflight",
+    ),
+    TaskSpec(
+        "vcf.readiness",
+        "VCF 9 readiness",
+        Stage.HARDWARE,
+        "Validate the hardware against the VCF 9 readiness rules (CA, Inc. VCF Readiness rules, read-only).",
+        produces="vcf_readiness",
+        requires=("inventory",),
+    ),
+    TaskSpec(
+        "os.reimage",
+        "Deploy OS · custom ISO from current settings",
+        Stage.OS,
+        "Reinstall ESXi with a custom ISO built from a stock one. Settings come from the running OS "
+        "(IP, VLAN, uplinks, boot disk) plus the options you choose (NTP, CPU override, VMFS).",
+        produces="install",
+        requires=(OS_ACCESS,),
+        optional=True,
+        destructive=True,
+    ),
+    TaskSpec(
+        "os.custom",
+        "Deploy OS · custom ISO from a config set",
+        Stage.OS,
+        "Install ESXi with a custom ISO built from a stock one. Settings come from a saved config set "
+        "plus this server's own values (hostname, IP); no running OS needed.",
+        produces="install",
+        optional=True,
+        destructive=True,
+    ),
+    TaskSpec(
+        "os.read",
+        "Read installed OS",
+        Stage.OS,
+        "Read the running hypervisor's network, NTP and storage (read-only).",
+        produces="os_network",
+        requires=(OS_ACCESS,),
+        os_bound=True,
+        optional=True,
+    ),
+    TaskSpec(
+        "os.capture",
+        "Capture config set",
+        Stage.OS,
+        "Save the running hypervisor's settings as a reusable config set (read-only).",
+        produces=None,
+        requires=(OS_ACCESS,),
+        optional=True,
+    ),
+    TaskSpec(
+        "host.assess",
+        "Assess Holodeck readiness",
+        Stage.READINESS,
+        "Compare drives, datastores, network and NTP with what Holodeck needs, and plan the fixes.",
+        produces="readiness",
+        requires=("preflight", OS_ACCESS),
+        os_bound=True,
+    ),
+    TaskSpec(
+        "host.prep",
+        "Prepare host",
+        Stage.PREP,
+        "Apply the planned fixes: MTU, trunk and external port groups, NTP, Holodeck datastore.",
+        produces="host_prep",
+        requires=("readiness",),
+        os_bound=True,
+        destructive=True,
+    ),
+    TaskSpec(
+        "net.verify_jumbo",
+        "Verify jumbo frames",
+        Stage.PREP,
+        "Send 9000-byte frames out of one uplink and back in the other through the physical switch.",
+        produces="jumbo",
+        requires=("host_prep",),
+        os_bound=True,
+    ),
+    TaskSpec(
+        "holodeck.router",
+        "Deploy Holorouter",
+        Stage.HOLODECK,
+        "Deploy and start the Holorouter appliance on the prepared datastore and port groups.",
+        produces="holorouter",
+        requires=("readiness", "host_prep"),
+        os_bound=True,
+    ),
+    TaskSpec(
+        "holodeck.stage",
+        "Stage binaries",
+        Stage.HOLODECK,
+        "Copy the ESX ISO and VCF Installer OVA to the Holorouter.",
+        produces="staged",
+        requires=("holorouter",),
+        os_bound=True,
+        available=False,
+    ),
+    TaskSpec(
+        "holodeck.deploy",
+        "Deploy Holodeck",
+        Stage.HOLODECK,
+        "Run New-HoloDeckConfig and New-HoloDeckInstance on the Holorouter and follow the deployment.",
+        produces="holodeck",
+        requires=("staged",),
+        os_bound=True,
+        available=False,
+    ),
+)
 
 TASKS = {t.id: t for t in CATALOG}
 # Which task to point at when an output is missing. "install" has two producers and is never required.
@@ -171,10 +253,16 @@ class TaskRun(BaseModel):
 
 def info(spec: TaskSpec) -> TaskInfo:
     return TaskInfo(
-        id=spec.id, title=spec.title, stage=spec.stage, description=spec.description,
-        produces=spec.produces, requires=list(spec.requires), optional=spec.optional,
-        destructive=spec.destructive, available=spec.available,
-    )  # fmt: skip
+        id=spec.id,
+        title=spec.title,
+        stage=spec.stage,
+        description=spec.description,
+        produces=spec.produces,
+        requires=list(spec.requires),
+        optional=spec.optional,
+        destructive=spec.destructive,
+        available=spec.available,
+    )
 
 
 # ── pipeline evaluation ─────────────────────────────────────────────────
@@ -184,6 +272,11 @@ def summarize(kind: str, data: dict[str, Any]) -> str:
         if kind == "inventory":
             cores = sum(p.get("cores", 0) for p in data.get("processors", []))
             return f"{data['system']['model']} · {cores} cores · {round(data['memory']['total_gib'])} GiB"
+        if kind == "vcf_readiness":
+            s = data["summary"]
+            note = " · CPU override needed for ESXi 9" if data.get("cpu_override_required") else ""
+            counts = f"{s['passed']} passed, {s['warnings']} warnings, {s['failed']} failed"
+            return f"{data['overall']}: {counts}{note}"
         if kind == "preflight":
             s = data["summary"]
             return f"{data['overall']}: {s['passed']} passed, {s['warnings']} warnings, {s['failed']} failed"
@@ -219,8 +312,10 @@ def _iso_settings(spec: dict[str, Any]) -> str:
     net = spec.get("network")
     if not net:
         return ""
-    parts = [f"VLAN {net.get('vlan_id') or 'untagged'}",
-             " + ".join([net.get("install_nic", "?"), *net.get("extra_uplinks", [])])]  # fmt: skip
+    parts = [
+        f"VLAN {net.get('vlan_id') or 'untagged'}",
+        " + ".join([net.get("install_nic", "?"), *net.get("extra_uplinks", [])]),
+    ]
     if spec.get("ntp_servers"):
         parts.append("NTP " + ", ".join(spec["ntp_servers"]))
     parts.append("VMFS kept" if spec.get("preserve_vmfs") else "VMFS overwritten")
@@ -270,15 +365,22 @@ def evaluate_pipeline(
             # Shared output kinds (both OS deployments produce "install"): attribute to the task that ran.
             if not (producing and siblings and producing.task != spec.id and producing.task in TASKS):
                 output = OutputInfo(
-                    kind=spec.produces or "", job_id=meta.job_id, produced_at=meta.created_at,
-                    fresh=fresh(spec, meta), summary=summarize(spec.produces or "", meta.data),
-                )  # fmt: skip
+                    kind=spec.produces or "",
+                    job_id=meta.job_id,
+                    produced_at=meta.created_at,
+                    fresh=fresh(spec, meta),
+                    summary=summarize(spec.produces or "", meta.data),
+                )
 
         job = last_job.get(spec.id)
         ref = None
         if job is not None:
-            ref = JobRef(id=job.id, status=job.status, finished_at=job.finished_at,
-                         error=job.error.message if job.error else None)  # fmt: skip
+            ref = JobRef(
+                id=job.id,
+                status=job.status,
+                finished_at=job.finished_at,
+                error=job.error.message if job.error else None,
+            )
 
         state: TaskStateName
         if not spec.available:
@@ -301,8 +403,9 @@ def evaluate_pipeline(
             state = "blocked"
         else:
             state = "ready"
-        states[spec.id] = TaskState(**info(spec).model_dump(), state=state, blocked_by=blocked,
-                                    last_job=ref, output=output)  # fmt: skip
+        states[spec.id] = TaskState(
+            **info(spec).model_dump(), state=state, blocked_by=blocked, last_job=ref, output=output
+        )
 
     stages = []
     for stage in Stage:
@@ -353,9 +456,12 @@ def _next(states: dict[str, TaskState], has_os_access: bool) -> NextStep:
             )
         if s.state == "blocked":
             if spec.requires and OS_ACCESS in spec.requires and not has_os_access:
-                return NextStep(task="os.custom", title="Deploy OS · custom ISO from a config set",
-                                reason="GroundZero can't reach an OS on this server yet. Deploy one, "
-                                "or set OS access if one is already installed.")  # fmt: skip
+                return NextStep(
+                    task="os.custom",
+                    title="Deploy OS · custom ISO from a config set",
+                    reason="GroundZero can't reach an OS on this server yet. Deploy one, "
+                    "or set OS access if one is already installed.",
+                )
             return NextStep(task=None, title=spec.title, reason="; ".join(s.blocked_by))
     planned = next((t for t in CATALOG if not t.available), None)
     if planned:

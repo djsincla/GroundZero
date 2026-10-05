@@ -57,6 +57,7 @@ class EsxiOps(Protocol):
         networks: dict[str, str],
         properties: dict[str, str],
         progress: Callable[[float, str], None],
+        reapply: bool = False,
     ) -> OvaDeployResult:
         """Deploy (or find) a VM from an OVA, powered on."""
         ...
@@ -173,6 +174,7 @@ class LiveEsxiOps:
         networks: dict[str, str],
         properties: dict[str, str],
         progress: Callable[[float, str], None],
+        reapply: bool = False,
     ) -> OvaDeployResult:
         diagnostics.add_secret(password, *[v for k, v in properties.items() if "password" in k.lower()])
 
@@ -190,6 +192,7 @@ class LiveEsxiOps:
                     properties=properties,
                     ssl_context=ctx,
                     progress=progress,
+                    reapply=reapply,
                 )
 
         return await _traced("deploy_ova", access.address, asyncio.to_thread(run))

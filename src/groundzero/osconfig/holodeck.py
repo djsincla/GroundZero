@@ -68,6 +68,11 @@ class HolodeckSettings(BaseModel):
     )
     holorouter_gateway: str = Field(title="Holorouter gateway")
     holorouter_dns: str = Field(title="Holorouter DNS server")
+    holorouter_dns_domain: str | None = Field(
+        default=None,
+        title="Holorouter DNS domain",
+        description="Optional; Holodeck's documentation uses site-a.vcf.lab",
+    )
     holorouter_ntp: str = Field(default="pool.ntp.org", title="Holorouter NTP server")
     webtop: bool = Field(default=True, title="Webtop UI", description="Browser desktop on the Holorouter")
     gitops: bool = Field(

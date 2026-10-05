@@ -13,6 +13,7 @@ T0 = datetime(2026, 10, 2, 12, 0, tzinfo=UTC)
 NETWORK = {"product": "VMware ESXi 9.1.1", "address": "192.0.2.101",
            "vmkernel": [{"ip": "192.0.2.101", "services": ["management"]}]}  # fmt: skip
 PREFLIGHT = {"overall": "warn", "summary": {"passed": 12, "warnings": 1, "failed": 0}}
+VCF = {"overall": "warn", "summary": {"passed": 0, "warnings": 1, "failed": 0}, "cpu_override_required": True}
 
 
 def _job(job_id: str, kind: JobKind, status: JobStatus, minutes: int, **params: Any) -> Job:
@@ -52,8 +53,20 @@ def test_a_new_host_starts_with_preflight() -> None:
 
 def test_without_os_access_the_next_step_is_deploying_an_os() -> None:
     jobs = [_job("p1", JobKind.PREFLIGHT, JobStatus.SUCCEEDED, 1)]
-    p = _pipeline(
+    early = _pipeline(
         jobs, {"preflight": _out("p1", 1, PREFLIGHT), "inventory": _out("p1", 1, {})}, os_access=False
+    )
+    assert early.next.task == "vcf.readiness"  # the VCF 9 readiness rules come right after preflight
+    jobs.append(_job("v1", JobKind.VCF_READINESS, JobStatus.SUCCEEDED, 2))
+    outputs = {
+        "preflight": _out("p1", 1, PREFLIGHT),
+        "inventory": _out("p1", 1, {}),
+        "vcf_readiness": _out("v1", 2, VCF),
+    }
+    p = _pipeline(jobs, outputs, os_access=False)
+    assert _state(p, "vcf.readiness") == "done"
+    assert next(t for t in p.stages[0].tasks if t.id == "vcf.readiness").output.summary == (  # type: ignore[union-attr]
+        "warn: 0 passed, 1 warnings, 0 failed · CPU override needed for ESXi 9"
     )
     assert _state(p, "preflight") == "done"
     assert p.next.task == "os.custom" and "Deploy" in p.next.title
@@ -73,7 +86,8 @@ def test_outputs_feed_the_next_task_and_go_stale_after_a_reinstall() -> None:
         "summary": {"failed": 3},
         "plan": [1, 2],
     }
-    outputs = {"preflight": _out("p1", 1, PREFLIGHT), "readiness": _out("a1", 2, readiness, epoch=0),
+    outputs = {"preflight": _out("p1", 1, PREFLIGHT), "vcf_readiness": _out("p1", 1, VCF),
+               "readiness": _out("a1", 2, readiness, epoch=0),
                "os_network": _out("a1", 2, NETWORK, epoch=0)}  # fmt: skip
     p = _pipeline(jobs, outputs)
     assert _state(p, "host.assess") == "done" and _state(p, "os.read") == "done"

@@ -58,6 +58,7 @@ from groundzero.redfish.capture import load_recording
 from groundzero.redfish.client import RedfishClient
 from groundzero.simulator.bmc import SimulatedBmc
 from groundzero.simulator.esxi import SimulatedEsxi
+from groundzero.vcf_readiness.validate import validate as vcf_validate
 
 logger = logging.getLogger(__name__)
 
@@ -547,6 +548,8 @@ class Services:
             return self.start_os_network(host_id)
         if task_id == "os.capture":
             return self.start_os_capture(host_id, str(p.get("name") or ""))
+        if task_id == "vcf.readiness":
+            return self.start_vcf_readiness(host_id)
         if task_id == "host.assess":
             return self.start_assess(host_id, p.get("variant"))
         if task_id == "host.prep":
@@ -555,8 +558,27 @@ class Services:
         if task_id == "net.verify_jumbo":
             return self.start_verify_jumbo(host_id)
         if task_id == "holodeck.router":
-            return self.start_holorouter(host_id, str(p.get("config_set_id") or ""))
+            return self.start_holorouter(
+                host_id, str(p.get("config_set_id") or ""), reapply=bool(p.get("reapply"))
+            )
         raise ConflictError(f"“{spec.title}” has no runner")  # pragma: no cover - catalog/dispatch mismatch
+
+    def start_vcf_readiness(self, host_id: str) -> Job:
+        """VCF 9 readiness (CA rules) on the latest hardware inventory. Read-only: no BMC calls."""
+        self.get_host(host_id)
+        meta = self.store.latest_output(host_id=host_id, kind=JobKind.INVENTORY.value)
+        if meta is None:
+            raise ConflictError("Discover the hardware first (inventory or preflight)")
+        inventory = HostInventory.model_validate(meta.data)
+
+        async def run(ctx: JobContext) -> dict[str, Any]:
+            async with ctx.step("validate", "Validate against the VCF 9 readiness rules"):
+                report = vcf_validate(inventory)
+            data = report.model_dump(mode="json")
+            self.store.save_result(host_id=host_id, kind="vcf_readiness", job_id=ctx.job.id, data=data)
+            return {"vcf_readiness": data}
+
+        return self.runner.submit(kind=JobKind.VCF_READINESS, host_id=host_id, params={}, func=run)
 
     def start_assess(self, host_id: str, variant: str | None = None) -> Job:
         """Read the installed OS live and assess it against Holodeck's needs (read-only)."""
@@ -782,7 +804,7 @@ class Services:
             self.config_set_secrets(config_set_id),
         )
 
-    def start_holorouter(self, host_id: str, config_set_id: str) -> Job:
+    def start_holorouter(self, host_id: str, config_set_id: str, *, reapply: bool = False) -> Job:
         """Deploy the Holorouter OVA on the prepared datastore and port groups, then wait for SSH."""
         host = self.get_host(host_id)
         access, secret = self._os_access(host_id)
@@ -813,6 +835,7 @@ class Services:
             "gateway": settings.holorouter_gateway,
             "dns_server": settings.holorouter_dns,
             "ntp_server": settings.holorouter_ntp,
+            **({"dns_domain": settings.holorouter_dns_domain} if settings.holorouter_dns_domain else {}),
             "ssh_enabled": "True",
             "webtop_enabled": bools[settings.webtop],
             "gitops_enabled": bools[settings.gitops],
@@ -844,12 +867,15 @@ class Services:
                     networks=networks,
                     properties=properties,
                     progress=progress,
+                    reapply=reapply,
                 )
                 step.message = (
                     f"uploaded {result.uploaded_bytes / 1e9:.2f} GB in {result.seconds / 60:.0f} min"
                     if result.created
-                    else f"{vm_name} already exists; left as is"
+                    else result.message
                 )
+                if not result.settings_applied:
+                    raise OsConfigError(result.message)
             async with ctx.step("ssh", "Wait for the Holorouter to answer on SSH") as step:
                 await self._wait_for_port(values.holorouter_ip, 22, minutes=20, ctx=ctx)
                 step.message = f"{values.holorouter_ip}:22 answers"
@@ -868,7 +894,12 @@ class Services:
             self.store.save_result(host_id=host_id, kind="holorouter", job_id=ctx.job.id, data=data)
             return {"holorouter": data}
 
-        params = {"config_set_id": config_set.id, "vm_name": vm_name, "image": image.filename}
+        params = {
+            "config_set_id": config_set.id,
+            "vm_name": vm_name,
+            "image": image.filename,
+            "reapply": reapply,
+        }
         return self.runner.submit(kind=JobKind.HOLOROUTER, host_id=host.id, params=params, func=run)
 
     async def _wait_for_port(self, address: str, port: int, *, minutes: float, ctx: JobContext) -> None:

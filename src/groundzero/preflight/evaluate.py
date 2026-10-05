@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 
 from groundzero.core.store import utcnow
 from groundzero.inventory.models import HostInventory
-from groundzero.preflight.cpu import CpuSupport, classify_cpu
 
 _GB = 1000**3
 _TB = 1000**4
@@ -124,35 +123,6 @@ def _compute(inv: HostInventory, need_cores: int) -> list[Check]:
             remediation=fix,
         )
     )
-    if inv.processors:
-        # Sockets are homogeneous in practice, so the first CPU represents the host.
-        cpu = inv.processors[0]
-        cls = classify_cpu(cpu.model)
-        status_map = {
-            CpuSupport.SUPPORTED: (CheckStatus.PASS, None),
-            CpuSupport.OVERRIDE_REQUIRED: (
-                CheckStatus.WARN,
-                "Deprecated for ESXi 9 (install needs the CPU support override). "
-                "Holodeck also supports an ESXi 8.0u3 host.",
-            ),
-            CpuSupport.UNSUPPORTED: (CheckStatus.FAIL, "CPU generation is not supported by ESXi 9."),
-            CpuSupport.UNKNOWN: (
-                CheckStatus.UNKNOWN,
-                "Verify CPU support in the Broadcom Compatibility Guide.",
-            ),
-        }
-        status, fix = status_map[cls.support]
-        checks.append(
-            Check(
-                id="cpu.generation",
-                category=Category.COMPUTE,
-                title="CPU generation",
-                status=status,
-                observed=f"{cpu.model} — {cls.family}",
-                required="CPU supported by ESXi 8.0u3 / 9.0",
-                remediation=fix,
-            )
-        )
     return checks
 
 

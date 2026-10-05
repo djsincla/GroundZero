@@ -28,12 +28,20 @@ def test_register_then_preflight_holodeck(simulated_r740xd: GroundZero) -> None:
     _add(gz)
 
     result = gz.cli("preflight", "r740xd")
-    assert result.code == 0, result.output  # WARN is not a failure
+    assert result.code == 0, result.output
     out = result.output
-    assert "r740xd vs holodeck-9 / VCF 9.0 (vSAN ESA), single site: WARN" in out
-    assert "Skylake-SP" in out
+    assert "r740xd vs holodeck-9 / VCF 9.0 (vSAN ESA), single site: PASS" in out
     assert "[protocols n/a]" in out  # BMC data printed verbatim, not eaten as rich markup
-    assert "12 passed, 1 warnings, 0 failed, 0 unknown" in out
+    assert "12 passed, 0 warnings, 0 failed, 0 unknown" in out
+
+    # The CPU generation verdict comes from the VCF 9 readiness rules (CA), a step of its own
+    vcf = gz.cli("run", "r740xd", "vcf.readiness", timeout=60)
+    assert vcf.code == 0, vcf.output
+    with gz.api() as api:
+        host_id = api.get("/api/v1/hosts").json()[0]["id"]
+        report = api.get(f"/api/v1/hosts/{host_id}/vcf-readiness").json()
+    assert report["overall"] == "warn" and report["cpu_override_required"]
+    assert "Skylake-SP" in report["checks"][0]["observed"]
 
     listing = gz.cli("hosts", "list").output
     assert "dell" in listing and "PowerEdge R740xd" in listing  # identity learned from the BMC
@@ -102,7 +110,7 @@ def test_state_survives_restart(simulated_r740xd: GroundZero) -> None:
     with gz.api() as api:
         host_id = api.get("/api/v1/hosts").json()[0]["id"]
         report = api.get(f"/api/v1/hosts/{host_id}/preflight")
-    assert report.status_code == 200 and report.json()["overall"] == "warn"
+    assert report.status_code == 200 and report.json()["overall"] == "pass"
 
 
 def test_cli_reports_unreachable_server(simulated_r740xd: GroundZero) -> None:
