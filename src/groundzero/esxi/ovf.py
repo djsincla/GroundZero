@@ -8,6 +8,7 @@ if a VM with the target name already exists it is left alone (and powered on).
 from __future__ import annotations
 
 import logging
+import re
 import ssl
 import tarfile
 import threading
@@ -89,6 +90,30 @@ def read_descriptor(ova: Path) -> tuple[str, dict[str, int]]:
     return descriptor, {m.name: m.size for m in members}
 
 
+def qualify_properties(descriptor: str, properties: dict[str, str]) -> dict[str, str]:
+    """Bare property keys → the keys the guest reads: ``<class>.<key>[.<instance>]``.
+
+    A property in ``<ProductSection ovf:class="network">`` is ``network.ip`` in the OVF environment,
+    not ``ip`` (live finding: the Holorouter ignored bare keys and booted without an IP).
+    Keys that are already qualified are kept; keys the descriptor does not declare are an error.
+    """
+    full: dict[str, str] = {}
+    for section in re.finditer(
+        r"<(?:ovf:)?ProductSection([^>]*)>(.*?)</(?:ovf:)?ProductSection>", descriptor, re.S
+    ):
+        cls = re.search(r'ovf:class="([^"]*)"', section.group(1))
+        inst = re.search(r'ovf:instance="([^"]*)"', section.group(1))
+        for key in re.findall(r'<(?:ovf:)?Property[^>]*?ovf:key="([^"]+)"', section.group(2)):
+            name = ".".join(p for p in (cls.group(1) if cls else "", key, inst.group(1) if inst else "") if p)
+            full[key] = full[name] = name
+    unknown = sorted(k for k in properties if k not in full)
+    if unknown:
+        raise EsxiError(
+            f"The OVA declares no propert{'y' if len(unknown) == 1 else 'ies'} {', '.join(unknown)}"
+        )
+    return {full[k]: v for k, v in properties.items()}
+
+
 def _stream(ova: Path, member: str, sent: list[int], lock: threading.Lock) -> Iterator[bytes]:
     with tarfile.open(ova) as tar:
         handle = tar.extractfile(member)
@@ -119,6 +144,8 @@ def deploy_ova(
 
     vim: Any = pyVmomi.vim  # untyped library
     content = vim.ServiceInstance("ServiceInstance", host._stub).RetrieveContent()
+    descriptor, sizes = read_descriptor(ova)
+    properties = qualify_properties(descriptor, properties)
     datacenter = content.rootFolder.childEntity[0]
     existing = next(
         (vm for vm in datacenter.vmFolder.childEntity if getattr(vm, "name", None) == vm_name), None
@@ -156,7 +183,6 @@ def deploy_ova(
             message=f"{vm_name} existed; settings written and powered on",
         )
 
-    descriptor, sizes = read_descriptor(ova)
     ds = next((d for d in host.datastore if d.summary.name == datastore), None)
     if ds is None:
         raise EsxiError(f"Datastore {datastore} not found on the host")

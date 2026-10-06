@@ -3,14 +3,50 @@
 from __future__ import annotations
 
 import ssl
+import tarfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from types import SimpleNamespace as NS
 from typing import Any
 
+import pytest
+
 from groundzero.esxi import ovf
 
 OE = "{http://schemas.dmtf.org/ovf/environment/1}"
+
+# The Holorouter 9.1.1 descriptor's layout: properties in classed ProductSections.
+DESCRIPTOR = """<Envelope><VirtualSystem>
+<ProductSection><Product>HoloRouter</Product></ProductSection>
+<ProductSection ovf:class="network"><Property ovf:key="hostname" ovf:type="string"/>
+<Property ovf:key="ip" ovf:type="string"/><Property ovf:key="password" ovf:password="true" ovf:type="string"/>
+</ProductSection>
+<ProductSection ovf:class="extra"><Property ovf:key="ssh_enabled" ovf:type="boolean"/></ProductSection>
+</VirtualSystem></Envelope>"""
+
+
+def _ova(tmp_path: Path) -> Path:
+    ovf_file = tmp_path / "holorouter.ovf"
+    ovf_file.write_text(DESCRIPTOR)
+    ova = tmp_path / "holorouter.ova"
+    with tarfile.open(ova, "w") as tar:
+        tar.add(ovf_file, arcname=ovf_file.name)
+    return ova
+
+
+def test_property_keys_are_qualified_by_their_section_class() -> None:
+    """Regression (live): bare keys were ignored by the Holorouter, which booted without an IP."""
+    full = ovf.qualify_properties(
+        DESCRIPTOR, {"hostname": "holorouter", "ip": "192.0.2.150", "ssh_enabled": "True"}
+    )
+    assert full == {
+        "network.hostname": "holorouter",
+        "network.ip": "192.0.2.150",
+        "extra.ssh_enabled": "True",
+    }
+    assert ovf.qualify_properties(DESCRIPTOR, {"network.ip": "x"}) == {"network.ip": "x"}  # already qualified
+    with pytest.raises(ovf.EsxiError, match="declares no property bogus"):
+        ovf.qualify_properties(DESCRIPTOR, {"bogus": "1"})
 
 
 def test_ovf_environment_carries_every_property_and_escapes_values() -> None:
@@ -44,7 +80,7 @@ class FakeVm:
         return self._task("reconfig")
 
 
-def _deploy(monkeypatch: Any, vm: FakeVm, **kw: Any) -> ovf.OvaDeployResult:
+def _deploy(monkeypatch: Any, vm: FakeVm, tmp_path: Path, **kw: Any) -> ovf.OvaDeployResult:
     content = NS(rootFolder=NS(childEntity=[NS(vmFolder=NS(childEntity=[vm]))]))
     monkeypatch.setattr(ovf.time, "sleep", lambda s: None)
 
@@ -60,7 +96,7 @@ def _deploy(monkeypatch: Any, vm: FakeVm, **kw: Any) -> ovf.OvaDeployResult:
     return ovf.deploy_ova(
         NS(_stub=None),
         "esxi",
-        Path("x.ova"),
+        _ova(tmp_path),
         vm_name=vm.name,
         datastore="ds",
         networks={},
@@ -70,22 +106,22 @@ def _deploy(monkeypatch: Any, vm: FakeVm, **kw: Any) -> ovf.OvaDeployResult:
     )
 
 
-def test_existing_vm_with_its_settings_is_left_alone(monkeypatch: Any) -> None:
+def test_existing_vm_with_its_settings_is_left_alone(monkeypatch: Any, tmp_path: Path) -> None:
     vm = FakeVm("holo1-holorouter", on=True, env=True)
-    result = _deploy(monkeypatch, vm)
+    result = _deploy(monkeypatch, vm, tmp_path)
     assert result.settings_applied and not result.created and vm.calls == []
 
 
-def test_a_running_vm_without_settings_is_reported_not_touched(monkeypatch: Any) -> None:
+def test_a_running_vm_without_settings_is_reported_not_touched(monkeypatch: Any, tmp_path: Path) -> None:
     """Regression (live): the Holorouter booted without IP; a re-run must say so, not pretend success."""
     vm = FakeVm("holo1-holorouter", on=True, env=False)
-    result = _deploy(monkeypatch, vm)
+    result = _deploy(monkeypatch, vm, tmp_path)
     assert not result.settings_applied and "reapply" in result.message and vm.calls == []
 
 
-def test_reapply_power_cycles_and_writes_the_settings(monkeypatch: Any) -> None:
+def test_reapply_power_cycles_and_writes_the_settings(monkeypatch: Any, tmp_path: Path) -> None:
     vm = FakeVm("holo1-holorouter", on=True, env=False)
-    result = _deploy(monkeypatch, vm, reapply=True)
+    result = _deploy(monkeypatch, vm, tmp_path, reapply=True)
     assert result.settings_applied and vm.calls == ["off", "reconfig", "on"]
     env = next(o.value for o in vm.config.extraConfig if o.key == ovf.OVF_ENV_KEY)
-    assert 'oe:key="ip" oe:value="192.0.2.150"' in env
+    assert 'oe:key="network.ip" oe:value="192.0.2.150"' in env  # qualified, as the guest reads it
