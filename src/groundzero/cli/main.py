@@ -562,7 +562,7 @@ def _print_os_network(cfg: dict[str, Any]) -> None:
 def install(
     host: str,
     iso: Annotated[
-        str, typer.Option(help="Stock ISO: repository id or filename (see `isos list`), or a path")
+        str, typer.Option(help="Stock ISO: repository id or filename (see `images list`), or a path")
     ],
     config: Annotated[
         str | None, typer.Option(help="Config set name or id (default: capture from the running OS)")
@@ -620,11 +620,11 @@ def install(
 
 
 def _resolve_iso(ref: str) -> dict[str, Any]:
-    isos: list[dict[str, Any]] = _call("GET", "/isos") or _call("POST", "/isos/rescan")
+    isos: list[dict[str, Any]] = _call("GET", "/images") or _call("POST", "/images/rescan")
     for image in isos:
         if ref in (image["id"], image["filename"]):
             return image
-    _fail(f"no ISO matches '{ref}' in the repository (run `groundzero isos list` to rescan)")
+    _fail(f"no image matches '{ref}' in the repository (run `groundzero images list` to rescan)")
 
 
 def _resolve_config_set(ref: str) -> dict[str, Any]:
@@ -636,9 +636,11 @@ def _resolve_config_set(ref: str) -> dict[str, Any]:
 
 # ── config sets & ISO repository ─────────────────────────────────────────
 config_app = typer.Typer(help="Config sets: shared OS settings applied at install.", no_args_is_help=True)
-isos_app = typer.Typer(help="Stock installer ISOs in the repository folder.", no_args_is_help=True)
+images_app = typer.Typer(
+    help="Stock installer ISOs and appliance OVAs in the repository folder.", no_args_is_help=True
+)
 app.add_typer(config_app, name="config")
-app.add_typer(isos_app, name="isos")
+app.add_typer(images_app, name="images")
 
 
 @config_app.command("list")
@@ -676,15 +678,58 @@ def config_delete(name: str) -> None:
     console.print(f"Deleted config set {escape(cs['name'])}")
 
 
-@isos_app.command("list")
-def isos_list(rescan: Annotated[bool, typer.Option(help="Rescan the folder first")] = True) -> None:
-    isos = _call("POST", "/isos/rescan") if rescan else _call("GET", "/isos")
-    table = Table("ID", "File", "OS", "Version", "Build", "Size")
+@images_app.command("show")
+def images_show(
+    image: Annotated[str, typer.Argument(help="Image id or filename (see `images list`)")],
+) -> None:
+    """What an OVA is and every input (OVF property) it takes."""
+    found = _resolve_iso(image)
+    info = _call("GET", f"/images/{found['id']}/descriptor")
+    d = info["descriptor"]
+    size = " · ".join(
+        x
+        for x in (
+            f"{d['cpus']} vCPU" if d["cpus"] else "",
+            f"{d['memory_mb'] / 1024:g} GB RAM" if d["memory_mb"] else "",
+        )
+        if x
+    )
+    console.print(Text(f"{d['product'] or found['filename']} {d['version'] or ''}  {size}", style="bold"))
+    console.print(Text("Networks: " + (", ".join(n["name"] for n in d["networks"]) or "-")))
+    table = Table("Input (guest key)", "Type", "Label", "Default", "Set by you")
+    for p in d["properties"]:
+        kind = (
+            p["type"]
+            + (" (password)" if p["password"] else "")
+            + (f" {p['choices']}" if p["choices"] else "")
+        )
+        default = "" if p["password"] else (p["default"] or "")
+        table.add_row(
+            *(
+                Text(c)
+                for c in (
+                    p["qualified_key"],
+                    kind,
+                    p["label"] or "",
+                    default,
+                    "yes" if p["user_configurable"] else "no",
+                )
+            )
+        )
+    console.print(table)
+
+
+@images_app.command("list")
+def images_list(rescan: Annotated[bool, typer.Option(help="Rescan the folder first")] = True) -> None:
+    """ISOs and OVAs in the repository folder."""
+    isos = _call("POST", "/images/rescan") if rescan else _call("GET", "/images")
+    table = Table("ID", "File", "Kind", "Product / OS", "Version", "Build", "Size")
     for i in isos:
         cells = (
             i["id"],
             i["filename"],
-            i["os_family"] or "?",
+            i["kind"],
+            i.get("product") or i["os_family"] or "?",
             i["version"] or "-",
             i["build"] or "-",
             f"{i['size'] / 2**20:.0f} MiB",

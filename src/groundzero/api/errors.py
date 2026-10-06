@@ -14,6 +14,7 @@ from groundzero.core.jobs import HostBusyError
 from groundzero.core.services import ConfirmationError, ConflictError, NotFoundError, SettingsValidationError
 from groundzero.core.tls import CertificateChangedError
 from groundzero.osconfig import OsConfigError
+from groundzero.ova.descriptor import DescriptorError
 from groundzero.preflight.evaluate import UnknownProfileError
 
 PROBLEM_JSON = "application/problem+json"
@@ -57,6 +58,7 @@ _DOMAIN_ERRORS: tuple[tuple[type[Exception], int, str], ...] = (
     (UnknownProfileError, 422, "unknown_profile"),
     (ConfirmationError, 422, "confirmation_required"),
     (OsConfigError, 422, "os_config_invalid"),
+    (DescriptorError, 422, "ova_invalid"),
     (CertificateChangedError, 409, "certificate_changed"),
 )
 

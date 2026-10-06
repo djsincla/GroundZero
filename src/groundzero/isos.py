@@ -10,7 +10,6 @@ import hashlib
 import json
 import logging
 import re
-import tarfile
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -20,11 +19,14 @@ from pydantic import BaseModel
 from groundzero.core.config import write_private
 from groundzero.core.store import utcnow
 from groundzero.osconfig import PLUGINS
+from groundzero.ova.descriptor import DescriptorError, read_ova_descriptor
 
 logger = logging.getLogger(__name__)
 
 
-class IsoImage(BaseModel):
+class Image(BaseModel):
+    """A stock installer ISO or appliance OVA in the image repository."""
+
     id: str  # first 12 hex of the SHA-256: stable across renames/moves
     filename: str
     kind: str = "iso"  # "iso" or "ova"
@@ -50,19 +52,19 @@ class IsoRepository:
         self.directory = directory
         self._cache_file = cache_file
         self._lock = threading.Lock()
-        self._images: dict[str, tuple[IsoImage, Path]] = {}
+        self._images: dict[str, tuple[Image, Path]] = {}
         self._scanned = False
 
-    def scan(self) -> list[IsoImage]:
+    def scan(self) -> list[Image]:
         """Rescan the folder. Blocking (hashes new files); call via a thread from async code."""
         cache = self._load_cache()
-        found: dict[str, tuple[IsoImage, Path]] = {}
+        found: dict[str, tuple[Image, Path]] = {}
         if self.directory.is_dir():
             for path in sorted(p for p in self.directory.iterdir() if p.suffix.lower() in (".iso", ".ova")):
                 stat = path.stat()
                 key = f"{path.resolve()}|{stat.st_size}|{int(stat.st_mtime)}"
                 cached = cache.get(key)
-                image = IsoImage.model_validate(cached) if cached else self._identify(path, stat.st_size)
+                image = Image.model_validate(cached) if cached else self._identify(path, stat.st_size)
                 cache[key] = image.model_dump(mode="json")
                 found[image.id] = (image, path)
         self._save_cache(
@@ -73,20 +75,20 @@ class IsoRepository:
             self._scanned = True
         return self.list()
 
-    def list(self) -> list[IsoImage]:
+    def list(self) -> list[Image]:
         """Known images; the first call scans the folder (after a restart nothing is known yet)."""
         if not self._scanned:
             return self.scan()
         with self._lock:
             return sorted((img for img, _ in self._images.values()), key=lambda i: i.filename)
 
-    def resolve(self, iso_id: str) -> tuple[IsoImage, Path] | None:
+    def resolve(self, iso_id: str) -> tuple[Image, Path] | None:
         if not self._scanned:
             self.scan()
         with self._lock:
             return self._images.get(iso_id)
 
-    def _identify(self, path: Path, size: int) -> IsoImage:
+    def _identify(self, path: Path, size: int) -> Image:
         sha = _sha256(path)
         family = version = build = product = None
         kind = "ova" if path.suffix.lower() == ".ova" else "iso"
@@ -100,7 +102,7 @@ class IsoRepository:
                 if meta is not None:
                     family, version, build = plugin.family, meta.version, meta.build
                     break
-        return IsoImage(
+        return Image(
             id=sha[:12],
             filename=path.name,
             kind=kind,
@@ -138,28 +140,18 @@ _OVA_FAMILIES = (
 
 
 def detect_ova(path: Path) -> tuple[str, str | None, str | None, str | None] | None:
-    """(product, family, version, build) from the OVF descriptor (the OVA's first member). Never raises."""
+    """(product, family, version, build) from the OVF descriptor. Never raises."""
     try:
-        with tarfile.open(path) as tar:
-            first = tar.next()
-            if first is None or not first.name.endswith(".ovf"):
-                return None
-            handle = tar.extractfile(first)
-            ovf = handle.read(4_000_000).decode(errors="replace") if handle else ""
-    except (OSError, tarfile.TarError):
+        desc = read_ova_descriptor(path)
+    except DescriptorError:
         return None
-
-    def tag(name: str) -> str | None:
-        m = re.search(rf"<(?:ovf:)?{name}>([^<]*)<", ovf)
-        return m.group(1).strip() if m else None
-
-    product = tag("Product")
+    product = desc.product
     if not product:
         return None
     family = next((f for key, f in _OVA_FAMILIES if key in product.lower()), None)
-    version = tag("Version")
+    version = desc.version
     build = None
-    if full := tag("FullVersion"):
+    if full := desc.full_version:
         m = re.search(r"Build_(\d+)", full) or re.search(r"(\d{5,})", full)
         build = m.group(1) if m else None
     # e.g. holorouter-9.1.1.0456.ova: version (and build) only in the file name

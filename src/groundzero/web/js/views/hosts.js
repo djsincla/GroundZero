@@ -291,14 +291,14 @@ async function holorouterDialog(ctx) {
   const { id, host } = ctx;
   const [families, sets, stored, isos] = await Promise.all([
     api("GET", "/os-families"), api("GET", "/config-sets"), maybe(api("GET", `/hosts/${id}/host-values/holodeck`)),
-    api("GET", "/isos"),
+    api("GET", "/images"),
   ]);
   const holodeck = families.find((f) => f.family === "holodeck");
   const choices = sets.filter((s) => s.os_family === "holodeck");
   const image = isos.filter((i) => i.os_family === "holorouter").sort((a, b) => (b.version || "").localeCompare(a.version || ""))[0];
   if (!choices.length || !image) {
     openDialog("Deploy Holorouter", [h("p", {}, !image
-      ? "Put the Holorouter OVA in the image repository first (ISOs page)."
+      ? "Put the Holorouter OVA in the image repository first (Images page)."
       : "Create a Holodeck config set first (Config sets → New, family VMware Holodeck).")],
       { submitLabel: "OK", onSubmit: async () => {} });
     return;

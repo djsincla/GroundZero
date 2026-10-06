@@ -1,4 +1,4 @@
-"""OS families, config sets and the ISO repository."""
+"""OS families, config sets and the image repository (ISOs and OVAs)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from fastapi import APIRouter, Response, status
 
 from groundzero.api.deps import ServicesDep
 from groundzero.core.models import ConfigSet, ConfigSetWrite
-from groundzero.core.services import OsFamily
-from groundzero.isos import IsoImage
+from groundzero.core.services import ImageDescriptor, OsFamily
+from groundzero.isos import Image
 
 router = APIRouter(tags=["catalog"])
 
@@ -46,12 +46,19 @@ def delete_config_set(set_id: str, services: ServicesDep) -> None:
     services.delete_config_set(set_id)
 
 
-@router.get("/isos", response_model=list[IsoImage])
-def list_isos(services: ServicesDep) -> list[IsoImage]:
-    """Stock installer ISOs found in the repository folder (you add/remove files there)."""
-    return services.list_isos()
+@router.get("/images", response_model=list[Image])
+def list_images(services: ServicesDep) -> list[Image]:
+    """Stock installer ISOs and appliance OVAs found in the repository folder (you add/remove files there)."""
+    return services.list_images()
 
 
-@router.post("/isos/rescan", response_model=list[IsoImage])
-async def rescan_isos(services: ServicesDep) -> list[IsoImage]:
-    return await services.rescan_isos()
+@router.post("/images/rescan", response_model=list[Image])
+async def rescan_images(services: ServicesDep) -> list[Image]:
+    return await services.rescan_images()
+
+
+@router.get("/images/{image_id}/descriptor", response_model=ImageDescriptor)
+async def image_descriptor(image_id: str, services: ServicesDep) -> ImageDescriptor:
+    """An OVA's descriptor: product, networks, size, and every input (OVF property) it takes, plus a
+    JSON Schema of the inputs a person sets."""
+    return await services.image_descriptor(image_id)

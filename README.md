@@ -55,7 +55,7 @@ re-burned ISOs. GroundZero turns that into one repeatable, API-driven run:
 ```mermaid
 flowchart LR
     subgraph Inputs
-      ISO[("ISO repository<br/><sub>stock installers you download</sub>")]
+      ISO[("Image repository<br/><sub>stock ISOs and OVAs you download</sub>")]
       CS["Config set<br/><sub>network · disk rule · NTP · CPU override</sub>"]
       HV["Per-server values<br/><sub>hostname · IP · NIC overrides</sub>"]
     end
@@ -69,7 +69,7 @@ flowchart LR
     class HD next
 ```
 
-The ISO repository, config sets and hosts stay separate, and they are only merged at deploy time. A
+The image repository, config sets and hosts stay separate, and they are only merged at deploy time. A
 **deploy preview** shows the exact kickstart, with secrets masked, before anything touches the
 server.
 
@@ -111,7 +111,7 @@ uv run groundzero config capture r740xd --name lab-esxi
 
 # 3. Drop stock ISOs into ./images, then install by filename or ISO id
 #    (the CLI previews the kickstart and asks for a typed confirmation)
-uv run groundzero isos list
+uv run groundzero images list
 uv run groundzero install r740xd --iso VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso --config lab-esxi \
     --hostname esxi1 --ip 192.0.2.101
 ```
@@ -133,7 +133,7 @@ scripts/gz-container logs | status | token | shell | down
 
 - **State** (database, API token, encryption key, certificates) lives in the `groundzero-data`
   volume and survives upgrades and restarts.
-- **ISOs** are read from `./images`, mounted read-only.
+- **Images** (ISOs and OVAs) are read from `./images`, mounted read-only.
 - **Ports:** the API and UI are published on `127.0.0.1:7182` only. The media server is published on
   `:443`, so the BMC can fetch the install ISO.
 - **Media URL:** the BMC fetches media from *this machine* (for example its VPN address), not from
@@ -153,12 +153,12 @@ curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7182/api/v1/hosts
 
 | Area | Endpoints |
 |---|---|
-| Hosts | `GET/POST /hosts`, `GET/DELETE /hosts/{id}` |
-| Discovery | `POST/GET /hosts/{id}/inventory`, `POST/GET /hosts/{id}/preflight`, `GET /profiles` |
-| Installed OS | `PUT/GET /hosts/{id}/os`, `POST/GET /hosts/{id}/os/network`, `POST /hosts/{id}/os/capture` |
+| Hosts | `GET/POST /hosts`, `GET/DELETE /hosts/{id}`, `PUT/GET /hosts/{id}/os` (how to reach the installed OS) |
+| Tasks | `GET /tasks` (the catalog, with each task's parameter schema), `GET /hosts/{id}/pipeline`, `POST /hosts/{id}/tasks/{task}` |
+| Outputs | `GET /hosts/{id}/outputs`, `GET /hosts/{id}/outputs/{kind}`: what each task produced, and the next task reads |
 | Config | `GET /os-families`, `GET/POST /config-sets`, `GET/PUT/DELETE /config-sets/{id}`, `GET/PUT /hosts/{id}/host-values/{family}` |
-| ISOs | `GET /isos`, `POST /isos/rescan` |
-| Install | `POST /hosts/{id}/install/preview`, `POST/GET /hosts/{id}/install` |
+| Images | `GET /images`, `POST /images/rescan`, `GET /images/{id}/descriptor` (an OVA's inputs, as a JSON Schema) |
+| Install | `POST /hosts/{id}/install/preview` (the kickstart, before anything runs) |
 | Trust | `GET /hosts/{id}/certificates`, `POST /hosts/{id}/certificates/{role}/trust` |
 | Jobs | `GET /jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/events` (SSE), `POST /jobs/{id}/cancel` |
 

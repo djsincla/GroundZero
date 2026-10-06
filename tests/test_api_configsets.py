@@ -145,18 +145,18 @@ def test_host_values_are_validated(api: TestClient) -> None:
 
 
 def test_iso_repository_lists_detected_isos(api: TestClient) -> None:
-    isos = api.post("/api/v1/isos/rescan").json()
+    isos = api.post("/api/v1/images/rescan").json()
     by_name = {i["filename"]: i for i in isos}
     esxi = by_name["VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso"]
     assert (esxi["os_family"], esxi["version"], esxi["build"]) == ("esxi", "9.1.1", "25714478")
     assert len(esxi["sha256"]) == 64 and esxi["id"] == esxi["sha256"][:12]
     assert by_name["notes.iso"]["os_family"] is None
-    assert api.get("/api/v1/isos").json() == isos
+    assert api.get("/api/v1/images").json() == isos
 
 
 def test_preview_shows_the_kickstart_without_secrets(api: TestClient) -> None:
     host_id = _host(api, with_os=False)
-    iso = next(i for i in api.post("/api/v1/isos/rescan").json() if i["os_family"] == "esxi")
+    iso = next(i for i in api.post("/api/v1/images/rescan").json() if i["os_family"] == "esxi")
     cs = api.post(
         "/api/v1/config-sets",
         json={"name": "lab", "os_family": "esxi", "settings": LAB, "root_password": SECRET},
@@ -179,7 +179,7 @@ def test_preview_shows_the_kickstart_without_secrets(api: TestClient) -> None:
 
 def test_install_with_a_set_needs_per_server_values(api: TestClient) -> None:
     host_id = _host(api, with_os=False)
-    iso = next(i for i in api.post("/api/v1/isos/rescan").json() if i["os_family"] == "esxi")
+    iso = next(i for i in api.post("/api/v1/images/rescan").json() if i["os_family"] == "esxi")
     cs = api.post(
         "/api/v1/config-sets",
         json={"name": "lab", "os_family": "esxi", "settings": LAB, "root_password": SECRET},
@@ -200,8 +200,8 @@ def test_certificate_routes(api: TestClient) -> None:
 
 
 def test_isos_are_listed_after_a_restart_without_a_rescan(api: TestClient) -> None:
-    """Regression: GET /isos was empty after every server start until someone pressed Rescan."""
-    names = [i["filename"] for i in api.get("/api/v1/isos").json()]
+    """Regression: the image list (formerly GET /isos) was empty after every restart until a Rescan."""
+    names = [i["filename"] for i in api.get("/api/v1/images").json()]
     assert "VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso" in names
 
 
@@ -267,7 +267,7 @@ def test_ovas_are_recognised_in_the_image_repository(tmp_path: Path, api: TestCl
         )
         with tarfile.open(isos / name, "w") as tar:
             tar.add(ovf, arcname=ovf.name)
-    by_name = {i["filename"]: i for i in api.post("/api/v1/isos/rescan").json()}
+    by_name = {i["filename"]: i for i in api.post("/api/v1/images/rescan").json()}
     router = by_name["holorouter-9.1.1.0456.ova"]
     assert (router["kind"], router["os_family"], router["version"], router["build"]) == (
         "ova",
@@ -281,3 +281,27 @@ def test_ovas_are_recognised_in_the_image_repository(tmp_path: Path, api: TestCl
         "9.1.1.0",
         "25713928",
     )
+
+
+def test_an_ovas_inputs_are_read_from_its_descriptor(tmp_path: Path, api: TestClient) -> None:
+    """Any OVA: its properties become a form (JSON Schema) keyed as the guest reads them."""
+    import tarfile
+
+    repo = Path(api.app.state.services.settings.iso_dir)  # type: ignore[attr-defined]
+    fixture = Path(__file__).parent / "fixtures" / "ova" / "sddc-manager-9.1.1.ovf"
+    with tarfile.open(repo / "VCF-SDDC-Manager-Appliance-9.1.1.0.25713928.ova", "w") as tar:
+        tar.add(fixture, arcname="VCF-SDDC-Manager-Appliance-9.1.1.0.25713928.ovf")
+    image = next(i for i in api.post("/api/v1/images/rescan").json() if i["kind"] == "ova")
+    info = api.get(f"/api/v1/images/{image['id']}/descriptor").json()
+    d, schema = info["descriptor"], info["schema"]
+    assert (d["product"], d["cpus"], d["memory_mb"], [n["name"] for n in d["networks"]]) == (
+        "VMware VCF SDDC Manager Appliance", 4, 16384, ["Network 1"])  # fmt: skip
+    props = schema["properties"]
+    assert props["ROOT_PASSWORD"]["format"] == "password" and props["ROOT_PASSWORD"]["minLength"] == 15
+    assert props["vami.ip_address_version.SDDC-Manager"]["enum"] == ["IPv4", "IPv4 and IPv6"]
+    assert props["vami.ip0.SDDC-Manager"]["x-group"] == "Networking Configuration"
+    assert "VCF_PASSWORD" not in props  # not user-configurable: sent with its default, never asked for
+    assert "ROOT_PASSWORD" in schema["x-secret-fields"]
+    iso = next(i for i in api.get("/api/v1/images").json() if i["kind"] == "iso")
+    assert api.get(f"/api/v1/images/{iso['id']}/descriptor").status_code == 409
+    assert api.get("/api/v1/images/nope/descriptor").status_code == 404

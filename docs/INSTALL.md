@@ -63,10 +63,10 @@ volume; ISOs and OVAs are read from `./images`.
 ## 3. Add your installers
 
 Copy the stock files into `./images` (or point `GROUNDZERO_ISO_REPOSITORY` at another folder), then
-rescan from the **ISOs** page or with:
+rescan from the **Images** page or with:
 
 ```bash
-uv run groundzero isos list
+uv run groundzero images list   # `images show <file>` lists an OVA's inputs
 ```
 
 GroundZero recognizes ESXi installer ISOs and appliance OVAs (Holorouter, VCF Installer) by their

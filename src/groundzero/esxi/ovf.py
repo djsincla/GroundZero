@@ -8,7 +8,6 @@ if a VM with the target name already exists it is left alone (and powered on).
 from __future__ import annotations
 
 import logging
-import re
 import ssl
 import tarfile
 import threading
@@ -22,6 +21,7 @@ import httpx
 from pydantic import BaseModel
 
 from groundzero.esxi.reader import EsxiError
+from groundzero.ova.descriptor import DescriptorError, environment_values, parse_descriptor, read_ova
 
 logger = logging.getLogger(__name__)
 CHUNK = 1024 * 1024
@@ -80,38 +80,23 @@ def inject_ovf_environment(vm: Any, properties: dict[str, str]) -> None:
 
 def read_descriptor(ova: Path) -> tuple[str, dict[str, int]]:
     """The OVF descriptor and the size of every file in the OVA."""
-    with tarfile.open(ova) as tar:
-        members = tar.getmembers()
-        ovf_member = next((m for m in members if m.name.endswith(".ovf")), None)
-        if ovf_member is None:
-            raise EsxiError(f"{ova.name} has no OVF descriptor")
-        handle = tar.extractfile(ovf_member)
-        descriptor = handle.read().decode() if handle else ""
-    return descriptor, {m.name: m.size for m in members}
+    try:
+        return read_ova(ova)
+    except DescriptorError as exc:
+        raise EsxiError(str(exc)) from exc
 
 
 def qualify_properties(descriptor: str, properties: dict[str, str]) -> dict[str, str]:
-    """Bare property keys → the keys the guest reads: ``<class>.<key>[.<instance>]``.
+    """Every property the OVA declares, keyed as the guest reads it (``<class>.<key>[.<instance>]``).
 
-    A property in ``<ProductSection ovf:class="network">`` is ``network.ip`` in the OVF environment,
-    not ``ip`` (live finding: the Holorouter ignored bare keys and booted without an IP).
-    Keys that are already qualified are kept; keys the descriptor does not declare are an error.
+    Given values may use bare or qualified keys; the rest get their defaults. A property in
+    ``<ProductSection ovf:class="network">`` is ``network.ip`` in the OVF environment, not ``ip`` (live
+    finding: the Holorouter ignored bare keys and booted without an IP). Undeclared keys are an error.
     """
-    full: dict[str, str] = {}
-    for section in re.finditer(
-        r"<(?:ovf:)?ProductSection([^>]*)>(.*?)</(?:ovf:)?ProductSection>", descriptor, re.S
-    ):
-        cls = re.search(r'ovf:class="([^"]*)"', section.group(1))
-        inst = re.search(r'ovf:instance="([^"]*)"', section.group(1))
-        for key in re.findall(r'<(?:ovf:)?Property[^>]*?ovf:key="([^"]+)"', section.group(2)):
-            name = ".".join(p for p in (cls.group(1) if cls else "", key, inst.group(1) if inst else "") if p)
-            full[key] = full[name] = name
-    unknown = sorted(k for k in properties if k not in full)
-    if unknown:
-        raise EsxiError(
-            f"The OVA declares no propert{'y' if len(unknown) == 1 else 'ies'} {', '.join(unknown)}"
-        )
-    return {full[k]: v for k, v in properties.items()}
+    try:
+        return environment_values(parse_descriptor(descriptor), properties)
+    except DescriptorError as exc:
+        raise EsxiError(str(exc)) from exc
 
 
 def _stream(ova: Path, member: str, sent: list[int], lock: threading.Lock) -> Iterator[bytes]:

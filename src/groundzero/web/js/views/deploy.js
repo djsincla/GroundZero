@@ -12,7 +12,7 @@ export async function viewDeploy(app, id, query = new URLSearchParams()) {
     api("GET", `/hosts/${id}`),
     maybe(api("GET", `/hosts/${id}/os`)),
     api("GET", "/os-families"),
-    api("GET", "/isos"),
+    api("GET", "/images"),
     api("GET", "/config-sets"),
     maybe(api("GET", `/hosts/${id}/host-values/esxi`)),
     api("GET", `/jobs?host_id=${id}&limit=5`),
@@ -31,7 +31,7 @@ export async function viewDeploy(app, id, query = new URLSearchParams()) {
   const isoStep = step(1, "Installer image",
     images.length
       ? h("div", { class: "choices" }, isoChoices)
-      : empty("No ESXi installer ISOs in the repository.", h("a", { class: "button", href: "#/isos" }, "Open ISO repository")));
+      : empty("No ESXi installer ISOs in the repository.", h("a", { class: "button", href: "#/images" }, "Open image repository")));
 
   // ── step 2: configuration ──
   // ?mode=keep comes from the pipeline's "Deploy OS · custom ISO from current settings".

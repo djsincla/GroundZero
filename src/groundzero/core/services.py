@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from groundzero import __version__
 from groundzero.core import diagnostics
@@ -37,7 +37,7 @@ from groundzero.install.job import InstallRequest
 from groundzero.install.kickstart import render_kickstart
 from groundzero.inventory.collect import collect_inventory as read_inventory
 from groundzero.inventory.models import HostInventory
-from groundzero.isos import IsoImage, IsoRepository
+from groundzero.isos import Image, IsoRepository
 from groundzero.media.registry import MediaRegistry
 from groundzero.modules import REGISTRY
 from groundzero.modules.base import Inputs
@@ -46,6 +46,7 @@ from groundzero.modules.outputs import OUTPUTS
 from groundzero.modules.prep import current_jumbo
 from groundzero.osconfig import PLUGINS, OsConfigError, plugin_for
 from groundzero.osconfig.esxi import EsxiPlugin
+from groundzero.ova.descriptor import OvfDescriptor, descriptor_schema, read_ova_descriptor
 from groundzero.preflight.evaluate import PreflightReport, load_profile
 from groundzero.readiness import ReadinessReport, assess
 from groundzero.redfish.capture import load_recording
@@ -94,10 +95,18 @@ class OsFamily(BaseModel):
     secret_fields: list[str]
 
 
+class ImageDescriptor(BaseModel):
+    image: Image
+    descriptor: OvfDescriptor
+    schema_: dict[str, Any] = Field(alias="schema", description="JSON Schema of the user-configurable inputs")
+
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+
 class InstallPreview(BaseModel):
     """What a deployment would do, without touching the BMC or the server."""
 
-    iso: IsoImage | None
+    iso: Image | None
     config_set: str | None
     spec: dict[str, Any]
     kickstart: str  # root password hash masked
@@ -333,11 +342,24 @@ class Services:
         return data
 
     # ── ISO repository ───────────────────────────────────────────────────
-    def list_isos(self) -> list[IsoImage]:
+    def list_images(self) -> list[Image]:
         return self.isos.list()
 
-    async def rescan_isos(self) -> list[IsoImage]:
+    async def rescan_images(self) -> list[Image]:
         return await asyncio.to_thread(self.isos.scan)
+
+    async def image_descriptor(self, image_id: str) -> ImageDescriptor:
+        """What an OVA is and the inputs it takes, with a JSON Schema for the form."""
+        resolved = self.isos.resolve(image_id)
+        if resolved is None:
+            raise NotFoundError(
+                f"Image {image_id} is not in the repository; rescan or check {self.settings.iso_dir}"
+            )
+        image, path = resolved
+        if image.kind != "ova":
+            raise ConflictError(f"{image.filename} is not an OVA")
+        desc = await asyncio.to_thread(read_ova_descriptor, path)
+        return ImageDescriptor(image=image, descriptor=desc, schema_=descriptor_schema(desc))
 
     # ── tasks and the pipeline ──────────────────────────────────────────
     def list_tasks(self) -> list[TaskInfo]:

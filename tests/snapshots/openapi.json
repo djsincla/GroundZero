@@ -120,6 +120,35 @@
         "title": "ConfigSetWrite",
         "type": "object"
       },
+      "DeploymentOption": {
+        "properties": {
+          "default": {
+            "default": false,
+            "title": "Default",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "DeploymentOption",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -265,6 +294,116 @@
         "title": "HostCreate",
         "type": "object"
       },
+      "Image": {
+        "description": "A stock installer ISO or appliance OVA in the image repository.",
+        "properties": {
+          "build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "default": "iso",
+            "title": "Kind",
+            "type": "string"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "title": "Modified At",
+            "type": "string"
+          },
+          "os_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Os Family"
+          },
+          "product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "os_family",
+          "version",
+          "build",
+          "size",
+          "sha256",
+          "modified_at"
+        ],
+        "title": "Image",
+        "type": "object"
+      },
+      "ImageDescriptor": {
+        "properties": {
+          "descriptor": {
+            "$ref": "#/components/schemas/OvfDescriptor"
+          },
+          "image": {
+            "$ref": "#/components/schemas/Image"
+          },
+          "schema": {
+            "additionalProperties": true,
+            "description": "JSON Schema of the user-configurable inputs",
+            "title": "Schema",
+            "type": "object"
+          }
+        },
+        "required": [
+          "image",
+          "descriptor",
+          "schema"
+        ],
+        "title": "ImageDescriptor",
+        "type": "object"
+      },
       "InputRef": {
         "description": "One input of a task: which output, which task makes it, and whether it is there.",
         "properties": {
@@ -351,7 +490,7 @@
           "iso": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/IsoImage"
+                "$ref": "#/components/schemas/Image"
               },
               {
                 "type": "null"
@@ -505,92 +644,6 @@
           "confirm"
         ],
         "title": "InstallRequest",
-        "type": "object"
-      },
-      "IsoImage": {
-        "properties": {
-          "build": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build"
-          },
-          "filename": {
-            "title": "Filename",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "kind": {
-            "default": "iso",
-            "title": "Kind",
-            "type": "string"
-          },
-          "modified_at": {
-            "format": "date-time",
-            "title": "Modified At",
-            "type": "string"
-          },
-          "os_family": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Os Family"
-          },
-          "product": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product"
-          },
-          "sha256": {
-            "title": "Sha256",
-            "type": "string"
-          },
-          "size": {
-            "title": "Size",
-            "type": "integer"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version"
-          }
-        },
-        "required": [
-          "id",
-          "filename",
-          "os_family",
-          "version",
-          "build",
-          "size",
-          "sha256",
-          "modified_at"
-        ],
-        "title": "IsoImage",
         "type": "object"
       },
       "Job": {
@@ -1023,6 +1076,263 @@
           "fresh"
         ],
         "title": "OutputSummary",
+        "type": "object"
+      },
+      "OvfDescriptor": {
+        "properties": {
+          "cpus": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpus"
+          },
+          "deployment_options": {
+            "items": {
+              "$ref": "#/components/schemas/DeploymentOption"
+            },
+            "title": "Deployment Options",
+            "type": "array"
+          },
+          "disk_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Gb"
+          },
+          "full_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Version"
+          },
+          "has_eula": {
+            "default": false,
+            "title": "Has Eula",
+            "type": "boolean"
+          },
+          "memory_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Mb"
+          },
+          "networks": {
+            "items": {
+              "$ref": "#/components/schemas/OvfNetwork"
+            },
+            "title": "Networks",
+            "type": "array"
+          },
+          "product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product"
+          },
+          "properties": {
+            "items": {
+              "$ref": "#/components/schemas/OvfProperty"
+            },
+            "title": "Properties",
+            "type": "array"
+          },
+          "transport": {
+            "description": "e.g. com.vmware.guestInfo, iso",
+            "items": {
+              "type": "string"
+            },
+            "title": "Transport",
+            "type": "array"
+          },
+          "vendor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "title": "OvfDescriptor",
+        "type": "object"
+      },
+      "OvfNetwork": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OvfNetwork",
+        "type": "object"
+      },
+      "OvfProperty": {
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ValueMap{...}: the only accepted values",
+            "title": "Choices"
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "key": {
+            "description": "As declared (ovf:key)",
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "max_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Length"
+          },
+          "min_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Length"
+          },
+          "password": {
+            "default": false,
+            "title": "Password",
+            "type": "boolean"
+          },
+          "qualified_key": {
+            "description": "What the guest reads: <class>.<key>[.<instance>]",
+            "title": "Qualified Key",
+            "type": "string"
+          },
+          "type": {
+            "default": "string",
+            "title": "Type",
+            "type": "string"
+          },
+          "user_configurable": {
+            "default": false,
+            "title": "User Configurable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "qualified_key"
+        ],
+        "title": "OvfProperty",
         "type": "object"
       },
       "PinnedCertificate": {
@@ -2460,19 +2770,19 @@
         ]
       }
     },
-    "/api/v1/isos": {
+    "/api/v1/images": {
       "get": {
-        "description": "Stock installer ISOs found in the repository folder (you add/remove files there).",
-        "operationId": "list_isos_api_v1_isos_get",
+        "description": "Stock installer ISOs and appliance OVAs found in the repository folder (you add/remove files there).",
+        "operationId": "list_images_api_v1_images_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/IsoImage"
+                    "$ref": "#/components/schemas/Image"
                   },
-                  "title": "Response List Isos Api V1 Isos Get",
+                  "title": "Response List Images Api V1 Images Get",
                   "type": "array"
                 }
               }
@@ -2485,24 +2795,24 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Isos",
+        "summary": "List Images",
         "tags": [
           "catalog"
         ]
       }
     },
-    "/api/v1/isos/rescan": {
+    "/api/v1/images/rescan": {
       "post": {
-        "operationId": "rescan_isos_api_v1_isos_rescan_post",
+        "operationId": "rescan_images_api_v1_images_rescan_post",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/IsoImage"
+                    "$ref": "#/components/schemas/Image"
                   },
-                  "title": "Response Rescan Isos Api V1 Isos Rescan Post",
+                  "title": "Response Rescan Images Api V1 Images Rescan Post",
                   "type": "array"
                 }
               }
@@ -2515,7 +2825,55 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Rescan Isos",
+        "summary": "Rescan Images",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/images/{image_id}/descriptor": {
+      "get": {
+        "description": "An OVA's descriptor: product, networks, size, and every input (OVF property) it takes, plus a\nJSON Schema of the inputs a person sets.",
+        "operationId": "image_descriptor_api_v1_images__image_id__descriptor_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageDescriptor"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Image Descriptor",
         "tags": [
           "catalog"
         ]

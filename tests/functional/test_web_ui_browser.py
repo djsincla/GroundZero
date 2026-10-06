@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import tarfile
 import time
 from pathlib import Path
 
@@ -62,7 +63,7 @@ def test_sidebar_persists_on_every_page_including_api(page: Page, simulated_r740
     """Regression (user report): the menu disappeared when opening the API page."""
     _open(page, simulated_r740xd)
     sidebar = page.get_by_role("navigation", name="Main")
-    pages = [("Jobs", "Jobs"), ("Config sets", "Config sets"), ("ISOs", "ISO repository"),
+    pages = [("Jobs", "Jobs"), ("Config sets", "Config sets"), ("Images", "Images"),
              ("API", "API"), ("Info", "Info"), ("Hosts", "Hosts")]  # fmt: skip
     for link, heading in pages:
         _main_nav(page, link)
@@ -231,16 +232,28 @@ def test_config_set_form_is_generated_and_shows_field_errors(
     expect(page.locator(".toast").last).to_contain_text("Saved lab-esxi")
 
 
-def test_iso_repository_page_lists_and_rescans(page: Page, simulated_r740xd: GroundZero) -> None:
+def test_image_repository_page_lists_and_rescans(page: Page, simulated_r740xd: GroundZero) -> None:
     gz = simulated_r740xd
-    _open(page, gz, "/isos")
-    expect(page.get_by_text("No ISOs found")).to_be_visible()
+    _open(page, gz, "/images")
+    expect(page.get_by_text("No images found")).to_be_visible()
     _stock_iso(gz)
     page.get_by_role("button", name="Rescan folder").click()
     row = page.locator(f'tr[data-iso="{ISO_NAME}"]')
     expect(row).to_contain_text("9.1.1")
     expect(row).to_contain_text("25714478")
     expect(page.locator(".toast").first).to_contain_text("Found 1 image")
+
+    # An OVA's inputs come from its descriptor, as the form a deployment will use
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "ova" / "holorouter-9.1.1.ovf"
+    with tarfile.open(gz.home / "isos" / "holorouter-9.1.1.0456.ova", "w") as tar:
+        tar.add(fixture, arcname="holorouter-9.1.1.0456.ovf")
+    page.get_by_role("button", name="Rescan folder").click()
+    page.locator('tr[data-image="holorouter-9.1.1.0456.ova"]').get_by_role("button", name="Inputs").click()
+    dialog = page.locator("dialog")
+    expect(dialog).to_contain_text("6 vCPU · 12 GB RAM")
+    expect(dialog.locator('fieldset[data-group="Router Network"]')).to_be_visible()
+    expect(dialog.locator('[data-field="network.password"] input')).to_have_attribute("type", "password")
+    expect(dialog.locator('[data-field="extra.ssh_enabled"] input')).to_be_checked()  # its default
 
 
 def test_capture_from_a_host_creates_a_config_set(page: Page, simulated_r740xd: GroundZero) -> None:
@@ -471,8 +484,6 @@ def test_readiness_report_shows_checks_storage_and_planned_fixes(
 
 
 def test_deploy_holorouter_from_the_pipeline(page: Page, simulated_r740xd: GroundZero) -> None:
-    import tarfile
-
     gz = simulated_r740xd
     ovf = gz.home / "holorouter-9.1.1.0456.ovf"
     ovf.write_text("<Envelope><ProductSection><Product>HoloRouter</Product></ProductSection></Envelope>")
@@ -504,7 +515,7 @@ def test_deploy_holorouter_from_the_pipeline(page: Page, simulated_r740xd: Groun
                 "secrets": {"holorouter_password": "Holo-pass1!"},
             },
         )
-        api.post("/api/v1/isos/rescan")
+        api.post("/api/v1/images/rescan")
 
     _open(page, gz)
     page.get_by_role("link", name="esxi1").click()

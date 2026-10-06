@@ -178,27 +178,28 @@ export async function viewConfigSet(app, id, query) {
         h("button", { class: "primary", onclick: save }, isNew ? "Create" : "Save"))));
 }
 
-// ── ISO repository ──
-export async function viewIsos(app) {
-  const isos = await api("GET", "/isos");
-  const render = (list) => mount(app, 
-    pageHeader("ISO repository", "Stock installer images. Download them yourself and drop them into the repository folder.",
+// ── image repository: stock ISOs and appliance OVAs ──
+export async function viewImages(app) {
+  const images = await api("GET", "/images");
+  const render = (list) => mount(app,
+    pageHeader("Images", "Stock installer ISOs and appliance OVAs. Download them yourself and drop them into the repository folder.",
       h("button", { onclick: rescan, id: "rescan" }, "Rescan folder")),
     card({}, list.length
-      ? table(["Image", "OS", "Version", "Build", "Size", "SHA-256", "Modified"], list.map((i) =>
-          h("tr", { "data-iso": i.filename },
+      ? table(["Image", "Kind", "Product / OS", "Version", "Build", "Size", "SHA-256", ""], list.map((i) =>
+          h("tr", { "data-iso": i.filename, "data-image": i.filename },
             h("td", { class: "mono" }, i.filename),
-            h("td", {}, i.os_family ? badge("pass", i.os_family) : badge("none", "unrecognised")),
+            h("td", {}, i.kind.toUpperCase()),
+            h("td", {}, i.product || i.os_family ? badge("pass", i.product || i.os_family) : badge("none", "unrecognised")),
             h("td", {}, i.version || "—"), h("td", {}, i.build || "—"), h("td", {}, fmtBytes(i.size)),
             h("td", { class: "mono small-text", title: i.sha256 }, `${i.sha256.slice(0, 12)}…`),
-            h("td", { class: "muted" }, fmtTime(i.modified_at)))))
-      : empty("No ISOs found. Put stock installer ISOs in the repository folder (./images by default, or GROUNDZERO_ISO_REPOSITORY), then rescan.")),
-    h("p", { class: "help" }, "GroundZero never downloads or changes these files. At deploy time it builds a temporary copy with the kickstart, serves it to the BMC and deletes it."));
+            h("td", {}, i.kind === "ova" ? h("button", { class: "small", onclick: () => inputsDialog(i) }, "Inputs") : null))))
+      : empty("No images found. Put stock ISOs and OVAs in the repository folder (./images by default, or GROUNDZERO_ISO_REPOSITORY), then rescan.")),
+    h("p", { class: "help" }, "GroundZero never downloads or changes these files. An ESXi install builds a temporary copy with the kickstart and deletes it afterwards."));
   async function rescan(ev) {
     ev.target.disabled = true;
     ev.target.textContent = "Scanning…";
     try {
-      const list = await api("POST", "/isos/rescan");
+      const list = await api("POST", "/images/rescan");
       render(list);
       toast(`Found ${list.length} image${list.length === 1 ? "" : "s"}`, "success");
     } catch (e) {
@@ -207,5 +208,24 @@ export async function viewIsos(app) {
       ev.target.textContent = "Rescan folder";
     }
   }
-  render(isos);
+  render(images);
+}
+
+// What an OVA takes: read from its descriptor, shown as the form a deployment will use.
+async function inputsDialog(image) {
+  let info;
+  try { info = await api("GET", `/images/${image.id}/descriptor`); } catch (e) { toast(e.message, "error"); return; }
+  const d = info.descriptor;
+  const size = [d.cpus && `${d.cpus} vCPU`, d.memory_mb && `${d.memory_mb / 1024} GB RAM`, d.disk_gb && `${Math.round(d.disk_gb)} GB disk`]
+    .filter(Boolean).join(" · ");
+  const hidden = d.properties.filter((p) => !p.user_configurable);
+  const form = schemaForm(info.schema, {}, { idPrefix: "ova", secretFields: info.schema["x-secret-fields"] || [] });
+  openDialog(`${d.product || image.filename} ${d.version || ""}`, [
+    h("p", { class: "muted" }, size || "Size not declared", " · networks: ", d.networks.map((n) => n.name).join(", ") || "none",
+      " · settings via ", d.transport.join(", ") || "none"),
+    h("h3", {}, `Inputs you set (${Object.keys(info.schema.properties).length})`),
+    h("div", { "data-role": "ova-inputs" }, form.el),
+    hidden.length ? h("details", {}, h("summary", {}, `${hidden.length} more the appliance sets itself (sent with their defaults)`),
+      h("ul", { class: "plain small-text mono" }, hidden.map((p) => h("li", {}, p.qualified_key, p.default ? ` = ${p.default}` : "")))) : null,
+  ], { submitLabel: "Close", wide: true, onSubmit: async () => {} });
 }

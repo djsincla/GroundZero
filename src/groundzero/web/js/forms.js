@@ -100,9 +100,10 @@ export function schemaForm(schema, initial = {}, { idPrefix = "f", secretFields 
       return fieldWrap(path, title, required, help, input);
     }
 
-    const secret = secretFields.includes(key);
+    const secret = secretFields.includes(key) || n.format === "password";
     const input = h("input", { id, type: secret ? "password" : "text", value: secret ? "" : current ?? "",
-      autocomplete: secret ? "new-password" : "off", placeholder: n.nullable ? "inherit" : "" });
+      autocomplete: secret ? "new-password" : "off", placeholder: n.nullable ? "inherit" : "",
+      minlength: n.minLength, maxlength: n.maxLength });
     readInto(() => {
       const v = input.value.trim();
       if (v === "") return n.nullable ? null : undefined;
@@ -113,9 +114,21 @@ export function schemaForm(schema, initial = {}, { idPrefix = "f", secretFields 
 
   const topReaders = [];
   const req = new Set(schema.required || []);
-  const el = h("div", { class: "schema-form" }, formError,
-    Object.entries(schema.properties || {}).map(([k, node]) =>
-      build(node, [k], initial?.[k], req.has(k), (fn) => topReaders.push([k, fn]))));
+  // Fields that share an "x-group" (e.g. an OVA's property categories) are shown together in a fieldset.
+  const groups = new Map();
+  const top = [];
+  for (const [k, node] of Object.entries(schema.properties || {})) {
+    const field = build(node, [k], initial?.[k], req.has(k), (fn) => topReaders.push([k, fn]));
+    const group = node["x-group"];
+    if (!group) { top.push(field); continue; }
+    if (!groups.has(group)) {
+      const fs = h("fieldset", { class: "group", "data-group": group }, h("legend", {}, group));
+      groups.set(group, fs);
+      top.push(fs);
+    }
+    groups.get(group).append(field);
+  }
+  const el = h("div", { class: "schema-form" }, formError, top);
   readers.push(...topReaders);
 
   return {

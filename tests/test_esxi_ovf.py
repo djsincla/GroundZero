@@ -15,14 +15,8 @@ from groundzero.esxi import ovf
 
 OE = "{http://schemas.dmtf.org/ovf/environment/1}"
 
-# The Holorouter 9.1.1 descriptor's layout: properties in classed ProductSections.
-DESCRIPTOR = """<Envelope><VirtualSystem>
-<ProductSection><Product>HoloRouter</Product></ProductSection>
-<ProductSection ovf:class="network"><Property ovf:key="hostname" ovf:type="string"/>
-<Property ovf:key="ip" ovf:type="string"/><Property ovf:key="password" ovf:password="true" ovf:type="string"/>
-</ProductSection>
-<ProductSection ovf:class="extra"><Property ovf:key="ssh_enabled" ovf:type="boolean"/></ProductSection>
-</VirtualSystem></Envelope>"""
+# The Holorouter 9.1.1 descriptor (trimmed): properties in classed ProductSections.
+DESCRIPTOR = (Path(__file__).parent / "fixtures" / "ova" / "holorouter-9.1.1.ovf").read_text()
 
 
 def _ova(tmp_path: Path) -> Path:
@@ -39,12 +33,14 @@ def test_property_keys_are_qualified_by_their_section_class() -> None:
     full = ovf.qualify_properties(
         DESCRIPTOR, {"hostname": "holorouter", "ip": "192.0.2.150", "ssh_enabled": "True"}
     )
-    assert full == {
+    assert {k: full[k] for k in ("network.hostname", "network.ip", "extra.ssh_enabled")} == {
         "network.hostname": "holorouter",
         "network.ip": "192.0.2.150",
         "extra.ssh_enabled": "True",
     }
-    assert ovf.qualify_properties(DESCRIPTOR, {"network.ip": "x"}) == {"network.ip": "x"}  # already qualified
+    # every declared property reaches the guest: unset ones with their default (or empty), as vCenter does
+    assert full["extra.webtop_enabled"] == "true" and full["network.dns_domain"] == ""
+    assert ovf.qualify_properties(DESCRIPTOR, {"network.ip": "x"})["network.ip"] == "x"  # already qualified
     with pytest.raises(ovf.EsxiError, match="declares no property bogus"):
         ovf.qualify_properties(DESCRIPTOR, {"bogus": "1"})
 

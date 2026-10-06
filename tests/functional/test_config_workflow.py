@@ -32,7 +32,7 @@ def test_capture_then_install_with_the_captured_set(simulated_r740xd: GroundZero
     assert "lab-esxi" in listing and "captured from esxi1" in listing and "set" in listing
 
     iso = _iso(gz)
-    isos = gz.cli("isos", "list")
+    isos = gz.cli("images", "list")
     assert isos.code == 0 and "25714478" in isos.output and "esxi" in isos.output
 
     result = gz.cli(
