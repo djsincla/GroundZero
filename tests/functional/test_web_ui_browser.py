@@ -131,9 +131,9 @@ def test_sign_in_add_host_and_preflight(page: Page, simulated_r740xd: GroundZero
     expect(page.locator(".toast").first).to_contain_text("Added esxi1")
 
     page.get_by_role("link", name="esxi1").click()
-    _tab(page, "Preflight")
+    _tab(page, "Readiness")  # the hardware preflight sits under the readiness report
     page.get_by_role("button", name="Run preflight").click()
-    expect(page.locator("#drawer")).to_contain_text("Preflight")  # live progress in the job drawer
+    expect(page.locator("#drawer")).to_contain_text("Holodeck preflight")  # live progress in the job drawer
     panel = page.locator('[data-panel="preflight"]')
     expect(panel.locator('tr[data-check="memory.total"] [data-status="pass"]')).to_be_visible(timeout=20_000)
     expect(panel).to_contain_text("12 passed, 0 warnings, 0 failed, 0 unknown")
@@ -266,6 +266,7 @@ def test_deploy_with_a_config_set_previews_then_installs(page: Page, simulated_r
     assert gz.cli("config", "capture", "esxi1", "--name", "lab-esxi", timeout=60).code == 0
     _open(page, gz)
     page.get_by_role("link", name="esxi1").click()
+    _tab(page, "Install")  # reinstalling lives on the Install tab, not in the page header
     page.get_by_role("link", name="Deploy OS…").click()
 
     expect(page.locator(f'[data-iso="{ISO_NAME}"] input')).to_be_checked()
@@ -307,6 +308,7 @@ def test_deploy_keeping_current_settings_needs_exact_phrase(page: Page, simulate
     _host_with_os(gz)
     _open(page, gz)
     page.get_by_role("link", name="esxi1").click()
+    _tab(page, "Install")  # reinstalling lives on the Install tab, not in the page header
     page.get_by_role("link", name="Deploy OS…").click()
     expect(page.get_by_label("Config set")).to_have_value("")  # no sets yet: keep current settings
     expect(page.get_by_role("button", name="Preview kickstart")).to_be_hidden()
@@ -520,3 +522,47 @@ def test_deploy_holorouter_from_the_pipeline(page: Page, simulated_r740xd: Groun
     expect(page.locator('[data-task="holodeck.router"] [data-role="output"]')).to_contain_text(
         "holo1-holorouter at 192.0.2.150"
     )
+
+
+def test_a_failed_task_shows_its_error_and_the_jobs_page_filters_to_it(
+    page: Page, simulated_r740xd_os_unreachable: GroundZero
+) -> None:
+    gz = simulated_r740xd_os_unreachable
+    _host_with_os(gz)
+    _open(page, gz)
+    page.get_by_role("link", name="esxi1").click()
+    row = page.locator('[data-task="os.read"]')
+    row.get_by_role("button", name="Run").click()
+    expect(row).to_have_attribute("data-state", "failed", timeout=20_000)
+    expect(row.locator('[data-role="error"]')).to_contain_text("Cannot connect to ESXi")  # no click needed
+    page.keyboard.press("Escape")  # the drawer stays open on failure; close it as a reader would
+    expect(page.locator("#drawer")).to_be_hidden()
+
+    # Other tabs offer the next step in the header; reinstalling is not a header action
+    _tab(page, "Overview")
+    header = page.locator(".page-header")
+    expect(header.get_by_role("button", name="Next: Holodeck preflight")).to_be_visible()
+    expect(header.get_by_role("link", name="Deploy OS…")).to_have_count(0)
+
+    # A new page starts at the top
+    _tab(page, "Pipeline")
+    expect(page.locator('[data-stage="holodeck"]')).to_be_visible()
+    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    assert page.evaluate("window.scrollY") > 0
+    _main_nav(page, "Jobs")
+    expect(page.get_by_role("heading", name="Jobs", exact=True)).to_be_visible()
+    assert page.evaluate("window.scrollY") == 0
+
+    page.get_by_label("Status").select_option("failed")
+    expect(page).to_have_url(re.compile(r"#/jobs\?status=failed$"))
+    jobs = page.locator("main [data-job]")
+    expect(jobs.and_(page.locator(':not([data-status="failed"])'))).to_have_count(0)
+    read = jobs.filter(has_text="Read installed OS").first
+    expect(read.locator('[data-role="error"]')).to_contain_text("Cannot connect to ESXi")
+    expect(read.locator(".progress")).to_have_count(0)  # finished jobs are one compact row
+    read.get_by_role("button", name="Details").click()
+    expect(page.locator("#drawer")).to_contain_text("Read installed OS")
+    expect(page.locator("#drawer .steps")).to_be_visible()
+
+    page.get_by_label("Status").select_option("succeeded")
+    expect(page.get_by_text("No jobs match these filters.")).to_be_visible()

@@ -13,7 +13,7 @@ const ROUTES = [
   [/^\/(?:hosts)?$/, "hosts", "Hosts", () => viewHosts(app), true],
   [/^\/hosts\/([\w-]+)\/deploy$/, "hosts", "Deploy", (m, q) => viewDeploy(app, m[1], q), false],
   [/^\/hosts\/([\w-]+)(?:\/(\w+))?$/, "hosts", "Host", (m) => viewHost(app, m[1], m[2]), true],
-  [/^\/jobs$/, "jobs", "Jobs", () => viewJobs(app), true],
+  [/^\/jobs$/, "jobs", "Jobs", (m, q) => viewJobs(app, q), true],
   [/^\/config-sets$/, "config-sets", "Config sets", () => viewConfigSets(app), true],
   [/^\/config-sets\/([\w-]+)$/, "config-sets", "Config set", (m, q) => viewConfigSet(app, m[1], q), false],
   [/^\/isos$/, "isos", "ISOs", () => viewIsos(app), false],
@@ -21,6 +21,7 @@ const ROUTES = [
   [/^\/info$/, "info", "Info", () => viewInfo(app), false],
 ];
 let current = null;
+let lastPath = null;
 
 async function route() {
   if (!token()) return renderLogin();
@@ -38,6 +39,9 @@ async function route() {
   closeMenu();
   try {
     await view(match || [], query);
+    // A new page starts at the top; a live refresh of the same page keeps the reader's place.
+    if (path !== lastPath) window.scrollTo(0, 0);
+    lastPath = path;
     document.title = `${document.querySelector("main h1")?.textContent || title} · GroundZero`;
   } catch (e) {
     if (e.status !== 401) app.replaceChildren(errorBox(e));
@@ -105,16 +109,20 @@ document.getElementById("sign-out").addEventListener("click", () => { signOut();
 // ── running-jobs pill in the top bar ──
 const pill = document.getElementById("running");
 let runningJobs = [];
+async function refreshRunning() {
+  if (!token() || document.visibilityState !== "visible") return;
+  try {
+    runningJobs = (await api("GET", "/jobs?limit=20")).filter(isActive);
+    pill.hidden = runningJobs.length === 0;
+    pill.replaceChildren(h("span", { class: "pulse", "aria-hidden": "true" }), `${runningJobs.length} running`);
+  } catch { /* signed out or server restarting */ }
+}
 async function pollRunning() {
-  if (token() && document.visibilityState === "visible") {
-    try {
-      runningJobs = (await api("GET", "/jobs?limit=20")).filter(isActive);
-      pill.hidden = runningJobs.length === 0;
-      pill.replaceChildren(h("span", { class: "pulse", "aria-hidden": "true" }), `${runningJobs.length} running`);
-    } catch { /* signed out or server restarting */ }
-  }
+  await refreshRunning();
   setTimeout(pollRunning, 4000);
 }
+// Poll at once when the tab comes back: background tabs skip polls, so the count could be stale.
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshRunning(); });
 pill.addEventListener("click", () => {
   if (runningJobs.length === 1) showJobDrawer(runningJobs[0], { onDone: () => window.dispatchEvent(new Event("gz:refresh")) });
   else location.hash = "#/jobs";

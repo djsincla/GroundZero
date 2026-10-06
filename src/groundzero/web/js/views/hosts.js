@@ -1,8 +1,8 @@
-// Hosts list and the tabbed host page (Overview · Preflight · Networking · Install · Jobs).
+// Hosts list and the tabbed host page (Pipeline · Readiness · Overview · Networking · Install · Jobs).
 import { schemaForm } from "../forms.js";
 import {
-  api, badge, card, empty, fmtBytes, fmtTime, h, isActive, jobCard, maybe, mount, openDialog, pageHeader, showJobDrawer,
-  startJob, table, toast,
+  age, api, badge, card, empty, fmtBytes, fmtTime, h, isActive, jobCard, jobLabel, maybe, mount, openDialog, pageHeader,
+  showJobDrawer, startJob, table, toast,
 } from "../core.js";
 
 const refresh = () => window.dispatchEvent(new Event("gz:refresh"));
@@ -24,7 +24,7 @@ export async function viewHosts(app) {
       h("td", {}, hardware(host) || "—"),
       h("td", {}, pre ? badge(pre.overall) : badge("none", "not run")),
       h("td", {}, net ? net.product : "—"),
-      h("td", {}, job ? badge("running", `${job.kind} ${Math.round(job.progress * 100)}%`) : h("span", { class: "muted" }, "idle")));
+      h("td", {}, job ? badge("running", `${jobLabel(job)} ${Math.round(job.progress * 100)}%`) : h("span", { class: "muted" }, "idle")));
   }));
   mount(app, 
     pageHeader("Hosts", "Servers GroundZero manages through their BMC.",
@@ -53,10 +53,12 @@ function addHostDialog() {
 }
 
 // ── host page ──
-const TABS = [["pipeline", "Pipeline"], ["readiness", "Readiness"], ["overview", "Overview"], ["preflight", "Preflight"], ["network", "Networking"],
+const TABS = [["pipeline", "Pipeline"], ["readiness", "Readiness"], ["overview", "Overview"], ["network", "Networking"],
   ["install", "Install"], ["jobs", "Jobs"]];
+const TAB_ALIASES = { preflight: "readiness" };  // Preflight is part of Readiness now; old links still land
 
 export async function viewHost(app, id, tab = "pipeline") {
+  tab = TAB_ALIASES[tab] || tab;
   const host = await api("GET", `/hosts/${id}`);
   const [pre, osAccess, net, install, jobs, certs] = await Promise.all([
     maybe(api("GET", `/hosts/${id}/preflight`)),
@@ -66,7 +68,7 @@ export async function viewHost(app, id, tab = "pipeline") {
     api("GET", `/jobs?host_id=${id}&limit=20`),
     api("GET", `/hosts/${id}/certificates`),
   ]);
-  const pipeline = tab === "pipeline" ? await api("GET", `/hosts/${id}/pipeline`) : null;
+  const pipeline = await api("GET", `/hosts/${id}/pipeline`);
   const readiness = tab === "readiness" ? await maybe(api("GET", `/hosts/${id}/readiness`)) : null;
   const active = jobs.find(isActive);
   const busy = Boolean(active);
@@ -77,14 +79,18 @@ export async function viewHost(app, id, tab = "pipeline") {
     h("a", { href: `#/hosts/${id}/${key}`, class: key === tab ? "active" : null, "aria-current": key === tab ? "page" : null }, label)));
 
   const body = {
-    pipeline: pipelineTab, readiness: readinessTab, overview: overviewTab, preflight: preflightTab, network: networkTab, install: installTab,
+    pipeline: pipelineTab, readiness: readinessTab, overview: overviewTab, network: networkTab, install: installTab,
     jobs: jobsTab,
   }[tab] || pipelineTab;
 
+  // The header offers the recommended next step (the Pipeline tab shows it as a card instead). Reinstalling the OS
+  // lives on the Install tab: the page's most prominent button should never be its most destructive one.
+  const nextTask = pipeline.next.task && pipelineTasks(pipeline)[pipeline.next.task];
+  const headerAction = tab !== "pipeline" && !busy && nextTask
+    ? taskButton(ctx, nextTask, { primary: true, label: `Next: ${pipeline.next.title}` }) : null;
+
   mount(app, 
-    pageHeader(host.name, [hardware(host), host.bmc_address].filter(Boolean).join(" · "),
-      h("a", { class: "button primary", href: `#/hosts/${id}/deploy`, "aria-disabled": busy ? "true" : null,
-        onclick: (e) => { if (busy) e.preventDefault(); } }, "Deploy OS…")),
+    pageHeader(host.name, [hardware(host), host.bmc_address].filter(Boolean).join(" · "), headerAction),
     tabs,
     active ? card({ class: "panel running" }, h("h2", {}, "Running"), jobCard(active, { onDone: refresh })) : null,
     body(ctx));
@@ -121,6 +127,16 @@ async function openJob(jobId) {
   try { showJobDrawer(await api("GET", `/jobs/${jobId}`), { onDone: refresh }); } catch (e) { toast(e.message, "error"); }
 }
 
+const pipelineTasks = (pipeline) => Object.fromEntries(pipeline.stages.flatMap((s) => s.tasks).map((t) => [t.id, t]));
+
+function lastRun(ctx, last) {
+  const open = (e) => { e.preventDefault(); openJob(last.id); };
+  const link = h("a", { href: `#/hosts/${ctx.id}/pipeline`, onclick: open }, last.status);
+  const when = last.finished_at ? [" · ", age(last.finished_at)]
+    : ctx.active?.id === last.id && ctx.active.started_at ? [" · started ", age(ctx.active.started_at)] : null;
+  return h("p", { class: "small-text muted" }, "Last run: ", link, when);
+}
+
 function taskRow(ctx, task) {
   const last = task.last_job;
   return h("li", { class: `task ${task.state}`, "data-task": task.id, "data-state": task.state },
@@ -130,23 +146,22 @@ function taskRow(ctx, task) {
       task.destructive ? h("span", { class: "chip danger-chip" }, "changes the server") : null,
       stateBadge(task.state), h("span", { class: "spacer" }), taskButton(ctx, task)),
     h("p", { class: "muted small-text task-desc" }, task.description),
+    task.state === "failed" && last?.error ? h("p", { class: "error small-text", "data-role": "error" }, last.error) : null,
     task.output ? h("p", { class: "task-output", "data-role": "output" }, "→ ", task.output.summary,
       task.output.fresh ? null : h("span", { class: "warn-text" }, " (from before the OS was reinstalled)"),
       task.id === "host.assess" ? [" · ", h("a", { href: `#/hosts/${ctx.id}/readiness` }, "View report")] : null) : null,
     task.state === "blocked" && task.blocked_by.length
       ? h("p", { class: "small-text blocked-by" }, "Needs: ", task.blocked_by.join("; ")) : null,
-    last ? h("p", { class: "small-text muted" }, "Last run: ",
-      h("a", { href: `#/hosts/${ctx.id}/pipeline`, onclick: (e) => { e.preventDefault(); openJob(last.id); } },
-        `${last.status}${last.finished_at ? ` · ${fmtTime(last.finished_at)}` : ""}`)) : null);
+    last ? lastRun(ctx, last) : null);
 }
 
 function pipelineTab(ctx) {
   const { pipeline } = ctx;
   const next = pipeline.next;
-  const tasks = Object.fromEntries(pipeline.stages.flatMap((s) => s.tasks).map((t) => [t.id, t]));
-  const nextTask = next.task ? tasks[next.task] : null;
+  const nextTask = next.task ? pipelineTasks(pipeline)[next.task] : null;
   return [
-    card({ class: "panel next-step", "data-role": "next-step" },
+    // While a job runs, the Running card above already says what is happening: no "next step" until it ends.
+    ctx.active ? null : card({ class: "panel next-step", "data-role": "next-step" },
       h("div", { class: "row" },
         h("div", { class: "grow" }, h("p", { class: "eyebrow" }, "Next step"), h("h2", {}, next.title),
           h("p", { class: "muted" }, next.reason)),
@@ -167,8 +182,9 @@ function readinessTab(ctx) {
   const header = h("div", { class: "row" }, h("h2", {}, "Holodeck readiness"), r ? badge(r.ready ? "pass" : "fail", r.ready ? "ready" : "not ready") : null,
     h("span", { class: "spacer" }), h("button", { onclick: assess, disabled: busy }, r ? "Assess again" : "Assess now"));
   if (!r) {
-    return card({ "data-panel": "readiness" }, header, h("p", { class: "muted" },
-      "Not assessed yet. The assessment reads the installed OS (read-only) and plans what Holodeck still needs."));
+    return [card({ "data-panel": "readiness" }, header, h("p", { class: "muted" },
+      "Not assessed yet. The assessment reads the installed OS (read-only) and plans what Holodeck still needs.")),
+    preflightPanel(ctx)];
   }
   const s = r.storage;
   const storageText = {
@@ -199,7 +215,8 @@ function readinessTab(ctx) {
     : h("p", { class: "muted" }, "Nothing to fix.");
   return [
     card({ "data-panel": "readiness" }, header,
-      h("p", { class: "muted" }, `${r.variant_title} · ${r.esxi} · assessed ${fmtTime(r.generated_at)} · ${r.summary.passed} passed, ${r.summary.warnings} warnings, ${r.summary.failed} to fix, ${r.summary.unknown} not yet verified`),
+      h("p", { class: "muted" }, `${r.variant_title} · ${r.esxi} · assessed `, age(r.generated_at),
+        ` · ${r.summary.passed} passed, ${r.summary.warnings} warnings, ${r.summary.failed} to fix, ${r.summary.unknown} not yet verified`),
       h("div", { class: `storage-proposal ${s.kind}`, "data-role": "storage" }, h("h3", {}, "Holodeck datastore"), h("p", {}, storageText))),
     card({}, h("h2", {}, "Checks"),
       table(["", "Check", "Observed", "Required", "What to do"], r.checks.map((c) =>
@@ -209,6 +226,7 @@ function readinessTab(ctx) {
       h("div", { class: "row" }, h("h2", {}, "Planned fixes"), h("span", { class: "spacer" }), prepActions.length ? applyBtn : null),
       h("p", { class: "muted small-text" }, "Each fix changes only what is listed, checks the live state first, and is skipped if already done. GroundZero re-assesses afterwards."),
       planList),
+    preflightPanel(ctx),
   ];
 }
 
@@ -305,7 +323,7 @@ function overviewTab(ctx) {
         : h("p", { class: "muted" }, "Not run yet. Preflight only reads from the BMC."),
       h("div", { class: "row" },
         h("button", { onclick: runPreflight, disabled: busy }, pre ? "Run again" : "Run preflight"),
-        pre ? h("a", { href: `#/hosts/${id}/preflight` }, "Details") : null)),
+        pre ? h("a", { href: `#/hosts/${id}/readiness` }, "Details") : null)),
     card({ "data-card": "os" },
       h("h2", {}, "Installed OS"),
       osAccess
@@ -362,15 +380,17 @@ function removeHostDialog(host) {
   btn.disabled = true;
 }
 
-function preflightTab({ id, pre, busy }) {
+// Hardware preflight (BMC, read-only): shown under the readiness report, which builds on it.
+function preflightPanel({ id, pre, busy }) {
   const run = () => startJob("POST", `/hosts/${id}/preflight`, { profile: "holodeck-9" }, { onDone: refresh });
-  const header = h("div", { class: "row" }, h("h2", {}, "Holodeck preflight"),
+  const header = h("div", { class: "row" }, h("h2", {}, "Hardware preflight"),
     pre ? badge(pre.overall) : null, h("span", { class: "spacer" }),
     h("button", { onclick: run, disabled: busy }, pre ? "Run again" : "Run preflight"));
   if (!pre) return card({ "data-panel": "preflight" }, header, h("p", { class: "muted" }, "Not run yet. Preflight is read-only."));
   const s = pre.summary;
   return card({ "data-panel": "preflight" }, header,
-    h("p", { class: "muted" }, `${pre.variant_title} · ${s.passed} passed, ${s.warnings} warnings, ${s.failed} failed, ${s.unknown} unknown`),
+    h("p", { class: "muted" }, `${pre.variant_title} · checked `, age(pre.generated_at),
+      ` · ${s.passed} passed, ${s.warnings} warnings, ${s.failed} failed, ${s.unknown} unknown`),
     table(["", "Check", "Observed", "Required", "What to do"], pre.checks.map((c) =>
       h("tr", { "data-check": c.id }, h("td", {}, badge(c.status)), h("td", {}, c.title), h("td", {}, c.observed),
         h("td", { class: "muted" }, c.required), h("td", {}, c.remediation || "")))));

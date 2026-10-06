@@ -1,11 +1,35 @@
 // Jobs, Info (operator notes) and the API reference embedded in the shell.
-import { api, card, empty, h, jobCard, mount, pageHeader } from "../core.js";
+import { api, card, empty, h, isActive, jobCard, mount, pageHeader } from "../core.js";
 
-export async function viewJobs(app) {
-  const [jobs, hosts] = await Promise.all([api("GET", "/jobs?limit=50"), api("GET", "/hosts")]);
+const JOB_FILTERS = [["", "All statuses"], ["active", "Running"], ["failed", "Failed"], ["succeeded", "Succeeded"],
+  ["cancelled", "Cancelled"]];
+
+// Filters live in the URL (#/jobs?host=…&status=…) so a filtered view can be linked and survives refreshes.
+export async function viewJobs(app, query = new URLSearchParams()) {
+  const [jobs, hosts] = await Promise.all([api("GET", "/jobs?limit=200"), api("GET", "/hosts")]);
   const names = Object.fromEntries(hosts.map((x) => [x.id, x.name]));
+  const host = query.get("host") || "";
+  const status = query.get("status") || "";
+  const go = (key, value) => {
+    const q = new URLSearchParams(query);
+    if (value) q.set(key, value); else q.delete(key);
+    location.hash = `#/jobs${q.toString() ? `?${q}` : ""}`;
+  };
+  const hostSelect = h("select", { id: "jobs-host", onchange: (e) => go("host", e.target.value) },
+    h("option", { value: "" }, "All hosts"), hosts.map((x) => h("option", { value: x.id, selected: x.id === host }, x.name)));
+  const statusSelect = h("select", { id: "jobs-status", onchange: (e) => go("status", e.target.value) },
+    JOB_FILTERS.map(([v, label]) => h("option", { value: v, selected: v === status }, label)));
+  const shown = jobs.filter((j) => (!host || j.host_id === host)
+    && (!status || (status === "active" ? isActive(j) : j.status === status)));
   mount(app, pageHeader("Jobs", "Everything GroundZero has run, newest first. Running jobs update live."),
-    card({}, jobs.length ? jobs.map((j) => jobCard(j, { hostName: names[j.host_id] })) : empty("No jobs yet.")));
+    card({},
+      h("div", { class: "row filters" },
+        h("label", { for: "jobs-host", class: "visually-hidden" }, "Host"), hostSelect,
+        h("label", { for: "jobs-status", class: "visually-hidden" }, "Status"), statusSelect,
+        h("span", { class: "spacer" }), h("span", { class: "muted small-text" }, `${shown.length} of ${jobs.length}`)),
+      shown.length
+        ? shown.map((j) => jobCard(j, { hostName: names[j.host_id], onDone: () => window.dispatchEvent(new Event("gz:refresh")) }))
+        : empty(jobs.length ? "No jobs match these filters." : "No jobs yet.")));
 }
 
 export function viewApi(app) {

@@ -59,6 +59,23 @@ export const table = (headers, rows) =>
   h("div", { class: "table-wrap" },
     h("table", {}, h("thead", {}, h("tr", {}, headers.map((x) => h("th", {}, x)))), h("tbody", {}, rows)));
 export const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString() : "—");
+// "just now", "12 min ago", "3 h ago", "4 days ago": how old a result is matters more than its timestamp.
+export const fmtAge = (iso) => {
+  if (!iso) return "—";
+  const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  const d = Math.floor(s / 86400);
+  return `${d} day${d === 1 ? "" : "s"} ago`;
+};
+// A timestamp shown as its age, with the exact time on hover.
+export const age = (iso, attrs = {}) => h("time", { datetime: iso, title: fmtTime(iso), ...attrs }, fmtAge(iso));
+const fmtDuration = (job) => {
+  if (!job.started_at || !job.finished_at) return "";
+  const s = Math.round((new Date(job.finished_at) - new Date(job.started_at)) / 1000);
+  return s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
+};
 export const fmtBytes = (n) => {
   if (n == null) return "—";
   const units = ["B", "KiB", "MiB", "GiB", "TiB"];
@@ -132,15 +149,12 @@ export async function followJob(jobId, onEvent, signal) {
 }
 
 export const TASK_TITLES = {
-  discover: "Discover hardware", preflight: "Preflight", "os.read": "Read installed OS", "os.reimage": "Deploy OS · custom ISO from current settings",
+  discover: "Discover hardware", preflight: "Holodeck preflight", "vcf.readiness": "VCF 9 readiness", "os.read": "Read installed OS", "os.reimage": "Deploy OS · custom ISO from current settings",
   "os.custom": "Deploy OS · custom ISO from a config set", "os.capture": "Capture config set", "host.assess": "Assess readiness",
   "host.prep": "Prepare host", "net.verify_jumbo": "Verify jumbo frames", "holodeck.router": "Deploy Holorouter",
   "holodeck.stage": "Stage binaries", "holodeck.deploy": "Deploy Holodeck",
 };
 export const jobLabel = (job) => TASK_TITLES[job.task] || job.task || job.kind;
-// Kept for older callers: kind → label.
-export const JOB_LABELS = { inventory: "Discover hardware", preflight: "Preflight", os_network: "Read installed OS",
-  install: "Install", os_capture: "Capture config set" };
 
 const STEP_ICON = { pending: "○", running: "◐", succeeded: "✓", failed: "✕", skipped: "–", cancelled: "✕" };
 function stepDuration(step) {
@@ -172,31 +186,42 @@ export async function downloadDiagnostics(jobId) {
 const FINAL = ["succeeded", "failed", "cancelled"];
 export const isActive = (job) => job.status === "queued" || job.status === "running";
 
+// A job as a row. In lists, finished jobs are one compact line (status, task, host, age, duration, error) and
+// "Details" opens the drawer; the progress bar and live message only show while the job is active.
 export function jobCard(job, { onDone, hostName, detailed = false } = {}) {
+  const active = isActive(job);
   const bar = h("div", { style: `width:${Math.round((job.progress || 0) * 100)}%` });
+  const progress = active || detailed ? h("div", { class: "progress" }, bar) : null;
   let status = badge(job.status);
-  const msg = h("span", { class: "muted", "data-role": "message" }, job.message || "");
-  const err = h("div", { class: "error" }, job.error ? job.error.message : "");
-  const cancel = isActive(job)
+  // A finished job's generic message ("Completed", "Failed") only repeats its badge.
+  const showMsg = active || detailed || (job.message && !["Completed", "Failed", "Cancelled"].includes(job.message));
+  const msg = h("span", { class: "muted", "data-role": "message", hidden: !showMsg }, job.message || "");
+  const err = h("div", { class: "error", "data-role": "error" }, job.error ? job.error.message : "");
+  const cancel = active
     ? h("button", { class: "small", onclick: async () => {
         try { await api("POST", `/jobs/${job.id}/cancel`); toast("Cancel requested"); } catch (e) { toast(e.message, "error"); }
       } }, "Cancel")
     : null;
+  const details = detailed ? null
+    : h("button", { class: "small", onclick: () => showJobDrawer(job, { onDone }) }, "Details");
   const stepsSlot = h("div", {}, detailed ? stepsList(job.steps) : null);
   const diag = detailed
     ? h("button", { class: "small", onclick: () => downloadDiagnostics(job.id).catch((e) => toast(e.message, "error")) },
         "Download diagnostics")
     : null;
-  const el = h("div", { class: "job", "data-job": job.id },
+  const duration = fmtDuration(job);
+  const el = h("div", { class: `job${active ? " active" : ""}`, "data-job": job.id, "data-status": job.status },
     h("div", { class: "row" }, status, h("strong", {}, jobLabel(job)),
       hostName ? h("span", {}, hostName) : null,
-      h("span", { class: "mono muted" }, job.id), h("span", { class: "spacer" }),
-      h("span", { class: "muted small-text" }, fmtTime(job.created_at)), cancel),
-    h("div", { class: "progress" }, bar), msg, err, stepsSlot, diag ? h("div", { class: "row" }, diag) : null);
-  if (isActive(job)) {
+      h("span", { class: "mono muted small-text" }, job.id), h("span", { class: "spacer" }),
+      duration ? h("span", { class: "muted small-text" }, duration) : null,
+      h("span", { class: "muted small-text" }, age(job.created_at)), cancel, details),
+    progress, msg, err, stepsSlot, diag ? h("div", { class: "row" }, diag) : null);
+  if (active) {
     followJob(job.id, (ev) => {
       bar.style.width = `${Math.round(ev.progress * 100)}%`;
       status.replaceWith((status = badge(ev.status)));
+      el.dataset.status = ev.status;
       msg.textContent = ev.message;
       if (detailed && ev.steps?.length) stepsSlot.replaceChildren(stepsList(ev.steps));
       if (FINAL.includes(ev.status)) {

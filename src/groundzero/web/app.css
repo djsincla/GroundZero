@@ -116,11 +116,11 @@ tr:last-child td { border-bottom: none; }
 
 /* ── badges ── */
 .badge { display: inline-block; padding: 1px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-.pass, .succeeded { background: var(--pass-bg); color: var(--pass); }
-.warn, .running, .queued { background: var(--warn-bg); color: var(--warn); }
-.fail, .failed, .cancelled { background: var(--fail-bg); color: var(--fail); }
-.unknown, .none { background: var(--unknown-bg); color: var(--unknown); }
-.panel.running { background: var(--panel); color: var(--text); }
+/* Scoped to .badge: stages, tasks and steps carry the same state names as classes. */
+.badge.pass, .badge.succeeded { background: var(--pass-bg); color: var(--pass); }
+.badge.warn, .badge.running, .badge.queued { background: var(--warn-bg); color: var(--warn); }
+.badge.fail, .badge.failed, .badge.cancelled { background: var(--fail-bg); color: var(--fail); }
+.badge.unknown, .badge.none { background: var(--unknown-bg); color: var(--unknown); }
 
 /* ── controls ── */
 button, .button { font: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 14px; border-radius: 8px;
@@ -178,6 +178,9 @@ pre.code-block { max-height: 420px; overflow: auto; }
 .progress > div { height: 100%; background: var(--accent); transition: width .4s; }
 .job { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .job:last-child { border-bottom: none; }
+.job .row { flex-wrap: wrap; }
+.filters { margin-bottom: 4px; }
+.filters select { width: auto; min-width: 160px; }
 .drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(440px, 100vw); background: var(--panel); border-left: 1px solid var(--line);
   box-shadow: var(--shadow-lg); padding: 18px; z-index: 40; overflow-y: auto; animation: slide-in .2s ease-out; }
 .drawer[hidden] { display: none; }
@@ -218,6 +221,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
 .stage-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .task { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); }
 .task.planned { opacity: .6; }
+.task.running { border-color: var(--accent); }
+.task.failed { border-color: var(--fail); }
 .task p { margin: 4px 0 0; }
 .task-output { font-size: 13px; }
 .blocked-by { color: var(--unknown); }
