@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from groundzero.core.models import Job, JobError, JobKind, JobStatus
+from groundzero.core.models import Job, JobError, JobStatus
 from groundzero.core.store import OutputMeta
 from groundzero.core.tasks import Pipeline, evaluate_pipeline
 
@@ -16,10 +16,10 @@ PREFLIGHT = {"overall": "warn", "summary": {"passed": 12, "warnings": 1, "failed
 VCF = {"overall": "warn", "summary": {"passed": 0, "warnings": 1, "failed": 0}, "cpu_override_required": True}
 
 
-def _job(job_id: str, kind: JobKind, status: JobStatus, minutes: int, **params: Any) -> Job:
+def _job(job_id: str, task: str, status: JobStatus, minutes: int, **params: Any) -> Job:
     at = T0 + timedelta(minutes=minutes)
     error = JobError(type="x", message="boom") if status is JobStatus.FAILED else None
-    return Job(id=job_id, kind=kind, host_id="h", status=status, params=params, created_at=at,
+    return Job(id=job_id, task=task, host_id="h", status=status, params=params, created_at=at,
                finished_at=None if status is JobStatus.RUNNING else at, error=error)  # fmt: skip
 
 
@@ -34,6 +34,10 @@ def _pipeline(
         host_id="h", os_epoch=epoch, jobs=sorted(jobs, key=lambda j: j.created_at, reverse=True),
         outputs=outputs, has_os_access=os_access,
     )  # fmt: skip
+
+
+def p_optional(p: Pipeline, task: str) -> bool:
+    return next(t.optional for s in p.stages for t in s.tasks if t.id == task)
 
 
 def _state(p: Pipeline, task: str) -> str:
@@ -52,12 +56,13 @@ def test_a_new_host_starts_with_preflight() -> None:
 
 
 def test_without_os_access_the_next_step_is_deploying_an_os() -> None:
-    jobs = [_job("p1", JobKind.PREFLIGHT, JobStatus.SUCCEEDED, 1)]
+    jobs = [_job("p1", "preflight", JobStatus.SUCCEEDED, 1)]
     early = _pipeline(
         jobs, {"preflight": _out("p1", 1, PREFLIGHT), "inventory": _out("p1", 1, {})}, os_access=False
     )
-    assert early.next.task == "vcf.readiness"  # the VCF 9 readiness rules come right after preflight
-    jobs.append(_job("v1", JobKind.VCF_READINESS, JobStatus.SUCCEEDED, 2))
+    assert early.next.task == "os.custom"  # VCF 9 readiness is optional: it never blocks the next step
+    assert _state(early, "vcf.readiness") == "ready" and p_optional(early, "vcf.readiness")
+    jobs.append(_job("v1", "vcf.readiness", JobStatus.SUCCEEDED, 2))
     outputs = {
         "preflight": _out("p1", 1, PREFLIGHT),
         "inventory": _out("p1", 1, {}),
@@ -76,8 +81,8 @@ def test_without_os_access_the_next_step_is_deploying_an_os() -> None:
 
 def test_outputs_feed_the_next_task_and_go_stale_after_a_reinstall() -> None:
     jobs = [
-        _job("p1", JobKind.PREFLIGHT, JobStatus.SUCCEEDED, 1),
-        _job("a1", JobKind.ASSESS, JobStatus.SUCCEEDED, 2),
+        _job("p1", "preflight", JobStatus.SUCCEEDED, 1),
+        _job("a1", "host.assess", JobStatus.SUCCEEDED, 2),
     ]
     readiness = {
         "ready": False,
@@ -102,14 +107,14 @@ def test_outputs_feed_the_next_task_and_go_stale_after_a_reinstall() -> None:
 
 
 def test_a_failed_run_is_shown_and_offered_again() -> None:
-    jobs = [_job("p1", JobKind.PREFLIGHT, JobStatus.FAILED, 1)]
+    jobs = [_job("p1", "preflight", JobStatus.FAILED, 1)]
     p = _pipeline(jobs, {})
     assert _state(p, "preflight") == "failed"
     assert p.next.task == "preflight" and "boom" in p.next.reason
 
 
 def test_a_running_task_is_reported_and_nothing_else_is_suggested() -> None:
-    p = _pipeline([_job("p1", JobKind.PREFLIGHT, JobStatus.RUNNING, 1)], {})
+    p = _pipeline([_job("p1", "preflight", JobStatus.RUNNING, 1)], {})
     assert _state(p, "preflight") == "running"
     assert p.next.task is None and "running" in p.next.reason
 
@@ -117,7 +122,7 @@ def test_a_running_task_is_reported_and_nothing_else_is_suggested() -> None:
 def test_the_two_os_deployments_are_attributed_to_the_task_that_ran() -> None:
     report = {"iso_version": "9.1.1", "iso_build": "25714478", "installed_build": "25714478",
               "validation": [{"ok": True}]}  # fmt: skip
-    jobs = [_job("i1", JobKind.INSTALL, JobStatus.SUCCEEDED, 1, config_set_id="cs1")]
+    jobs = [_job("i1", "os.custom", JobStatus.SUCCEEDED, 1, config_set_id="cs1")]
     p = _pipeline(jobs, {"install": _out("i1", 1, report)})
     assert _state(p, "os.custom") == "done"
     assert _state(p, "os.reimage") == "ready"  # did not run; not "done"
@@ -132,9 +137,9 @@ def test_an_installed_os_stage_is_done_even_though_alternatives_can_run() -> Non
     """Regression (user report): the OS stage showed "ready" with the OS installed, validated and read."""
     report = {"iso_version": "9.1.1", "iso_build": "1", "installed_build": "1", "validation": [{"ok": True}]}
     jobs = [
-        _job("i1", JobKind.INSTALL, JobStatus.SUCCEEDED, 1),
-        _job("n1", JobKind.OS_NETWORK, JobStatus.SUCCEEDED, 2),
-        _job("c1", JobKind.OS_CAPTURE, JobStatus.SUCCEEDED, 3, name="lab"),
+        _job("i1", "os.reimage", JobStatus.SUCCEEDED, 1),
+        _job("n1", "os.read", JobStatus.SUCCEEDED, 2),
+        _job("c1", "os.capture", JobStatus.SUCCEEDED, 3, name="lab"),
     ]
     p = _pipeline(jobs, {"install": _out("i1", 1, report), "os_network": _out("n1", 2, NETWORK)})
     os_stage = next(s for s in p.stages if s.id == "os")
@@ -160,7 +165,7 @@ def test_install_history_says_what_went_into_the_custom_iso() -> None:
             "ntp_servers": ["pool.ntp.org"], "preserve_vmfs": True, "allow_legacy_cpu": True}  # fmt: skip
     report = {"iso_version": "9.1.1", "iso_build": "25714478", "installed_build": "25714478",
               "validation": [{"ok": True}], "spec": spec}  # fmt: skip
-    p = _pipeline([_job("i1", JobKind.INSTALL, JobStatus.SUCCEEDED, 1)], {"install": _out("i1", 1, report)})
+    p = _pipeline([_job("i1", "os.reimage", JobStatus.SUCCEEDED, 1)], {"install": _out("i1", 1, report)})
     reimage = next(t for t in p.stages[1].tasks if t.id == "os.reimage")
     assert reimage.title == "Deploy OS · custom ISO from current settings"
     assert reimage.output is not None and reimage.output.summary == (

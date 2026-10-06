@@ -1,388 +1,6 @@
 {
   "components": {
     "schemas": {
-      "Action": {
-        "description": "One fix ``host.prep`` can apply. ``params`` are exactly what it will do.",
-        "properties": {
-          "check": {
-            "description": "The check this action fixes",
-            "title": "Check",
-            "type": "string"
-          },
-          "confirm_phrase": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Typed confirmation for destructive actions",
-            "title": "Confirm Phrase"
-          },
-          "destructive": {
-            "default": false,
-            "title": "Destructive",
-            "type": "boolean"
-          },
-          "id": {
-            "description": "set_mtu, ensure_portgroup, configure_ntp, create_datastore, verify_jumbo",
-            "title": "Id",
-            "type": "string"
-          },
-          "params": {
-            "additionalProperties": true,
-            "title": "Params",
-            "type": "object"
-          },
-          "recommended": {
-            "default": true,
-            "description": "Selected by default in the UI",
-            "title": "Recommended",
-            "type": "boolean"
-          },
-          "task": {
-            "default": "host.prep",
-            "description": "The pipeline task that applies this action",
-            "title": "Task",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "why": {
-            "title": "Why",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "check",
-          "title",
-          "why"
-        ],
-        "title": "Action",
-        "type": "object"
-      },
-      "BiosSettings": {
-        "properties": {
-          "attributes": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "title": "Attributes",
-            "type": "object"
-          },
-          "boot_mode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Boot Mode"
-          },
-          "cpu_virtualization": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cpu Virtualization"
-          },
-          "iommu": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Iommu"
-          }
-        },
-        "title": "BiosSettings",
-        "type": "object"
-      },
-      "BmcAudit": {
-        "description": "Every request a job sent to the BMC, so callers can verify what was (not) changed.",
-        "properties": {
-          "non_get": {
-            "description": "e.g. \"POST /redfish/v1/...\"",
-            "items": {
-              "type": "string"
-            },
-            "title": "Non Get",
-            "type": "array"
-          },
-          "requests": {
-            "title": "Requests",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "requests"
-        ],
-        "title": "BmcAudit",
-        "type": "object"
-      },
-      "BmcCapabilities": {
-        "properties": {
-          "boot_override": {
-            "$ref": "#/components/schemas/BootOverrideCapability"
-          },
-          "reset": {
-            "$ref": "#/components/schemas/ResetCapability"
-          },
-          "virtual_media": {
-            "items": {
-              "$ref": "#/components/schemas/VirtualMediaSlot"
-            },
-            "title": "Virtual Media",
-            "type": "array"
-          }
-        },
-        "required": [
-          "reset",
-          "boot_override"
-        ],
-        "title": "BmcCapabilities",
-        "type": "object"
-      },
-      "BmcInfo": {
-        "properties": {
-          "firmware_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Firmware Version"
-          },
-          "license": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LicenseInfo"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "redfish_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Redfish Version"
-          },
-          "vendor": {
-            "title": "Vendor",
-            "type": "string"
-          }
-        },
-        "required": [
-          "vendor"
-        ],
-        "title": "BmcInfo",
-        "type": "object"
-      },
-      "BootOption": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "uefi_device_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Uefi Device Path"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "title": "BootOption",
-        "type": "object"
-      },
-      "BootOverrideCapability": {
-        "properties": {
-          "allowed_modes": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Allowed Modes",
-            "type": "array"
-          },
-          "allowed_targets": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Allowed Targets",
-            "type": "array"
-          },
-          "current_enabled": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current Enabled"
-          },
-          "current_mode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current Mode"
-          },
-          "current_target": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current Target"
-          },
-          "options": {
-            "description": "UEFI boot options from the last POST",
-            "items": {
-              "$ref": "#/components/schemas/BootOption"
-            },
-            "title": "Options",
-            "type": "array"
-          }
-        },
-        "title": "BootOverrideCapability",
-        "type": "object"
-      },
-      "Category": {
-        "enum": [
-          "compute",
-          "memory",
-          "storage",
-          "network",
-          "bios",
-          "bmc"
-        ],
-        "title": "Category",
-        "type": "string"
-      },
-      "Check": {
-        "properties": {
-          "category": {
-            "$ref": "#/components/schemas/Category"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "observed": {
-            "title": "Observed",
-            "type": "string"
-          },
-          "remediation": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Remediation"
-          },
-          "required": {
-            "title": "Required",
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/CheckStatus"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "category",
-          "title",
-          "status",
-          "observed",
-          "required"
-        ],
-        "title": "Check",
-        "type": "object"
-      },
-      "CheckStatus": {
-        "enum": [
-          "pass",
-          "warn",
-          "fail",
-          "unknown"
-        ],
-        "title": "CheckStatus",
-        "type": "string"
-      },
       "ConfigSet": {
         "properties": {
           "created_at": {
@@ -500,227 +118,6 @@
           "settings"
         ],
         "title": "ConfigSetWrite",
-        "type": "object"
-      },
-      "Drive": {
-        "properties": {
-          "capacity_bytes": {
-            "default": 0,
-            "title": "Capacity Bytes",
-            "type": "integer"
-          },
-          "controller": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Controller"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "is_boot_device": {
-            "default": false,
-            "description": "Dedicated boot device such as a Dell BOSS card",
-            "title": "Is Boot Device",
-            "type": "boolean"
-          },
-          "media_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "SSD or HDD",
-            "title": "Media Type"
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "protocol": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "NVMe, SAS, SATA, ...",
-            "title": "Protocol"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "title": "Drive",
-        "type": "object"
-      },
-      "EsxiNetworkConfig": {
-        "properties": {
-          "address": {
-            "description": "Address GroundZero used to reach the host",
-            "title": "Address",
-            "type": "string"
-          },
-          "build": {
-            "title": "Build",
-            "type": "string"
-          },
-          "default_gateway": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Gateway"
-          },
-          "dns_from_dhcp": {
-            "default": false,
-            "title": "Dns From Dhcp",
-            "type": "boolean"
-          },
-          "dns_servers": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Dns Servers",
-            "type": "array"
-          },
-          "domain": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Domain"
-          },
-          "hostname": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hostname"
-          },
-          "ntp_policy": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "ntpd startup policy: \"on\", \"off\", \"automatic\"",
-            "title": "Ntp Policy"
-          },
-          "ntp_running": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "ntpd service running (None: not read)",
-            "title": "Ntp Running"
-          },
-          "ntp_servers": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Ntp Servers",
-            "type": "array"
-          },
-          "physical_nics": {
-            "items": {
-              "$ref": "#/components/schemas/PhysicalNic"
-            },
-            "title": "Physical Nics",
-            "type": "array"
-          },
-          "portgroups": {
-            "items": {
-              "$ref": "#/components/schemas/PortGroup"
-            },
-            "title": "Portgroups",
-            "type": "array"
-          },
-          "product": {
-            "title": "Product",
-            "type": "string"
-          },
-          "search_domains": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Search Domains",
-            "type": "array"
-          },
-          "version": {
-            "title": "Version",
-            "type": "string"
-          },
-          "vmkernel": {
-            "items": {
-              "$ref": "#/components/schemas/VmkInterface"
-            },
-            "title": "Vmkernel",
-            "type": "array"
-          },
-          "vswitches": {
-            "items": {
-              "$ref": "#/components/schemas/VSwitch"
-            },
-            "title": "Vswitches",
-            "type": "array"
-          }
-        },
-        "required": [
-          "address",
-          "product",
-          "version",
-          "build"
-        ],
-        "title": "EsxiNetworkConfig",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -868,64 +265,6 @@
         "title": "HostCreate",
         "type": "object"
       },
-      "HostInventory": {
-        "properties": {
-          "bios": {
-            "$ref": "#/components/schemas/BiosSettings"
-          },
-          "bmc": {
-            "$ref": "#/components/schemas/BmcInfo"
-          },
-          "capabilities": {
-            "$ref": "#/components/schemas/BmcCapabilities"
-          },
-          "collected_at": {
-            "format": "date-time",
-            "title": "Collected At",
-            "type": "string"
-          },
-          "drives": {
-            "items": {
-              "$ref": "#/components/schemas/Drive"
-            },
-            "title": "Drives",
-            "type": "array"
-          },
-          "memory": {
-            "$ref": "#/components/schemas/MemoryInfo"
-          },
-          "network_ports": {
-            "items": {
-              "$ref": "#/components/schemas/NetworkPort"
-            },
-            "title": "Network Ports",
-            "type": "array"
-          },
-          "processors": {
-            "items": {
-              "$ref": "#/components/schemas/Processor"
-            },
-            "title": "Processors",
-            "type": "array"
-          },
-          "system": {
-            "$ref": "#/components/schemas/SystemInfo"
-          }
-        },
-        "required": [
-          "collected_at",
-          "system",
-          "processors",
-          "memory",
-          "drives",
-          "network_ports",
-          "bios",
-          "bmc",
-          "capabilities"
-        ],
-        "title": "HostInventory",
-        "type": "object"
-      },
       "InstallPreview": {
         "description": "What a deployment would do, without touching the BMC or the server.",
         "properties": {
@@ -975,148 +314,6 @@
           "notes"
         ],
         "title": "InstallPreview",
-        "type": "object"
-      },
-      "InstallReport": {
-        "properties": {
-          "bmc_audit": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BmcAudit"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "boot_method": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Boot Method"
-          },
-          "durations_s": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "title": "Durations S",
-            "type": "object"
-          },
-          "host": {
-            "title": "Host",
-            "type": "string"
-          },
-          "installed_build": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Installed Build"
-          },
-          "iso_build": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Iso Build"
-          },
-          "iso_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Iso Version"
-          },
-          "media_bytes_served": {
-            "default": 0,
-            "title": "Media Bytes Served",
-            "type": "integer"
-          },
-          "media_fetches": {
-            "description": "Every BMC request for the ISO (diagnoses boots that never read it)",
-            "items": {
-              "$ref": "#/components/schemas/MediaFetch"
-            },
-            "title": "Media Fetches",
-            "type": "array"
-          },
-          "media_url_host": {
-            "title": "Media Url Host",
-            "type": "string"
-          },
-          "previous_build": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous Build"
-          },
-          "reset_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reset At"
-          },
-          "reset_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reset Type"
-          },
-          "spec": {
-            "additionalProperties": true,
-            "title": "Spec",
-            "type": "object"
-          },
-          "validation": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationCheck"
-            },
-            "title": "Validation",
-            "type": "array"
-          }
-        },
-        "required": [
-          "host",
-          "iso_version",
-          "iso_build",
-          "previous_build",
-          "spec",
-          "media_url_host"
-        ],
-        "title": "InstallReport",
         "type": "object"
       },
       "InstallRequest": {
@@ -1364,9 +561,6 @@
             "title": "Id",
             "type": "string"
           },
-          "kind": {
-            "$ref": "#/components/schemas/JobKind"
-          },
           "message": {
             "default": "",
             "title": "Message",
@@ -1419,18 +613,17 @@
             "type": "array"
           },
           "task": {
-            "readOnly": true,
+            "description": "The pipeline task this job ran (see GET /tasks)",
             "title": "Task",
             "type": "string"
           }
         },
         "required": [
           "id",
-          "kind",
+          "task",
           "host_id",
           "status",
-          "created_at",
-          "task"
+          "created_at"
         ],
         "title": "Job",
         "type": "object"
@@ -1452,22 +645,6 @@
         ],
         "title": "JobError",
         "type": "object"
-      },
-      "JobKind": {
-        "enum": [
-          "inventory",
-          "preflight",
-          "os_network",
-          "install",
-          "os_capture",
-          "assess",
-          "host_prep",
-          "verify_jumbo",
-          "holorouter",
-          "vcf_readiness"
-        ],
-        "title": "JobKind",
-        "type": "string"
       },
       "JobRef": {
         "properties": {
@@ -1585,152 +762,6 @@
         "title": "JobStepStatus",
         "type": "string"
       },
-      "LicenseInfo": {
-        "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "supports_virtual_media": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Supports Virtual Media"
-          },
-          "tier": {
-            "title": "Tier",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "tier",
-          "supports_virtual_media"
-        ],
-        "title": "LicenseInfo",
-        "type": "object"
-      },
-      "MediaFetch": {
-        "properties": {
-          "at": {
-            "format": "date-time",
-            "title": "At",
-            "type": "string"
-          },
-          "byte_range": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Byte Range"
-          },
-          "bytes": {
-            "title": "Bytes",
-            "type": "integer"
-          },
-          "client": {
-            "title": "Client",
-            "type": "string"
-          },
-          "method": {
-            "title": "Method",
-            "type": "string"
-          }
-        },
-        "required": [
-          "client",
-          "method",
-          "byte_range",
-          "bytes",
-          "at"
-        ],
-        "title": "MediaFetch",
-        "type": "object"
-      },
-      "MemoryInfo": {
-        "properties": {
-          "dimm_count": {
-            "default": 0,
-            "title": "Dimm Count",
-            "type": "integer"
-          },
-          "total_gib": {
-            "title": "Total Gib",
-            "type": "number"
-          }
-        },
-        "required": [
-          "total_gib"
-        ],
-        "title": "MemoryInfo",
-        "type": "object"
-      },
-      "NetworkPort": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "link_status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Link Status"
-          },
-          "mac_address": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mac Address"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "speed_mbps": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Speed Mbps"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "title": "NetworkPort",
-        "type": "object"
-      },
       "NextStep": {
         "properties": {
           "reason": {
@@ -1817,22 +848,6 @@
         "title": "OsAccessSet",
         "type": "object"
       },
-      "OsCaptureRequest": {
-        "properties": {
-          "name": {
-            "description": "Name for the new config set",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "OsCaptureRequest",
-        "type": "object"
-      },
       "OsFamily": {
         "properties": {
           "family": {
@@ -1911,84 +926,34 @@
         "title": "OutputInfo",
         "type": "object"
       },
-      "PhysicalNic": {
+      "OutputSummary": {
         "properties": {
-          "device": {
-            "title": "Device",
+          "fresh": {
+            "description": "False when the OS was reinstalled after this output was produced",
+            "title": "Fresh",
+            "type": "boolean"
+          },
+          "job_id": {
+            "title": "Job Id",
             "type": "string"
           },
-          "driver": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Driver"
+          "kind": {
+            "title": "Kind",
+            "type": "string"
           },
-          "mac": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mac"
-          },
-          "pci": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pci"
-          },
-          "speed_mbps": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Speed Mbps"
-          },
-          "switch": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Neighbour switch from CDP/LLDP",
-            "title": "Switch"
-          },
-          "switch_port": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Switch Port"
+          "produced_at": {
+            "format": "date-time",
+            "title": "Produced At",
+            "type": "string"
           }
         },
         "required": [
-          "device"
+          "kind",
+          "job_id",
+          "produced_at",
+          "fresh"
         ],
-        "title": "PhysicalNic",
+        "title": "OutputSummary",
         "type": "object"
       },
       "PinnedCertificate": {
@@ -2089,386 +1054,6 @@
         "title": "PipelineStage",
         "type": "object"
       },
-      "PortGroup": {
-        "properties": {
-          "active_uplinks": {
-            "description": "Effective (computed) teaming order",
-            "items": {
-              "type": "string"
-            },
-            "title": "Active Uplinks",
-            "type": "array"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "security": {
-            "$ref": "#/components/schemas/SecurityPolicy",
-            "description": "Effective (computed) policy"
-          },
-          "standby_uplinks": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Standby Uplinks",
-            "type": "array"
-          },
-          "vlan_id": {
-            "default": 0,
-            "title": "Vlan Id",
-            "type": "integer"
-          },
-          "vswitch": {
-            "title": "Vswitch",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "vswitch"
-        ],
-        "title": "PortGroup",
-        "type": "object"
-      },
-      "PreflightReport": {
-        "properties": {
-          "checks": {
-            "items": {
-              "$ref": "#/components/schemas/Check"
-            },
-            "title": "Checks",
-            "type": "array"
-          },
-          "generated_at": {
-            "format": "date-time",
-            "title": "Generated At",
-            "type": "string"
-          },
-          "overall": {
-            "$ref": "#/components/schemas/CheckStatus"
-          },
-          "profile": {
-            "title": "Profile",
-            "type": "string"
-          },
-          "source": {
-            "title": "Source",
-            "type": "string"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/PreflightSummary"
-          },
-          "variant": {
-            "title": "Variant",
-            "type": "string"
-          },
-          "variant_title": {
-            "title": "Variant Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "profile",
-          "variant",
-          "variant_title",
-          "source",
-          "generated_at",
-          "overall",
-          "summary"
-        ],
-        "title": "PreflightReport",
-        "type": "object"
-      },
-      "PreflightRequest": {
-        "properties": {
-          "profile": {
-            "default": "holodeck-9",
-            "description": "Requirements profile id (see GET /profiles)",
-            "title": "Profile",
-            "type": "string"
-          },
-          "variant": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Profile variant; defaults to the profile's default",
-            "title": "Variant"
-          }
-        },
-        "title": "PreflightRequest",
-        "type": "object"
-      },
-      "PreflightSummary": {
-        "properties": {
-          "failed": {
-            "default": 0,
-            "title": "Failed",
-            "type": "integer"
-          },
-          "passed": {
-            "default": 0,
-            "title": "Passed",
-            "type": "integer"
-          },
-          "unknown": {
-            "default": 0,
-            "title": "Unknown",
-            "type": "integer"
-          },
-          "warnings": {
-            "default": 0,
-            "title": "Warnings",
-            "type": "integer"
-          }
-        },
-        "title": "PreflightSummary",
-        "type": "object"
-      },
-      "Processor": {
-        "properties": {
-          "cores": {
-            "default": 0,
-            "title": "Cores",
-            "type": "integer"
-          },
-          "manufacturer": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Manufacturer"
-          },
-          "max_speed_mhz": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Speed Mhz"
-          },
-          "model": {
-            "title": "Model",
-            "type": "string"
-          },
-          "socket": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Socket"
-          },
-          "threads": {
-            "default": 0,
-            "title": "Threads",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "model"
-        ],
-        "title": "Processor",
-        "type": "object"
-      },
-      "ProfileSummary": {
-        "properties": {
-          "default_variant": {
-            "title": "Default Variant",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "source": {
-            "title": "Source",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "variants": {
-            "items": {
-              "$ref": "#/components/schemas/Variant"
-            },
-            "title": "Variants",
-            "type": "array"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "source",
-          "default_variant",
-          "variants"
-        ],
-        "title": "ProfileSummary",
-        "type": "object"
-      },
-      "ReadinessReport": {
-        "properties": {
-          "checks": {
-            "items": {
-              "$ref": "#/components/schemas/Check"
-            },
-            "title": "Checks",
-            "type": "array"
-          },
-          "esxi": {
-            "description": "Product and build that was assessed",
-            "title": "Esxi",
-            "type": "string"
-          },
-          "generated_at": {
-            "format": "date-time",
-            "title": "Generated At",
-            "type": "string"
-          },
-          "overall": {
-            "$ref": "#/components/schemas/CheckStatus"
-          },
-          "plan": {
-            "items": {
-              "$ref": "#/components/schemas/Action"
-            },
-            "title": "Plan",
-            "type": "array"
-          },
-          "profile": {
-            "title": "Profile",
-            "type": "string"
-          },
-          "ready": {
-            "description": "True when nothing blocks the Holodeck deployment",
-            "title": "Ready",
-            "type": "boolean"
-          },
-          "storage": {
-            "$ref": "#/components/schemas/StorageProposal"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/PreflightSummary"
-          },
-          "target_vswitch": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Vswitch"
-          },
-          "variant": {
-            "title": "Variant",
-            "type": "string"
-          },
-          "variant_title": {
-            "title": "Variant Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "profile",
-          "variant",
-          "variant_title",
-          "generated_at",
-          "esxi",
-          "overall",
-          "ready",
-          "summary",
-          "checks",
-          "plan",
-          "storage"
-        ],
-        "title": "ReadinessReport",
-        "type": "object"
-      },
-      "ResetCapability": {
-        "properties": {
-          "allowed_types": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Allowed Types",
-            "type": "array"
-          },
-          "target": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target"
-          }
-        },
-        "required": [
-          "target"
-        ],
-        "title": "ResetCapability",
-        "type": "object"
-      },
-      "SecurityPolicy": {
-        "description": "Effective L2 security policy. Holodeck trunks need all three set to Accept (True).",
-        "properties": {
-          "allow_promiscuous": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Allow Promiscuous"
-          },
-          "forged_transmits": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Forged Transmits"
-          },
-          "mac_changes": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mac Changes"
-          }
-        },
-        "title": "SecurityPolicy",
-        "type": "object"
-      },
       "Stage": {
         "enum": [
           "hardware",
@@ -2479,152 +1064,6 @@
         ],
         "title": "Stage",
         "type": "string"
-      },
-      "StorageProposal": {
-        "properties": {
-          "capacity_gb": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Capacity Gb"
-          },
-          "datastore": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Datastore"
-          },
-          "disk": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Canonical name of the disk to format (kind=format)",
-            "title": "Disk"
-          },
-          "disk_label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Disk Label"
-          },
-          "free_gb": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Free Gb"
-          },
-          "kind": {
-            "enum": [
-              "existing",
-              "format",
-              "none"
-            ],
-            "title": "Kind",
-            "type": "string"
-          },
-          "reason": {
-            "title": "Reason",
-            "type": "string"
-          },
-          "required_gb": {
-            "title": "Required Gb",
-            "type": "number"
-          }
-        },
-        "required": [
-          "kind",
-          "required_gb",
-          "reason"
-        ],
-        "title": "StorageProposal",
-        "type": "object"
-      },
-      "SystemInfo": {
-        "properties": {
-          "bios_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bios Version"
-          },
-          "health": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health"
-          },
-          "manufacturer": {
-            "title": "Manufacturer",
-            "type": "string"
-          },
-          "model": {
-            "title": "Model",
-            "type": "string"
-          },
-          "power_state": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Power State"
-          },
-          "serial_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Serial Number"
-          }
-        },
-        "required": [
-          "manufacturer",
-          "model"
-        ],
-        "title": "SystemInfo",
-        "type": "object"
       },
       "TaskInfo": {
         "properties": {
@@ -2647,6 +1086,12 @@
           "optional": {
             "title": "Optional",
             "type": "boolean"
+          },
+          "params_schema": {
+            "additionalProperties": true,
+            "description": "JSON Schema of the task's parameters (POST .../tasks/{id} params)",
+            "title": "Params Schema",
+            "type": "object"
           },
           "produces": {
             "anyOf": [
@@ -2761,6 +1206,12 @@
               }
             ]
           },
+          "params_schema": {
+            "additionalProperties": true,
+            "description": "JSON Schema of the task's parameters (POST .../tasks/{id} params)",
+            "title": "Params Schema",
+            "type": "object"
+          },
           "produces": {
             "anyOf": [
               {
@@ -2815,89 +1266,6 @@
         "title": "TaskState",
         "type": "object"
       },
-      "VSwitch": {
-        "properties": {
-          "active_uplinks": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Active Uplinks",
-            "type": "array"
-          },
-          "mtu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mtu"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "portgroups": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Portgroups",
-            "type": "array"
-          },
-          "security": {
-            "$ref": "#/components/schemas/SecurityPolicy"
-          },
-          "standby_uplinks": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Standby Uplinks",
-            "type": "array"
-          },
-          "uplinks": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Uplinks",
-            "type": "array"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "VSwitch",
-        "type": "object"
-      },
-      "ValidationCheck": {
-        "properties": {
-          "expected": {
-            "title": "Expected",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "observed": {
-            "title": "Observed",
-            "type": "string"
-          },
-          "ok": {
-            "title": "Ok",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "name",
-          "ok",
-          "expected",
-          "observed"
-        ],
-        "title": "ValidationCheck",
-        "type": "object"
-      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -2936,243 +1304,6 @@
           "type"
         ],
         "title": "ValidationError",
-        "type": "object"
-      },
-      "Variant": {
-        "properties": {
-          "cores": {
-            "title": "Cores",
-            "type": "integer"
-          },
-          "disk_tb": {
-            "title": "Disk Tb",
-            "type": "number"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "memory_gb": {
-            "title": "Memory Gb",
-            "type": "number"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "cores",
-          "memory_gb",
-          "disk_tb"
-        ],
-        "title": "Variant",
-        "type": "object"
-      },
-      "VcfReadinessReport": {
-        "properties": {
-          "checks": {
-            "items": {
-              "$ref": "#/components/schemas/Check"
-            },
-            "title": "Checks",
-            "type": "array"
-          },
-          "cpu_override_required": {
-            "description": "ESXi 9 installs need the CPU support override (allowLegacyCPU) on this hardware",
-            "title": "Cpu Override Required",
-            "type": "boolean"
-          },
-          "generated_at": {
-            "format": "date-time",
-            "title": "Generated At",
-            "type": "string"
-          },
-          "overall": {
-            "$ref": "#/components/schemas/CheckStatus"
-          },
-          "rules": {
-            "default": "VCF Readiness Assessment Tool v9.7.3 rules (CA, Inc.)",
-            "title": "Rules",
-            "type": "string"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/PreflightSummary"
-          }
-        },
-        "required": [
-          "generated_at",
-          "overall",
-          "summary",
-          "cpu_override_required",
-          "checks"
-        ],
-        "title": "VcfReadinessReport",
-        "type": "object"
-      },
-      "VirtualMediaSlot": {
-        "properties": {
-          "eject_target": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Eject Target"
-          },
-          "image": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Image"
-          },
-          "insert_target": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Insert Target"
-          },
-          "inserted": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Inserted"
-          },
-          "media_types": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Media Types",
-            "type": "array"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "transfer_protocols": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Transfer Protocols",
-            "type": "array"
-          }
-        },
-        "required": [
-          "path"
-        ],
-        "title": "VirtualMediaSlot",
-        "type": "object"
-      },
-      "VmkInterface": {
-        "properties": {
-          "device": {
-            "title": "Device",
-            "type": "string"
-          },
-          "dhcp": {
-            "default": false,
-            "title": "Dhcp",
-            "type": "boolean"
-          },
-          "ip": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ip"
-          },
-          "mac": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mac"
-          },
-          "mtu": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mtu"
-          },
-          "netmask": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Netmask"
-          },
-          "portgroup": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Portgroup"
-          },
-          "services": {
-            "description": "management, vmotion, vsan, ...",
-            "items": {
-              "type": "string"
-            },
-            "title": "Services",
-            "type": "array"
-          }
-        },
-        "required": [
-          "device"
-        ],
-        "title": "VmkInterface",
         "type": "object"
       }
     },
@@ -3801,109 +1932,6 @@
         ]
       }
     },
-    "/api/v1/hosts/{host_id}/install": {
-      "get": {
-        "operationId": "latest_install_api_v1_hosts__host_id__install_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "host_id",
-            "required": true,
-            "schema": {
-              "title": "Host Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InstallReport"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Latest Install",
-        "tags": [
-          "hosts"
-        ]
-      },
-      "post": {
-        "description": "Reinstall ESXi on the host (destructive). `confirm` must be exactly \"install <host name>\".",
-        "operationId": "start_install_api_v1_hosts__host_id__install_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "host_id",
-            "required": true,
-            "schema": {
-              "title": "Host Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InstallRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Job"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Start Install",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
     "/api/v1/hosts/{host_id}/install/preview": {
       "post": {
         "description": "Show the spec and kickstart a deployment would use (password hidden). Touches nothing.",
@@ -3957,98 +1985,6 @@
           }
         ],
         "summary": "Preview Install",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{host_id}/inventory": {
-      "get": {
-        "operationId": "latest_inventory_api_v1_hosts__host_id__inventory_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "host_id",
-            "required": true,
-            "schema": {
-              "title": "Host Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HostInventory"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Latest Inventory",
-        "tags": [
-          "hosts"
-        ]
-      },
-      "post": {
-        "operationId": "start_inventory_api_v1_hosts__host_id__inventory_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "host_id",
-            "required": true,
-            "schema": {
-              "title": "Host Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Job"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Start Inventory",
         "tags": [
           "hosts"
         ]
@@ -4157,67 +2093,10 @@
         ]
       }
     },
-    "/api/v1/hosts/{host_id}/os/capture": {
-      "post": {
-        "description": "Create a config set (and this host's per-server values) from the running OS. Read-only.",
-        "operationId": "capture_config_set_api_v1_hosts__host_id__os_capture_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "host_id",
-            "required": true,
-            "schema": {
-              "title": "Host Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OsCaptureRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Job"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Capture Config Set",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{host_id}/os/network": {
+    "/api/v1/hosts/{host_id}/outputs": {
       "get": {
-        "operationId": "latest_os_network_api_v1_hosts__host_id__os_network_get",
+        "description": "The latest output of each kind for this host: what later tasks will use as their inputs.",
+        "operationId": "list_outputs_api_v1_hosts__host_id__outputs_get",
         "parameters": [
           {
             "in": "path",
@@ -4234,7 +2113,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EsxiNetworkConfig"
+                  "items": {
+                    "$ref": "#/components/schemas/OutputSummary"
+                  },
+                  "title": "Response List Outputs Api V1 Hosts  Host Id  Outputs Get",
+                  "type": "array"
                 }
               }
             },
@@ -4256,14 +2139,16 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Latest Os Network",
+        "summary": "List Outputs",
         "tags": [
           "hosts"
         ]
-      },
-      "post": {
-        "description": "Read the installed hypervisor's network configuration (read-only).",
-        "operationId": "start_os_network_api_v1_hosts__host_id__os_network_post",
+      }
+    },
+    "/api/v1/hosts/{host_id}/outputs/{kind}": {
+      "get": {
+        "description": "The latest output of one kind (e.g. inventory, preflight, os_network, install, readiness,\nvcf_readiness, host_prep, jumbo, holorouter). Each kind has a fixed shape; see GET /tasks.",
+        "operationId": "get_output_api_v1_hosts__host_id__outputs__kind__get",
         "parameters": [
           {
             "in": "path",
@@ -4273,14 +2158,25 @@
               "title": "Host Id",
               "type": "string"
             }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "202": {
+          "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Job"
+                  "additionalProperties": true,
+                  "title": "Response Get Output Api V1 Hosts  Host Id  Outputs  Kind  Get",
+                  "type": "object"
                 }
               }
             },
@@ -4302,7 +2198,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Start Os Network",
+        "summary": "Get Output",
         "tags": [
           "hosts"
         ]
@@ -4351,163 +2247,6 @@
           }
         ],
         "summary": "Get Pipeline",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{host_id}/preflight": {
-      "get": {
-        "operationId": "latest_preflight_api_v1_hosts__host_id__preflight_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "host_id",
-            "required": true,
-            "schema": {
-              "title": "Host Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PreflightReport"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Latest Preflight",
-        "tags": [
-          "hosts"
-        ]
-      },
-      "post": {
-        "operationId": "start_preflight_api_v1_hosts__host_id__preflight_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "host_id",
-            "required": true,
-            "schema": {
-              "title": "Host Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/PreflightRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Job"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Start Preflight",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{host_id}/readiness": {
-      "get": {
-        "description": "Latest Holodeck readiness assessment: checks, the proposed datastore and the planned fixes.",
-        "operationId": "get_readiness_api_v1_hosts__host_id__readiness_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "host_id",
-            "required": true,
-            "schema": {
-              "title": "Host Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadinessReport"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Readiness",
         "tags": [
           "hosts"
         ]
@@ -4575,54 +2314,6 @@
           }
         ],
         "summary": "Start Task",
-        "tags": [
-          "hosts"
-        ]
-      }
-    },
-    "/api/v1/hosts/{host_id}/vcf-readiness": {
-      "get": {
-        "description": "Latest VCF 9 readiness validation (VCF Readiness rules, CA, Inc. licence).",
-        "operationId": "get_vcf_readiness_api_v1_hosts__host_id__vcf_readiness_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "host_id",
-            "required": true,
-            "schema": {
-              "title": "Host Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VcfReadinessReport"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Vcf Readiness",
         "tags": [
           "hosts"
         ]
@@ -4974,36 +2665,6 @@
         "summary": "List Os Families",
         "tags": [
           "catalog"
-        ]
-      }
-    },
-    "/api/v1/profiles": {
-      "get": {
-        "operationId": "list_profiles_api_v1_profiles_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ProfileSummary"
-                  },
-                  "title": "Response List Profiles Api V1 Profiles Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Profiles",
-        "tags": [
-          "meta"
         ]
       }
     },

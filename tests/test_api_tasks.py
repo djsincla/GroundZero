@@ -84,7 +84,8 @@ def test_pipeline_walks_from_preflight_to_reading_the_os(api: TestClient) -> Non
     p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
     assert _task(p, "preflight")["state"] == "done"
     assert _task(p, "discover")["state"] == "done"  # preflight also produced the inventory
-    assert p["next"]["task"] == "vcf.readiness"  # VCF 9 readiness rules (CA) are their own step
+    assert p["next"]["task"] == "os.custom"  # VCF 9 readiness is optional; no OS access yet
+    assert _task(p, "vcf.readiness")["optional"] and _task(p, "vcf.readiness")["state"] == "ready"
     job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/vcf.readiness", json={}).json()["id"])
     assert job["status"] == "succeeded" and job["result"]["vcf_readiness"]["cpu_override_required"] is False
     p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
@@ -140,7 +141,7 @@ def test_assess_reads_the_os_and_plans_fixes(api: TestClient) -> None:
     assert job["status"] == "succeeded", job
     assert [s["key"] for s in job["steps"]] == ["connect", "network", "storage", "evaluate"]
 
-    report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+    report = api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()
     assert report["variant"] == "vcf-9.0-esa-single"  # taken from the preflight output
     assert report["storage"] == {**report["storage"], "kind": "existing", "datastore": "localHolodeck"}
     assert {a["id"] for a in report["plan"]} >= {"set_mtu", "configure_ntp", "verify_jumbo"}
@@ -182,7 +183,7 @@ def test_prepare_then_verify_makes_the_host_ready(tmp_path: Path, idrac9: dict[s
         bad = api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={"params": {"checks": ["nope"]}})
         assert bad.status_code == 422 and "Not in the current plan" in bad.json()["detail"]
 
-        plan = api.get(f"/api/v1/hosts/{host}/readiness").json()["plan"]
+        plan = api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()["plan"]
         checks = [
             a["check"] for a in plan if a["task"] == "host.prep"
         ]  # incl. the optional VLAN 100 external
@@ -204,7 +205,7 @@ def test_prepare_then_verify_makes_the_host_ready(tmp_path: Path, idrac9: dict[s
         )
         assert prep["datastore"] == "localHolodeck" and prep["vswitch"] == "vSwitch0"
 
-        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        report = api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()
         status = {c["id"]: c["status"] for c in report["checks"]}
         assert (
             status["network.mtu"]
@@ -226,7 +227,7 @@ def test_prepare_then_verify_makes_the_host_ready(tmp_path: Path, idrac9: dict[s
             job["result"]["jumbo"]["uplinks"] == ["vmnic0", "vmnic1"]  # keep mgmt NIC, borrow vmnic1
             and job["result"]["jumbo"]["vlan"] == 100
         )
-        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        report = api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()
         assert report["ready"] and report["plan"] == []
         pins = {c["role"]: c["fingerprint"] for c in api.get(f"/api/v1/hosts/{host}/certificates").json()}
         assert pins["os-ssh"] == "SHA256:simulated-host-key"
@@ -243,7 +244,7 @@ def test_formatting_a_disk_needs_its_typed_phrase(tmp_path: Path, idrac9: dict[s
     big.datastores, big.partitions = [], 0
     with _app(tmp_path, idrac9, esxi) as api:
         host = _assessed(api)
-        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        report = api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()
         action = next(a for a in report["plan"] if a["id"] == "create_datastore")
         assert action["destructive"] and action["params"]["disk"] == big.name
         body = {"params": {"checks": ["storage.datastore"]}, "confirm": "format it"}
@@ -254,7 +255,7 @@ def test_formatting_a_disk_needs_its_typed_phrase(tmp_path: Path, idrac9: dict[s
         body["confirm"] = action["confirm_phrase"]
         job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json=body).json()["id"])
         assert job["status"] == "succeeded", job
-        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        report = api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()
         assert report["storage"]["kind"] == "existing" and report["storage"]["datastore"] == "holodeck"
         assert job["result"]["host_prep"]["datastore"] == "holodeck"
 
@@ -271,7 +272,7 @@ def test_a_switch_dropping_jumbo_frames_fails_the_check(tmp_path: Path, idrac9: 
         assert job["status"] == "failed" and "do not pass through the switch" in job["error"]["message"]
         loop = next(s for s in job["steps"] if s["key"] == "loop")
         assert loop["status"] == "succeeded"  # the test ran; it is the result that failed
-        report = api.get(f"/api/v1/hosts/{host}/readiness").json()
+        report = api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()
         jumbo_check = next(c for c in report["checks"] if c["id"] == "network.jumbo")
         assert jumbo_check["status"] == "fail" and not report["ready"]
 
@@ -305,7 +306,7 @@ def test_deploy_holorouter_after_prep(tmp_path: Path, idrac9: dict[str, Any]) ->
         assert run().status_code == 409  # readiness/prep first (pipeline inputs)
         checks = [
             a["check"]
-            for a in api.get(f"/api/v1/hosts/{host}/readiness").json()["plan"]
+            for a in api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()["plan"]
             if a["task"] == "host.prep"
         ]
         prep = _wait(

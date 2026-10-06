@@ -12,7 +12,7 @@ from conftest import make_client
 
 from groundzero.core import diagnostics
 from groundzero.core.jobs import JobContext, JobRunner
-from groundzero.core.models import JobKind, JobStatus, JobStepStatus
+from groundzero.core.models import JobStatus, JobStepStatus
 from groundzero.core.store import Store
 
 
@@ -50,7 +50,7 @@ def test_a_job_records_redfish_exchanges_steps_and_errors_without_secrets(
                 raise RuntimeError("the BMC said no")
             return {}
 
-        job = runner.submit(kind=JobKind.INVENTORY, host_id=host.id, params={}, func=work)
+        job = runner.submit(task="discover", host_id=host.id, params={}, func=work)
         await runner.wait(job.id)
 
     asyncio.run(scenario())
@@ -84,7 +84,12 @@ def test_existing_databases_gain_the_new_columns(tmp_path: Path) -> None:
             " started_at TEXT, finished_at TEXT);"
             "INSERT INTO jobs (id, kind, host_id, status, created_at) VALUES"
             " ('j1', 'inventory', 'h', 'succeeded', '2026-10-01T00:00:00+00:00');"
+            "INSERT INTO jobs (id, kind, host_id, status, params, created_at) VALUES"
+            " ('j2', 'install', 'h', 'succeeded', '{\"config_set_id\": \"cs1\"}',"
+            " '2026-10-01T00:01:00+00:00');"
         )
     store = Store(db)
     job = store.get_job("j1")
-    assert job is not None and job.steps == [] and job.task == "discover"
+    assert job is not None and job.steps == [] and job.task == "discover"  # backfilled from the old kind
+    install = store.get_job("j2")
+    assert install is not None and install.task == "os.custom"  # installs: by whether a config set was used

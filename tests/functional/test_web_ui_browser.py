@@ -410,12 +410,10 @@ def test_pipeline_guides_through_the_next_steps(page: Page, simulated_r740xd: Gr
 
     expect(page.locator('[data-task="preflight"]')).to_have_attribute("data-state", "done")
     expect(page.locator('[data-task="preflight"] [data-role="output"]')).to_contain_text("12 passed")
-    expect(nxt).to_contain_text("VCF 9 readiness")  # the CA readiness rules come next
-    nxt.get_by_role("button", name="VCF 9 readiness").click()
-    expect(page.locator('[data-task="vcf.readiness"]')).to_have_attribute(
-        "data-state", "done", timeout=20_000
-    )
     expect(nxt).to_contain_text("Deploy OS · custom ISO from a config set")  # no OS access yet
+    vcf = page.locator('[data-task="vcf.readiness"]')  # optional: run from its own row
+    vcf.get_by_role("button", name="Run").click()
+    expect(vcf).to_have_attribute("data-state", "done", timeout=20_000)
     expect(page.locator('[data-task="os.read"]')).to_contain_text("Needs: Set OS access")
 
     assert gz.cli("os", "set", "esxi1", "--address", "192.0.2.101").code == 0
@@ -486,7 +484,7 @@ def test_deploy_holorouter_from_the_pipeline(page: Page, simulated_r740xd: Groun
         assert gz.cli("run", "esxi1", task, timeout=120).code == 0
     with gz.api() as api:
         host = api.get("/api/v1/hosts").json()[0]["id"]
-        plan = api.get(f"/api/v1/hosts/{host}/readiness").json()["plan"]
+        plan = api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()["plan"]
         checks = [a["check"] for a in plan if a["task"] == "host.prep"]
         job = api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={"params": {"checks": checks}}).json()
         for _ in range(100):  # prep runs in the server

@@ -32,7 +32,7 @@ def _prepare(gz: GroundZero) -> Path:
 def _report(gz: GroundZero) -> dict:
     with gz.api() as api:
         host_id = api.get("/api/v1/hosts").json()[0]["id"]
-        return dict(api.get(f"/api/v1/hosts/{host_id}/install").json())
+        return dict(api.get(f"/api/v1/hosts/{host_id}/outputs/install").json())
 
 
 def test_install_reinstalls_and_validates(simulated_r740xd: GroundZero) -> None:
@@ -84,7 +84,7 @@ def test_install_reinstalls_and_validates(simulated_r740xd: GroundZero) -> None:
     assert not list((gz.home / "media").glob("*.iso"))  # built ISO cleaned up
     with gz.api() as api:  # regression (user report): the host's OS view must reflect the new build
         host_id = api.get("/api/v1/hosts").json()[0]["id"]
-        os_now = api.get(f"/api/v1/hosts/{host_id}/os/network").json()
+        os_now = api.get(f"/api/v1/hosts/{host_id}/outputs/os_network").json()
     assert os_now["build"] == "25714478" and os_now["product"] == "VMware ESXi 9.1.1"
 
 
@@ -102,19 +102,16 @@ def test_install_refuses_on_preflight_fail_without_touching_the_bmc(simulated_r7
     iso = _prepare(gz)
     with gz.api() as api:
         host_id = api.get("/api/v1/hosts").json()[0]["id"]
-        body = {
-            "iso_path": str(iso),
-            "confirm": "install esxi1",
-            "variant": "vcf-9.1-dual",
-        }  # needs 1.5 TB RAM
-        job = api.post(f"/api/v1/hosts/{host_id}/install", json=body).json()
+        params = {"iso_path": str(iso), "variant": "vcf-9.1-dual"}  # needs 1.5 TB RAM
+        body = {"params": params, "confirm": "install esxi1"}
+        job = api.post(f"/api/v1/hosts/{host_id}/tasks/os.reimage", json=body).json()
         for _ in range(200):
             job = api.get(f"/api/v1/jobs/{job['id']}").json()
             if job["status"] not in ("queued", "running"):
                 break
         assert job["status"] == "failed"
         assert "Preflight failed" in job["error"]["message"] and "memory.total" in job["error"]["message"]
-        assert api.get(f"/api/v1/hosts/{host_id}/install").status_code == 404  # never got to the BMC
+        assert api.get(f"/api/v1/hosts/{host_id}/outputs/install").status_code == 404  # never got to the BMC
     assert not list((gz.home / "media").glob("*.iso"))
 
 
@@ -147,15 +144,16 @@ def test_boot_method_can_be_chosen_per_install(simulated_r740xd: GroundZero) -> 
     iso = _prepare(gz)
     with gz.api() as api:
         host_id = api.get("/api/v1/hosts").json()[0]["id"]
-        body = {"iso_path": str(iso), "confirm": "install esxi1", "boot_method": "uefi-target"}
-        job = api.post(f"/api/v1/hosts/{host_id}/install", json=body).json()
+        params = {"iso_path": str(iso), "boot_method": "uefi-target"}
+        body = {"params": params, "confirm": "install esxi1"}
+        job = api.post(f"/api/v1/hosts/{host_id}/tasks/os.reimage", json=body).json()
         for _ in range(600):
             job = api.get(f"/api/v1/jobs/{job['id']}").json()
             if job["status"] not in ("queued", "running"):
                 break
             time.sleep(0.1)
         assert job["status"] == "succeeded", job
-        report = api.get(f"/api/v1/hosts/{host_id}/install").json()
+        report = api.get(f"/api/v1/hosts/{host_id}/outputs/install").json()
     assert report["boot_method"].startswith("UefiTarget PciRoot(0x0)/Pci(0x14,0x0)/USB(0xD,0x0)")
 
 

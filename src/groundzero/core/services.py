@@ -9,7 +9,6 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -26,39 +25,33 @@ from groundzero.core.models import (
     Host,
     HostCreate,
     Job,
-    JobKind,
     OsAccess,
     OsAccessSet,
 )
 from groundzero.core.store import Store, utcnow
-from groundzero.core.tasks import (
-    CATALOG,
-    TASKS,
-    Pipeline,
-    TaskInfo,
-    TaskRun,
-    evaluate_pipeline,
-    info,
-)
+from groundzero.core.tasks import Pipeline, TaskInfo, TaskRun, catalog, evaluate_pipeline, info
 from groundzero.core.tls import PinnedCertificate, check_pin, fetch_certificate, fingerprint, pinned_context
 from groundzero.esxi.models import EsxiNetworkConfig, EsxiStorage
 from groundzero.esxi.ops import EsxiOps, LiveEsxiOps, OsTarget
-from groundzero.install.job import InstallConfig, Installer, InstallRequest, InstallTimings
+from groundzero.install.job import InstallRequest
 from groundzero.install.kickstart import render_kickstart
-from groundzero.inventory.collect import collect_inventory
+from groundzero.inventory.collect import collect_inventory as read_inventory
 from groundzero.inventory.models import HostInventory
 from groundzero.isos import IsoImage, IsoRepository
 from groundzero.media.registry import MediaRegistry
+from groundzero.modules import REGISTRY
+from groundzero.modules.base import Inputs
+from groundzero.modules.os import install_config
+from groundzero.modules.outputs import OUTPUTS
+from groundzero.modules.prep import current_jumbo
 from groundzero.osconfig import PLUGINS, OsConfigError, plugin_for
-from groundzero.osconfig.esxi import EsxiHostValues, EsxiPlugin, EsxiSettings
-from groundzero.osconfig.holodeck import HolodeckHostValues, HolodeckPlugin, HolodeckSettings
-from groundzero.preflight.evaluate import PreflightReport, UnknownProfileError, evaluate, load_profile
+from groundzero.osconfig.esxi import EsxiPlugin
+from groundzero.preflight.evaluate import PreflightReport, load_profile
 from groundzero.readiness import ReadinessReport, assess
 from groundzero.redfish.capture import load_recording
 from groundzero.redfish.client import RedfishClient
 from groundzero.simulator.bmc import SimulatedBmc
 from groundzero.simulator.esxi import SimulatedEsxi
-from groundzero.vcf_readiness.validate import validate as vcf_validate
 
 logger = logging.getLogger(__name__)
 
@@ -109,14 +102,6 @@ class InstallPreview(BaseModel):
     spec: dict[str, Any]
     kickstart: str  # root password hash masked
     notes: list[str]
-
-
-ASSESS_STEPS = [
-    ("connect", "Connect to the OS"),
-    ("network", "Read network and NTP"),
-    ("storage", "Read disks and datastores"),
-    ("evaluate", "Evaluate Holodeck readiness"),
-]
 
 
 class Services:
@@ -194,13 +179,6 @@ class Services:
             raise NotFoundError(f"No {kind} for host {host_id} yet")
         return meta.data
 
-    def latest_result(self, host_id: str, kind: JobKind) -> dict[str, Any]:
-        self.get_host(host_id)
-        result = self.store.latest_result(host_id=host_id, kind=kind.value)
-        if result is None:
-            raise NotFoundError(f"No {kind.value} result for host {host_id} yet")
-        return result
-
     # ── installed OS ─────────────────────────────────────────────────────
     def set_os_access(self, host_id: str, req: OsAccessSet) -> OsAccess:
         self.get_host(host_id)
@@ -210,119 +188,6 @@ class Services:
 
     def get_os_access(self, host_id: str) -> OsAccess:
         return self._os_access(host_id)[0]
-
-    def start_os_network(self, host_id: str) -> Job:
-        access, secret = self._os_access(host_id)
-        password = self._cipher.decrypt(secret)
-
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.plan(
-                [
-                    ("connect", "Connect to the OS"),
-                    ("network", "Read network and NTP"),
-                    ("storage", "Read disks and datastores"),
-                ]
-            )
-            async with ctx.step("connect", "Connect to the OS"):
-                target = await asyncio.to_thread(self.os_target, host_id, access)
-            async with ctx.step("network", "Read network and NTP"):
-                ctx.progress(0.3, f"Reading network configuration from {access.address}")
-                config = await self.esxi.read_network(target, password)
-            async with ctx.step("storage", "Read disks and datastores"):
-                ctx.progress(0.7, f"Reading storage from {access.address}")
-                storage = await self.esxi.read_storage(target, password)
-            data = config.model_dump(mode="json")
-            self.store.save_result(
-                host_id=host_id, kind=JobKind.OS_NETWORK.value, job_id=ctx.job.id, data=data
-            )
-            self.store.save_result(
-                host_id=host_id, kind="os_storage", job_id=ctx.job.id, data=storage.model_dump(mode="json")
-            )
-            return {"os_network": data, "os_storage": storage.model_dump(mode="json")}
-
-        return self.runner.submit(kind=JobKind.OS_NETWORK, host_id=host_id, params={}, func=run)
-
-    def start_install(self, host_id: str, req: InstallRequest) -> Job:
-        """Reinstall ESXi on the host. Destructive: requires the exact confirmation phrase."""
-        host = self.get_host(host_id)
-        expected = f"install {host.name}"
-        if req.confirm != expected:
-            raise ConfirmationError(f'Confirmation must be exactly "{expected}"')
-        req = req.model_copy(update={"iso_path": str(self._resolve_iso(req))})
-        profile = load_profile(req.profile)  # bad profile/variant is a 4xx, not a failed job
-        if req.variant is not None and req.variant not in profile.variants:
-            raise UnknownProfileError(
-                f"Unknown variant '{req.variant}'; choose from {sorted(profile.variants)}"
-            )
-        stored_access = self.store.get_os_access(host_id)
-        access = stored_access[0] if stored_access else None
-        os_password = self._cipher.decrypt(stored_access[1]) if stored_access else None
-        config = self._install_config(host, req, os_password)
-        if config is None and access is None:
-            raise NotFoundError(
-                f"No OS access configured for host {host_id}; set it, or install with a config set"
-            )
-        if config is not None:
-            self.store.set_host_values(host.id, EsxiPlugin.family, config.values.model_dump(mode="json"))
-        installer = Installer(
-            host=host,
-            bmc_password=self._cipher.decrypt(self._secret(host.id)),
-            os_access=access,
-            resolve_os=lambda a: self.os_target(host.id, a),
-            repin_os=lambda a: self.os_target(host.id, a, repin=True),
-            os_password=os_password,
-            request=req,
-            config=config,
-            client_factory=self._client_factory,
-            esxi=self.esxi,
-            media=self.media,
-            media_dir=self.settings.media_dir,
-            media_base_url=self.settings.media_public_url,
-            media_port=self.settings.media_port,
-            timings=InstallTimings(
-                poll_seconds=self.settings.install_poll_seconds,
-                action_timeout=self.settings.redfish_action_timeout,
-                media_settle_seconds=self.settings.media_settle_seconds,
-                cleanup_watch_seconds=self.settings.media_cleanup_watch_seconds,
-                media_attach_seconds=self.settings.media_attach_seconds,
-                installer_boot_minutes=self.settings.installer_boot_minutes,
-            ),
-        )
-
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            try:
-                result = await installer.run(ctx)
-                # A new OS: anything read from the previous one (network, readiness, prep) is now stale,
-                # and it has a new SSH host key (the TLS certificate was re-pinned during the install).
-                self.store.bump_os_epoch(host.id)
-                self.store.delete_pin(host.id, "os-ssh")
-                if installer.last_network is not None:
-                    # Keep the host's "installed OS" view current without an extra read.
-                    self.store.save_result(
-                        host_id=host.id,
-                        kind=JobKind.OS_NETWORK.value,
-                        job_id=ctx.job.id,
-                        data=installer.last_network.model_dump(mode="json"),
-                    )
-                if config is not None:  # the host now answers at the configured IP with the set's password
-                    self.store.set_os_access(
-                        host.id,
-                        installer.new_access,
-                        self._cipher.encrypt(config.root_password),
-                    )
-            finally:
-                report = installer.last_report
-                if report is not None:
-                    self.store.save_result(
-                        host_id=host.id,
-                        kind=JobKind.INSTALL.value,
-                        job_id=ctx.job.id,
-                        data=report.model_dump(mode="json"),
-                    )
-            return result
-
-        params = req.model_dump(exclude={"confirm", "host_values"})
-        return self.runner.submit(kind=JobKind.INSTALL, host_id=host.id, params=params, func=run)
 
     def preview_install(self, host_id: str, req: InstallRequest) -> InstallPreview:
         """Build the spec and kickstart a deployment would use. No BMC or OS calls."""
@@ -338,7 +203,7 @@ class Services:
             iso = resolved[0]
         stored_access = self.store.get_os_access(host_id)
         os_password = self._cipher.decrypt(stored_access[1]) if stored_access else None
-        config = self._install_config(host, req, os_password)
+        config = install_config(self, host, req, os_password)
         if config is None:
             raise OsConfigError(
                 "Preview needs a config set (without one, settings are captured at install time)"
@@ -467,35 +332,6 @@ class Services:
         self.store.set_host_values(host_id, family, data)
         return data
 
-    def start_os_capture(self, host_id: str, name: str) -> Job:
-        host = self.get_host(host_id)
-        if self.store.find_config_set_by_name(name):
-            raise ConflictError(f"A config set named '{name}' already exists")
-        access, secret = self._os_access(host_id)
-        password = self._cipher.decrypt(secret)
-
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            async with ctx.step("read", "Read the running OS"):
-                ctx.progress(0.2, f"Reading configuration from {access.address}")
-                target = await asyncio.to_thread(self.os_target, host_id, access)
-                network = await self.esxi.read_network(target, password)
-                storage = await self.esxi.read_storage(target, password)
-            captured = EsxiPlugin.capture(network, storage)
-            ctx.progress(0.8, "Saving config set")
-            config_set = self.create_config_set(
-                ConfigSetWrite(
-                    name=name,
-                    os_family=EsxiPlugin.family,
-                    settings=captured.settings,
-                    root_password=password,
-                ),
-                source=f"captured from {host.name} ({access.address})",
-            )
-            self.store.set_host_values(host.id, EsxiPlugin.family, captured.host_values)
-            return {"config_set_id": config_set.id, "host_values": captured.host_values}
-
-        return self.runner.submit(kind=JobKind.OS_CAPTURE, host_id=host.id, params={"name": name}, func=run)
-
     # ── ISO repository ───────────────────────────────────────────────────
     def list_isos(self) -> list[IsoImage]:
         return self.isos.list()
@@ -505,11 +341,29 @@ class Services:
 
     # ── tasks and the pipeline ──────────────────────────────────────────
     def list_tasks(self) -> list[TaskInfo]:
-        return [info(t) for t in CATALOG]
+        return [info(m.spec(), m.params_schema()) for m in REGISTRY.values()]
+
+    def list_outputs(self, host_id: str) -> list[dict[str, Any]]:
+        """The latest output of each kind this host has, newest first."""
+        self.get_host(host_id)
+        epoch = self.store.os_epoch(host_id)
+        found = []
+        for kind in sorted({t.produces for t in catalog() if t.produces} | set(OUTPUTS)):
+            meta = self.store.latest_output(host_id=host_id, kind=kind)
+            if meta is not None:
+                found.append(
+                    {
+                        "kind": kind,
+                        "job_id": meta.job_id,
+                        "produced_at": meta.created_at,
+                        "fresh": meta.epoch >= epoch,
+                    }
+                )
+        return sorted(found, key=lambda o: o["produced_at"], reverse=True)
 
     def pipeline(self, host_id: str) -> Pipeline:
         self.get_host(host_id)
-        kinds = {t.produces for t in CATALOG if t.produces}
+        kinds = {t.produces for t in catalog() if t.produces}
         return evaluate_pipeline(
             host_id=host_id,
             os_epoch=self.store.os_epoch(host_id),
@@ -519,127 +373,37 @@ class Services:
         )
 
     def start_task(self, host_id: str, task_id: str, run: TaskRun) -> Job:
-        """Start any catalog task, after checking its inputs exist and are current."""
-        spec = TASKS.get(task_id)
-        if spec is None:
+        """Start any catalog task: its inputs must exist and be current, its parameters valid."""
+        module = REGISTRY.get(task_id)
+        if module is None:
             raise NotFoundError(f"Unknown task '{task_id}'; see GET /tasks")
-        if not spec.available:
-            raise ConflictError(f"“{spec.title}” is not available yet")
+        if not module.available:
+            raise ConflictError(f"“{module.title}” is not available yet")
+        host = self.get_host(host_id)
         state = next(t for s in self.pipeline(host_id).stages for t in s.tasks if t.id == task_id)
         if state.blocked_by:
-            raise ConflictError(f"Can't run “{spec.title}” yet: " + "; ".join(state.blocked_by))
-        p = run.params
-        if task_id == "discover":
-            return self.start_inventory(host_id)
-        if task_id == "preflight":
-            return self.start_preflight(host_id, p.get("profile", "holodeck-9"), p.get("variant"))
-        if task_id in ("os.reimage", "os.custom"):
-            req = InstallRequest.model_validate({**p, "confirm": run.confirm or ""})
-            if task_id == "os.custom" and not req.config_set_id:
-                raise OsConfigError(
-                    "Deploy OS · custom ISO from a config set needs a config set (params.config_set_id)"
-                )
-            if task_id == "os.reimage" and req.config_set_id:
-                raise OsConfigError(
-                    "os.reimage builds the ISO from the current settings; use os.custom for a config set"
-                )
-            return self.start_install(host_id, req)
-        if task_id == "os.read":
-            return self.start_os_network(host_id)
-        if task_id == "os.capture":
-            return self.start_os_capture(host_id, str(p.get("name") or ""))
-        if task_id == "vcf.readiness":
-            return self.start_vcf_readiness(host_id)
-        if task_id == "host.assess":
-            return self.start_assess(host_id, p.get("variant"))
-        if task_id == "host.prep":
-            checks = p.get("checks")
-            return self.start_prep(host_id, list(checks) if checks is not None else None, run.confirm)
-        if task_id == "net.verify_jumbo":
-            return self.start_verify_jumbo(host_id)
-        if task_id == "holodeck.router":
-            return self.start_holorouter(
-                host_id, str(p.get("config_set_id") or ""), reapply=bool(p.get("reapply"))
-            )
-        raise ConflictError(f"“{spec.title}” has no runner")  # pragma: no cover - catalog/dispatch mismatch
+            raise ConflictError(f"Can't run “{module.title}” yet: " + "; ".join(state.blocked_by))
+        params = module.Params.model_validate(self._validate(module.Params, run.params, "params"))
+        prepared = module.prepare(self, host, params, Inputs(self.store, host_id), run.confirm)
+        return self.runner.submit(task=module.id, host_id=host_id, params=prepared.params, func=prepared.run)
 
-    def start_vcf_readiness(self, host_id: str) -> Job:
-        """VCF 9 readiness (CA rules) on the latest hardware inventory. Read-only: no BMC calls."""
-        self.get_host(host_id)
-        meta = self.store.latest_output(host_id=host_id, kind=JobKind.INVENTORY.value)
-        if meta is None:
-            raise ConflictError("Discover the hardware first (inventory or preflight)")
-        inventory = HostInventory.model_validate(meta.data)
+    # ── shared plumbing for modules (the Deps protocol in groundzero.modules.base) ──
+    def save_output(self, host_id: str, kind: str, job_id: str, output: BaseModel | dict[str, Any]) -> None:
+        """Store a module's output, checked against the output registry so the next module can read it."""
+        data = output.model_dump(mode="json") if isinstance(output, BaseModel) else output
+        model = OUTPUTS.get(kind)
+        if model is not None:
+            model.model_validate(data)  # an output that doesn't match its type is a bug, not bad input
+        self.store.save_result(host_id=host_id, kind=kind, job_id=job_id, data=data)
 
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            async with ctx.step("validate", "Validate against the VCF 9 readiness rules"):
-                report = vcf_validate(inventory)
-            data = report.model_dump(mode="json")
-            self.store.save_result(host_id=host_id, kind="vcf_readiness", job_id=ctx.job.id, data=data)
-            return {"vcf_readiness": data}
-
-        return self.runner.submit(kind=JobKind.VCF_READINESS, host_id=host_id, params={}, func=run)
-
-    def start_assess(self, host_id: str, variant: str | None = None) -> Job:
-        """Read the installed OS live and assess it against Holodeck's needs (read-only)."""
-        self.get_host(host_id)
-        access, secret = self._os_access(host_id)
-        password = self._cipher.decrypt(secret)
-        stored = self.store.latest_output(host_id=host_id, kind=JobKind.PREFLIGHT.value)
-        preflight = PreflightReport.model_validate(stored.data) if stored else None
-        profile = load_profile(preflight.profile if preflight else "holodeck-9")
-        variant = variant or (preflight.variant if preflight else profile.default_variant)
-        if variant not in profile.variants:
-            raise UnknownProfileError(f"Unknown variant '{variant}'; choose from {sorted(profile.variants)}")
-        jumbo_meta = self.store.latest_output(host_id=host_id, kind="jumbo")
-        epoch = self.store.os_epoch(host_id)
-        jumbo = jumbo_meta.data if jumbo_meta and jumbo_meta.epoch >= epoch else None
-
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.plan(ASSESS_STEPS)
-            async with ctx.step("connect", "Connect to the OS"):
-                target = await asyncio.to_thread(self.os_target, host_id, access)
-            async with ctx.step("network", "Read network and NTP"):
-                ctx.progress(0.3, f"Reading network configuration from {access.address}")
-                network = await self.esxi.read_network(target, password)
-            async with ctx.step("storage", "Read disks and datastores"):
-                ctx.progress(0.6, f"Reading disks and datastores from {access.address}")
-                storage = await self.esxi.read_storage(target, password)
-            for kind, model in ((JobKind.OS_NETWORK.value, network), ("os_storage", storage)):
-                self.store.save_result(
-                    host_id=host_id, kind=kind, job_id=ctx.job.id, data=model.model_dump(mode="json")
-                )
-            async with ctx.step("evaluate", "Evaluate Holodeck readiness"):
-                report = assess(
-                    profile=profile,
-                    variant=variant,
-                    network=network,
-                    storage=storage,
-                    preflight=preflight,
-                    jumbo=jumbo,
-                )
-                data = report.model_dump(mode="json")
-                self.store.save_result(host_id=host_id, kind="readiness", job_id=ctx.job.id, data=data)
-            return {"readiness": data}
-
-        return self.runner.submit(kind=JobKind.ASSESS, host_id=host_id, params={"variant": variant}, func=run)
-
-    def _readiness(self, host_id: str) -> ReadinessReport:
-        meta = self.store.latest_output(host_id=host_id, kind="readiness")
-        if meta is None:
-            raise ConflictError("Assess Holodeck readiness first")
-        return ReadinessReport.model_validate(meta.data)
-
-    def _reassess(
+    def reassess(
         self, host_id: str, network: EsxiNetworkConfig, storage: EsxiStorage, job_id: str
     ) -> ReadinessReport:
         """Re-run the assessment with the variant the last one used (after prep or a jumbo test)."""
-        previous = self._readiness(host_id)
-        stored = self.store.latest_output(host_id=host_id, kind=JobKind.PREFLIGHT.value)
-        preflight = PreflightReport.model_validate(stored.data) if stored else None
-        jumbo_meta = self.store.latest_output(host_id=host_id, kind="jumbo")
-        epoch = self.store.os_epoch(host_id)
-        jumbo = jumbo_meta.data if jumbo_meta and jumbo_meta.epoch >= epoch else None
+        inputs = Inputs(self.store, host_id)
+        previous = inputs.require("readiness", ReadinessReport, "Assess Holodeck readiness first")
+        preflight = inputs.get("preflight", PreflightReport)
+        jumbo = current_jumbo(inputs)
         report = assess(
             profile=load_profile(previous.profile),
             variant=previous.variant,
@@ -648,261 +412,31 @@ class Services:
             preflight=preflight,
             jumbo=jumbo,
         )
-        self.store.save_result(
-            host_id=host_id, kind="readiness", job_id=job_id, data=report.model_dump(mode="json")
-        )
+        self.save_output(host_id, "readiness", job_id, report)
         return report
 
-    def start_prep(self, host_id: str, checks: list[str] | None, confirm: str | None) -> Job:
-        """Apply planned readiness fixes (by check id; default: the recommended ones), then re-assess."""
-        self.get_host(host_id)
+    def client_factory(self, host: Host, password: str) -> RedfishClient:
+        return self._client_factory(host, password)
+
+    def bmc_password(self, host_id: str) -> str:
+        return self._cipher.decrypt(self._secret(host_id))
+
+    def os_access(self, host_id: str) -> tuple[OsAccess, str]:
+        """How to reach the installed OS, with its password; NotFound until OS access is set."""
         access, secret = self._os_access(host_id)
-        password = self._cipher.decrypt(secret)
-        report = self._readiness(host_id)
-        plan = [a for a in report.plan if a.task == "host.prep"]
-        by_check = {a.check: a for a in plan}
-        if checks is None:
-            selected = [a for a in plan if a.recommended]
-        else:
-            unknown = [c for c in checks if c not in by_check]
-            if unknown:
-                raise OsConfigError(
-                    f"Not in the current plan: {', '.join(unknown)}. Assess again to refresh it."
-                )
-            selected = [by_check[c] for c in checks]
-        if not selected:
-            raise OsConfigError("Nothing selected to apply")
-        for action in selected:
-            if action.destructive and confirm != action.confirm_phrase:
-                raise ConfirmationError(
-                    f'“{action.title}” erases a disk: confirm with exactly "{action.confirm_phrase}"'
-                )
+        return access, self._cipher.decrypt(secret)
 
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.plan(
-                [(a.check, a.title) for a in selected] + [("reassess", "Read the host again and re-assess")]
-            )
-            target = await asyncio.to_thread(self.os_target, host_id, access)
-            applied = []
-            for i, action in enumerate(selected):
-                async with ctx.step(action.check, action.title) as step:
-                    ctx.progress(0.1 + 0.7 * i / len(selected), action.title)
-                    record = await self.esxi.apply(target, password, action.id, action.params)
-                    step.message = (
-                        f"{record.before} → {record.after}" if record.changed else f"already {record.after}"
-                    )
-                    applied.append(record)
-            async with ctx.step("reassess", "Read the host again and re-assess"):
-                network = await self.esxi.read_network(target, password)
-                storage = await self.esxi.read_storage(target, password)
-                for kind, model in ((JobKind.OS_NETWORK.value, network), ("os_storage", storage)):
-                    self.store.save_result(
-                        host_id=host_id, kind=kind, job_id=ctx.job.id, data=model.model_dump(mode="json")
-                    )
-                after = self._reassess(host_id, network, storage, ctx.job.id)
-            vswitch = after.target_vswitch
-            trunk = next(
-                (
-                    pg.name
-                    for pg in network.portgroups
-                    if pg.is_trunk and pg.vswitch == vswitch and pg.security.accepts_all
-                ),
-                None,
-            )
-            external = next((pg.name for pg in network.portgroups if pg.name == "Holodeck-External"), None)
-            data = {
-                "applied": [r.model_dump(mode="json") for r in applied],
-                "vswitch": vswitch,
-                "trunk_portgroup": trunk,
-                "external_portgroup": external,
-                "datastore": after.storage.datastore if after.storage.kind == "existing" else None,
-                "ready": after.ready,
-            }
-            self.store.save_result(host_id=host_id, kind="host_prep", job_id=ctx.job.id, data=data)
-            return {"host_prep": data, "readiness": after.model_dump(mode="json")}
+    def stored_os_access(self, host_id: str) -> tuple[OsAccess, str] | None:
+        stored = self.store.get_os_access(host_id)
+        return (stored[0], self._cipher.decrypt(stored[1])) if stored else None
 
-        return self.runner.submit(
-            kind=JobKind.HOST_PREP, host_id=host_id, params={"checks": [a.check for a in selected]}, func=run
-        )
+    def save_os_access(self, host_id: str, access: OsAccess, password: str) -> None:
+        self.store.set_os_access(host_id, access, self._cipher.encrypt(password))
 
-    def start_verify_jumbo(self, host_id: str) -> Job:
-        """Loop test 9000-byte frames through the physical switch (temporary changes, always reverted)."""
-        self.get_host(host_id)
-        access, secret = self._os_access(host_id)
-        password = self._cipher.decrypt(secret)
-        self._readiness(host_id)
-        pinned = self.store.get_pin(host_id, "os-ssh")
+    def validate_values(self, model: type[BaseModel], data: dict[str, Any], where: str) -> dict[str, Any]:
+        return self._validate(model, data, where)
 
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.plan(
-                [
-                    ("read", "Read the network"),
-                    ("loop", "Loop test through the switch"),
-                    ("reassess", "Update the readiness report"),
-                ]
-            )
-            target = await asyncio.to_thread(self.os_target, host_id, access)
-            async with ctx.step("read", "Read the network"):
-                network = await self.esxi.read_network(target, password)
-                vswitch = next(
-                    (v for v in network.vswitches if v.name == self._readiness(host_id).target_vswitch), None
-                )
-                if vswitch is None or len(vswitch.uplinks) < 2:
-                    raise OsConfigError("The jumbo-frame test needs a standard switch with two uplinks")
-                # Management stays on the NIC whose MAC vmk0 uses; the other uplink is borrowed for the test.
-                keep = network.install_nic()
-                keep = keep if keep in vswitch.uplinks else vswitch.uplinks[0]
-                borrow = next(u for u in vswitch.uplinks if u != keep)
-                uplinks = (keep, borrow)
-                vlan = network.management_vlan()
-            async with ctx.step("loop", "Loop test through the switch") as step:
-                result = await self.esxi.verify_jumbo(
-                    target,
-                    password,
-                    vswitch=vswitch.name,
-                    uplinks=uplinks,
-                    vlan=vlan,
-                    mtu=9000,
-                    pinned_ssh_key=pinned[1] if pinned else None,
-                    log=lambda m: ctx.progress(0.5, m),
-                )
-                if result.ssh_host_key and not pinned:
-                    self.store.set_pin(host_id, "os-ssh", access.address, result.ssh_host_key)
-                self.store.save_result(
-                    host_id=host_id, kind="jumbo", job_id=ctx.job.id, data=result.model_dump(mode="json")
-                )
-                step.message = result.summary
-            async with ctx.step("reassess", "Update the readiness report"):
-                storage_meta = self.store.latest_output(host_id=host_id, kind="os_storage")
-                if storage_meta is not None:
-                    self._reassess(
-                        host_id, network, EsxiStorage.model_validate(storage_meta.data), ctx.job.id
-                    )
-            if not result.restored:
-                raise OsConfigError(f"The network configuration was not fully restored:\n{result.diff}")
-            if not result.ok:
-                raise OsConfigError(result.summary)
-            return {"jumbo": result.model_dump(mode="json")}
-
-        return self.runner.submit(kind=JobKind.VERIFY_JUMBO, host_id=host_id, params={}, func=run)
-
-    def _holodeck_inputs(
-        self, host_id: str, config_set_id: str
-    ) -> tuple[ConfigSet, HolodeckSettings, HolodeckHostValues, dict[str, str]]:
-        if not config_set_id:
-            raise OsConfigError("Choose a Holodeck config set (params.config_set_id)")
-        config_set = self.get_config_set(config_set_id)
-        if config_set.os_family != HolodeckPlugin.family:
-            raise OsConfigError(f"{config_set.name} is not a Holodeck config set")
-        values = self.store.get_host_values(host_id, HolodeckPlugin.family)
-        if values is None:
-            raise OsConfigError("Set this host's Holodeck values first (Holorouter IP, instance ID)")
-        return (
-            config_set,
-            HolodeckSettings.model_validate(config_set.settings),
-            HolodeckHostValues.model_validate(values),
-            self.config_set_secrets(config_set_id),
-        )
-
-    def start_holorouter(self, host_id: str, config_set_id: str, *, reapply: bool = False) -> Job:
-        """Deploy the Holorouter OVA on the prepared datastore and port groups, then wait for SSH."""
-        host = self.get_host(host_id)
-        access, secret = self._os_access(host_id)
-        password = self._cipher.decrypt(secret)
-        config_set, settings, values, secrets = self._holodeck_inputs(host_id, config_set_id)
-        if not secrets.get("holorouter_password"):
-            raise OsConfigError(f"Set the Holorouter password in config set {config_set.name}")
-        readiness = self._readiness(host_id)
-        if not readiness.ready:
-            raise ConflictError("The host is not ready for Holodeck yet; see the readiness report")
-        prep = self.store.latest_output(host_id=host_id, kind="host_prep")
-        if prep is None or not prep.data.get("trunk_portgroup") or not prep.data.get("external_portgroup"):
-            raise ConflictError("Prepare host must have created the trunk and external port groups")
-        datastore = prep.data.get("datastore") or readiness.storage.datastore
-        images = [i for i in self.isos.list() if i.os_family == "holorouter"]
-        if not images:
-            raise NotFoundError(f"No Holorouter OVA in the image repository ({self.settings.iso_dir})")
-        image = max(images, key=lambda i: (i.version or "", i.build or ""))
-        resolved = self.isos.resolve(image.id)
-        assert resolved is not None
-        ova = resolved[1]
-        bools = {True: "True", False: "False"}
-        properties = {
-            "hostname": values.holorouter_hostname,
-            "password": secrets["holorouter_password"],
-            "ip": values.holorouter_ip,
-            "mask": str(settings.holorouter_prefix),
-            "gateway": settings.holorouter_gateway,
-            "dns_server": settings.holorouter_dns,
-            "ntp_server": settings.holorouter_ntp,
-            **({"dns_domain": settings.holorouter_dns_domain} if settings.holorouter_dns_domain else {}),
-            "ssh_enabled": "True",
-            "webtop_enabled": bools[settings.webtop],
-            "gitops_enabled": bools[settings.gitops],
-        }
-        networks = {
-            "VM Management Network": prep.data["external_portgroup"],
-            "Trunk Portgroup for Site A": prep.data["trunk_portgroup"],
-            "Trunk Portgroup for Site B": prep.data["trunk_portgroup"],
-        }
-        vm_name = f"{values.instance_id}-holorouter"
-
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.plan(
-                [("deploy", f"Deploy {image.filename}"), ("ssh", "Wait for the Holorouter to answer on SSH")]
-            )
-            loop = asyncio.get_running_loop()
-
-            def progress(fraction: float, message: str) -> None:  # called from the upload thread
-                loop.call_soon_threadsafe(ctx.progress, fraction, message)
-
-            target = await asyncio.to_thread(self.os_target, host_id, access)
-            async with ctx.step("deploy", f"Deploy {image.filename}") as step:
-                result = await self.esxi.deploy_ova(
-                    target,
-                    password,
-                    ova,
-                    vm_name=vm_name,
-                    datastore=datastore or "",
-                    networks=networks,
-                    properties=properties,
-                    progress=progress,
-                    reapply=reapply,
-                )
-                step.message = (
-                    f"uploaded {result.uploaded_bytes / 1e9:.2f} GB in {result.seconds / 60:.0f} min"
-                    if result.created
-                    else result.message
-                )
-                if not result.settings_applied:
-                    raise OsConfigError(result.message)
-            async with ctx.step("ssh", "Wait for the Holorouter to answer on SSH") as step:
-                await self._wait_for_port(values.holorouter_ip, 22, minutes=20, ctx=ctx)
-                step.message = f"{values.holorouter_ip}:22 answers"
-            data = {
-                "vm_name": vm_name,
-                "ip": values.holorouter_ip,
-                "hostname": values.holorouter_hostname,
-                "version": image.version,
-                "image": image.filename,
-                "config_set_id": config_set.id,
-                "datastore": datastore,
-                "networks": networks,
-                "created": result.created,
-                "webtop_url": f"http://{values.holorouter_ip}:30000" if settings.webtop else None,
-            }
-            self.store.save_result(host_id=host_id, kind="holorouter", job_id=ctx.job.id, data=data)
-            return {"holorouter": data}
-
-        params = {
-            "config_set_id": config_set.id,
-            "vm_name": vm_name,
-            "image": image.filename,
-            "reapply": reapply,
-        }
-        return self.runner.submit(kind=JobKind.HOLOROUTER, host_id=host.id, params=params, func=run)
-
-    async def _wait_for_port(self, address: str, port: int, *, minutes: float, ctx: JobContext) -> None:
+    async def wait_for_port(self, address: str, port: int, *, minutes: float, ctx: JobContext) -> None:
         if not isinstance(self.esxi, LiveEsxiOps):
             return  # simulated appliances have no real network presence
         deadline = asyncio.get_running_loop().time() + minutes * 60
@@ -949,50 +483,13 @@ class Services:
         self.runner.cancel(job_id)
         return job
 
-    def start_inventory(self, host_id: str) -> Job:
-        host = self.get_host(host_id)
-
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            async with ctx.step("collect", "Read hardware inventory from the BMC"):
-                inventory, audit = await self._collect(host, ctx)
-            return {"inventory": inventory.model_dump(mode="json"), "audit": audit.model_dump()}
-
-        return self.runner.submit(kind=JobKind.INVENTORY, host_id=host.id, params={}, func=run)
-
-    def start_preflight(self, host_id: str, profile: str, variant: str | None) -> Job:
-        host = self.get_host(host_id)
-        spec = load_profile(profile)  # validate before queuing so bad input is a 4xx, not a failed job
-        variant = variant or spec.default_variant
-        if variant not in spec.variants:
-            raise UnknownProfileError(f"Unknown variant '{variant}'; choose from {sorted(spec.variants)}")
-        evaluate_args = {"profile": profile, "variant": variant}
-
-        async def run(ctx: JobContext) -> dict[str, Any]:
-            ctx.plan(
-                [
-                    ("collect", "Read hardware inventory from the BMC"),
-                    ("evaluate", "Evaluate the requirements"),
-                ]
-            )
-            async with ctx.step("collect", "Read hardware inventory from the BMC"):
-                inventory, audit = await self._collect(host, ctx)
-            async with ctx.step("evaluate", "Evaluate the requirements"):
-                ctx.progress(0.97, "Evaluating preflight checks")
-                report = evaluate(inventory, profile, variant)
-            data = report.model_dump(mode="json")
-            self.store.save_result(
-                host_id=host.id, kind=JobKind.PREFLIGHT.value, job_id=ctx.job.id, data=data
-            )
-            return {"preflight": data, "audit": audit.model_dump()}
-
-        return self.runner.submit(kind=JobKind.PREFLIGHT, host_id=host.id, params=evaluate_args, func=run)
-
     # ── internals ────────────────────────────────────────────────────────
-    async def _collect(self, host: Host, ctx: JobContext) -> tuple[HostInventory, BmcAudit]:
+    async def collect_inventory(self, host: Host, ctx: JobContext) -> tuple[HostInventory, dict[str, Any]]:
+        """Read the BMC's inventory (read-only), save it as the host's inventory output, audit the calls."""
         password = self._cipher.decrypt(self._secret(host.id))
         client = self._client_factory(host, password)
         async with client:
-            identity, inventory = await collect_inventory(client, ctx.progress)
+            identity, inventory = await read_inventory(client, ctx.progress)
         diagnostics.record(
             "bmc_identity", **identity.model_dump(mode="json"), firmware=inventory.bmc.model_dump(mode="json")
         )
@@ -1003,13 +500,8 @@ class Services:
         if any("Sessions" not in call for call in audit.non_get):  # inventory must be read-only
             logger.error("Unexpected BMC writes during inventory of %s: %s", host.id, audit.non_get)
         self.store.update_host_identity(host.id, vendor=identity.vendor.value, model=identity.model)
-        self.store.save_result(
-            host_id=host.id,
-            kind=JobKind.INVENTORY.value,
-            job_id=ctx.job.id,
-            data=inventory.model_dump(mode="json"),
-        )
-        return inventory, audit
+        self.save_output(host.id, "inventory", ctx.job.id, inventory)
+        return inventory, audit.model_dump()
 
     # ── certificate pinning ─────────────────────────────────────────────
     def pinned_pem(
@@ -1065,51 +557,6 @@ class Services:
             raise NotFoundError(f"Unknown certificate role '{role}' (bmc, os or os-ssh)")
         self.pinned_pem(host_id, role, address, repin=True)
         return next(p for p in self.list_pins(host_id) if p.role == role)
-
-    def _resolve_iso(self, req: InstallRequest) -> Path:
-        if req.iso_id:
-            resolved = self.isos.resolve(req.iso_id)
-            if resolved is None:
-                raise NotFoundError(
-                    f"ISO {req.iso_id} is not in the repository; rescan or check {self.settings.iso_dir}"
-                )
-            image, path = resolved
-            if image.os_family != EsxiPlugin.family:
-                raise OsConfigError(f"{image.filename} is not an ESXi installer ISO")
-            return path
-        if req.iso_path and Path(req.iso_path).is_file():
-            return Path(req.iso_path)
-        raise NotFoundError(f"ISO not found: {req.iso_path or req.iso_id}")
-
-    def _install_config(
-        self, host: Host, req: InstallRequest, os_password: str | None
-    ) -> InstallConfig | None:
-        if req.config_set_id is None:
-            return None
-        found = self.store.get_config_set(req.config_set_id)
-        if found is None:
-            raise NotFoundError(f"Config set {req.config_set_id} not found")
-        config_set, sealed = found
-        if config_set.os_family != EsxiPlugin.family:
-            raise OsConfigError(f"Config set '{config_set.name}' is for {config_set.os_family}, not ESXi")
-        raw_values = req.host_values or self.store.get_host_values(host.id, EsxiPlugin.family)
-        if raw_values is None:
-            raise OsConfigError(
-                f"Per-server values (hostname, ip) are needed for {host.name}: pass host_values, "
-                "set them for the host, or capture from its running OS"
-            )
-        values = EsxiHostValues.model_validate(self._validate(EsxiHostValues, raw_values, "host_values"))
-        root_password = self._unseal(sealed).get("root_password") if sealed else None
-        root_password = root_password or os_password
-        if not root_password:
-            raise OsConfigError(
-                f"Config set '{config_set.name}' has no root password and the host has no OS access"
-            )
-        return InstallConfig(
-            settings=EsxiSettings.model_validate(config_set.settings),
-            values=values,
-            root_password=root_password,
-        )
 
     def _config_set_name(self, set_id: str | None) -> str | None:
         if set_id is None:

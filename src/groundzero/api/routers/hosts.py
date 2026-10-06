@@ -2,31 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel, Field
 
 from groundzero.api.deps import ServicesDep
-from groundzero.core.models import Host, HostCreate, Job, JobKind, OsAccess, OsAccessSet, OsCaptureRequest
+from groundzero.core.models import Host, HostCreate, Job, OsAccess, OsAccessSet
 from groundzero.core.services import InstallPreview
 from groundzero.core.tasks import Pipeline, TaskRun
 from groundzero.core.tls import PinnedCertificate
-from groundzero.esxi.models import EsxiNetworkConfig
-from groundzero.install.job import InstallReport, InstallRequest
-from groundzero.inventory.models import HostInventory
-from groundzero.preflight.evaluate import PreflightReport
-from groundzero.readiness import ReadinessReport
-from groundzero.vcf_readiness.validate import VcfReadinessReport
+from groundzero.install.job import InstallRequest
 
 router = APIRouter(prefix="/hosts", tags=["hosts"])
-
-
-class PreflightRequest(BaseModel):
-    profile: str = Field(default="holodeck-9", description="Requirements profile id (see GET /profiles)")
-    variant: str | None = Field(
-        default=None, description="Profile variant; defaults to the profile's default"
-    )
 
 
 def _accepted(response: Response, job: Job) -> Job:
@@ -56,29 +45,6 @@ def delete_host(host_id: str, services: ServicesDep) -> None:
     services.delete_host(host_id)
 
 
-@router.post("/{host_id}/inventory", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
-async def start_inventory(host_id: str, services: ServicesDep, response: Response) -> Job:
-    return _accepted(response, services.start_inventory(host_id))
-
-
-@router.get("/{host_id}/inventory", response_model=HostInventory)
-def latest_inventory(host_id: str, services: ServicesDep) -> HostInventory:
-    return HostInventory.model_validate(services.latest_result(host_id, JobKind.INVENTORY))
-
-
-@router.post("/{host_id}/preflight", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
-async def start_preflight(
-    host_id: str, services: ServicesDep, response: Response, body: PreflightRequest | None = None
-) -> Job:
-    body = body or PreflightRequest()
-    return _accepted(response, services.start_preflight(host_id, body.profile, body.variant))
-
-
-@router.get("/{host_id}/preflight", response_model=PreflightReport)
-def latest_preflight(host_id: str, services: ServicesDep) -> PreflightReport:
-    return PreflightReport.model_validate(services.latest_result(host_id, JobKind.PREFLIGHT))
-
-
 @router.put("/{host_id}/os", response_model=OsAccess)
 def set_os_access(host_id: str, body: OsAccessSet, services: ServicesDep) -> OsAccess:
     """Record how to reach the OS currently installed on the host (e.g. ESXi management IP)."""
@@ -88,36 +54,6 @@ def set_os_access(host_id: str, body: OsAccessSet, services: ServicesDep) -> OsA
 @router.get("/{host_id}/os", response_model=OsAccess)
 def get_os_access(host_id: str, services: ServicesDep) -> OsAccess:
     return services.get_os_access(host_id)
-
-
-@router.post("/{host_id}/os/network", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
-async def start_os_network(host_id: str, services: ServicesDep, response: Response) -> Job:
-    """Read the installed hypervisor's network configuration (read-only)."""
-    return _accepted(response, services.start_os_network(host_id))
-
-
-@router.get("/{host_id}/os/network", response_model=EsxiNetworkConfig)
-def latest_os_network(host_id: str, services: ServicesDep) -> EsxiNetworkConfig:
-    return EsxiNetworkConfig.model_validate(services.latest_result(host_id, JobKind.OS_NETWORK))
-
-
-@router.post("/{host_id}/install", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
-async def start_install(host_id: str, body: InstallRequest, services: ServicesDep, response: Response) -> Job:
-    """Reinstall ESXi on the host (destructive). `confirm` must be exactly "install <host name>"."""
-    return _accepted(response, services.start_install(host_id, body))
-
-
-@router.get("/{host_id}/install", response_model=InstallReport)
-def latest_install(host_id: str, services: ServicesDep) -> InstallReport:
-    return InstallReport.model_validate(services.latest_result(host_id, JobKind.INSTALL))
-
-
-@router.post("/{host_id}/os/capture", status_code=status.HTTP_202_ACCEPTED, response_model=Job)
-async def capture_config_set(
-    host_id: str, body: OsCaptureRequest, services: ServicesDep, response: Response
-) -> Job:
-    """Create a config set (and this host's per-server values) from the running OS. Read-only."""
-    return _accepted(response, services.start_os_capture(host_id, body.name))
 
 
 @router.get("/{host_id}/host-values/{family}", response_model=dict[str, Any])
@@ -166,13 +102,21 @@ async def start_task(
     return _accepted(response, services.start_task(host_id, task_id, body))
 
 
-@router.get("/{host_id}/readiness", response_model=ReadinessReport)
-def get_readiness(host_id: str, services: ServicesDep) -> ReadinessReport:
-    """Latest Holodeck readiness assessment: checks, the proposed datastore and the planned fixes."""
-    return ReadinessReport.model_validate(services.latest_output(host_id, "readiness"))
+class OutputSummary(BaseModel):
+    kind: str
+    job_id: str
+    produced_at: datetime
+    fresh: bool = Field(description="False when the OS was reinstalled after this output was produced")
 
 
-@router.get("/{host_id}/vcf-readiness", response_model=VcfReadinessReport)
-def get_vcf_readiness(host_id: str, services: ServicesDep) -> VcfReadinessReport:
-    """Latest VCF 9 readiness validation (VCF Readiness rules, CA, Inc. licence)."""
-    return VcfReadinessReport.model_validate(services.latest_output(host_id, "vcf_readiness"))
+@router.get("/{host_id}/outputs", response_model=list[OutputSummary])
+def list_outputs(host_id: str, services: ServicesDep) -> list[OutputSummary]:
+    """The latest output of each kind for this host: what later tasks will use as their inputs."""
+    return [OutputSummary(**o) for o in services.list_outputs(host_id)]
+
+
+@router.get("/{host_id}/outputs/{kind}", response_model=dict[str, Any])
+def get_output(host_id: str, kind: str, services: ServicesDep) -> dict[str, Any]:
+    """The latest output of one kind (e.g. inventory, preflight, os_network, install, readiness,
+    vcf_readiness, host_prep, jumbo, holorouter). Each kind has a fixed shape; see GET /tasks."""
+    return services.latest_output(host_id, kind)

@@ -93,7 +93,7 @@ def test_validation_errors_are_problems(api: TestClient) -> None:
 
 def test_preflight_job_end_to_end(api: TestClient) -> None:
     host = _add_host(api)
-    resp = api.post(f"/api/v1/hosts/{host['id']}/preflight", json={"profile": "holodeck-9"})
+    resp = api.post(f"/api/v1/hosts/{host['id']}/tasks/preflight", json={"params": {"profile": "holodeck-9"}})
     assert resp.status_code == 202
     assert resp.headers["location"] == f"/api/v1/jobs/{resp.json()['id']}"
 
@@ -101,9 +101,9 @@ def test_preflight_job_end_to_end(api: TestClient) -> None:
     assert job["status"] == "succeeded", job
     assert job["result"]["preflight"]["overall"] == "pass"
 
-    report = api.get(f"/api/v1/hosts/{host['id']}/preflight").json()
+    report = api.get(f"/api/v1/hosts/{host['id']}/outputs/preflight").json()
     assert report["variant"] == "vcf-9.0-esa-single"
-    inventory = api.get(f"/api/v1/hosts/{host['id']}/inventory").json()
+    inventory = api.get(f"/api/v1/hosts/{host['id']}/outputs/inventory").json()
     assert inventory["system"]["model"] == "PowerEdge R740xd"
     refreshed = api.get(f"/api/v1/hosts/{host['id']}").json()
     assert (refreshed["vendor"], refreshed["model"]) == ("dell", "PowerEdge R740xd")
@@ -111,33 +111,37 @@ def test_preflight_job_end_to_end(api: TestClient) -> None:
 
 def test_bad_profile_and_variant_rejected_before_queueing(api: TestClient) -> None:
     host = _add_host(api)
-    bad = api.post(f"/api/v1/hosts/{host['id']}/preflight", json={"profile": "nope"})
+    url = f"/api/v1/hosts/{host['id']}/tasks/preflight"
+    bad = api.post(url, json={"params": {"profile": "nope"}})
     assert bad.status_code == 422
-    bad_variant = api.post(f"/api/v1/hosts/{host['id']}/preflight", json={"variant": "nope"})
+    bad_variant = api.post(url, json={"params": {"variant": "nope"}})
     assert bad_variant.status_code == 422
     assert api.get("/api/v1/jobs").json() == []
 
 
 def test_results_404_before_first_run(api: TestClient) -> None:
     host = _add_host(api)
-    resp = api.get(f"/api/v1/hosts/{host['id']}/preflight")
+    resp = api.get(f"/api/v1/hosts/{host['id']}/outputs/preflight")
     assert resp.status_code == 404
     assert resp.json()["type"] == "urn:groundzero:problem:not_found"
 
 
 def test_job_events_stream_ends_with_terminal_event(api: TestClient) -> None:
     host = _add_host(api)
-    job = api.post(f"/api/v1/hosts/{host['id']}/inventory").json()
+    job = api.post(f"/api/v1/hosts/{host['id']}/tasks/discover", json={}).json()
     _wait(api, job["id"])
     with api.stream("GET", f"/api/v1/jobs/{job['id']}/events") as resp:
         body = "".join(resp.iter_text())
     assert "event: succeeded" in body
 
 
-def test_profiles_listed(api: TestClient) -> None:
-    profiles = api.get("/api/v1/profiles").json()
-    assert profiles[0]["id"] == "holodeck-9"
-    assert any(v["id"] == "vcf-9.1-single" for v in profiles[0]["variants"])
+def test_task_catalog_offers_the_profile_variants(api: TestClient) -> None:
+    """The preflight variants (formerly GET /profiles) are choices in the task's parameter schema."""
+    preflight = next(t for t in api.get("/api/v1/tasks").json() if t["id"] == "preflight")
+    props = preflight["params_schema"]["properties"]
+    assert props["profile"]["enum"] == ["holodeck-9"]
+    assert "vcf-9.1-single" in props["variant"]["anyOf"][0]["enum"]
+    assert api.get("/api/v1/profiles").status_code == 404
 
 
 def test_openapi_snapshot(api: TestClient) -> None:
@@ -151,8 +155,8 @@ def test_openapi_snapshot(api: TestClient) -> None:
 
 def test_os_network_read_flow(api: TestClient) -> None:
     host = _add_host(api)
-    missing = api.post(f"/api/v1/hosts/{host['id']}/os/network")
-    assert missing.status_code == 404 and "PUT /hosts" in missing.json()["detail"]
+    missing = api.post(f"/api/v1/hosts/{host['id']}/tasks/os.read", json={})
+    assert missing.status_code == 409 and "Set OS access" in missing.json()["detail"]
 
     put = api.put(
         f"/api/v1/hosts/{host['id']}/os", json={"address": "192.0.2.101", "password": "esxi-secret"}
@@ -160,9 +164,9 @@ def test_os_network_read_flow(api: TestClient) -> None:
     assert put.status_code == 200 and "password" not in put.json()
     assert put.json() == {"address": "192.0.2.101", "username": "root", "verify_tls": False}
 
-    job = _wait(api, api.post(f"/api/v1/hosts/{host['id']}/os/network").json()["id"])
+    job = _wait(api, api.post(f"/api/v1/hosts/{host['id']}/tasks/os.read", json={}).json()["id"])
     assert job["status"] == "succeeded", job
-    cfg = api.get(f"/api/v1/hosts/{host['id']}/os/network").json()
+    cfg = api.get(f"/api/v1/hosts/{host['id']}/outputs/os_network").json()
     assert cfg["address"] == "192.0.2.101"
     mgmt = next(p for p in cfg["portgroups"] if p["name"] == "Management Network")
     assert (mgmt["vlan_id"], mgmt["active_uplinks"]) == (100, ["vmnic0", "vmnic1"])

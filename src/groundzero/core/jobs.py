@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from groundzero.core import diagnostics
-from groundzero.core.models import Job, JobError, JobEvent, JobKind, JobStatus, JobStep, JobStepStatus
+from groundzero.core.models import Job, JobError, JobEvent, JobStatus, JobStep, JobStepStatus
 from groundzero.core.store import Store, utcnow
 
 logger = logging.getLogger(__name__)
@@ -99,10 +99,10 @@ class JobRunner:
         self._active_by_host: dict[str, str] = {}
         self._subscribers: dict[str, set[asyncio.Queue[JobEvent]]] = {}
 
-    def submit(self, *, kind: JobKind, host_id: str, params: dict[str, Any], func: JobFunc) -> Job:
+    def submit(self, *, task: str, host_id: str, params: dict[str, Any], func: JobFunc) -> Job:
         if active := self._active_by_host.get(host_id):
             raise HostBusyError(host_id, active)
-        job = self._store.create_job(kind=kind, host_id=host_id, params=params)
+        job = self._store.create_job(task=task, host_id=host_id, params=params)
         self._active_by_host[host_id] = job.id
         self._tasks[job.id] = asyncio.create_task(self._run(job, func), name=f"job-{job.id}")
         return job
@@ -143,7 +143,7 @@ class JobRunner:
     async def _run(self, job: Job, func: JobFunc) -> None:
         diag = diagnostics.Diagnostics(job.id)
         diagnostics.current.set(diag)  # this task's context: everything the job awaits records here
-        diag.record("job", kind=job.kind.value, task=job.task, params=job.params)
+        diag.record("job", task=job.task, params=job.params)
         try:
             async with self._sem:
                 job.status = JobStatus.RUNNING
@@ -157,7 +157,7 @@ class JobRunner:
             job.status = JobStatus.CANCELLED
             job.message = "Cancelled"
         except Exception as exc:
-            logger.exception("Job %s (%s) failed", job.id, job.kind)
+            logger.exception("Job %s (%s) failed", job.id, job.task)
             job.status = JobStatus.FAILED
             job.error = JobError(type=getattr(exc, "error_type", type(exc).__name__), message=str(exc))
             job.message = "Failed"

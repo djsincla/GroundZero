@@ -93,7 +93,7 @@ def test_bundle_serves_ui_api_and_keeps_state_across_restarts(bundle: tuple[dict
             "/api/v1/hosts",
             json={"bmc_address": "198.51.100.11", "username": "root", "password": "x", "name": "r1"},
         ).json()
-        job = api.post(f"/api/v1/hosts/{host['id']}/preflight", json={}).json()
+        job = api.post(f"/api/v1/hosts/{host['id']}/tasks/preflight", json={"params": {}}).json()
         for _ in range(120):
             job = api.get(f"/api/v1/jobs/{job['id']}").json()
             if job["status"] not in ("queued", "running"):
@@ -107,7 +107,7 @@ def test_bundle_serves_ui_api_and_keeps_state_across_restarts(bundle: tuple[dict
         assert api.headers["Authorization"] == token
         hosts = api.get("/api/v1/hosts").json()
         assert [h["name"] for h in hosts] == ["r1"]
-        assert api.get(f"/api/v1/hosts/{hosts[0]['id']}/preflight").status_code == 200
+        assert api.get(f"/api/v1/hosts/{hosts[0]['id']}/outputs/preflight").status_code == 200
 
     user = _run(ENGINE, "exec", env["GZ_NAME"], "id", "-u")
     assert user != "0", "the bundle must not run as root"

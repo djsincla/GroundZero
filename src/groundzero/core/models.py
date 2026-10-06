@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, SecretStr, computed_field
+from pydantic import BaseModel, Field, SecretStr
 
 
 class HostCreate(BaseModel):
@@ -26,19 +26,6 @@ class Host(BaseModel):
     vendor: str | None = None
     model: str | None = None
     created_at: datetime
-
-
-class JobKind(StrEnum):
-    INVENTORY = "inventory"
-    PREFLIGHT = "preflight"
-    OS_NETWORK = "os_network"
-    INSTALL = "install"
-    OS_CAPTURE = "os_capture"
-    ASSESS = "assess"
-    HOST_PREP = "host_prep"
-    VERIFY_JUMBO = "verify_jumbo"
-    HOLOROUTER = "holorouter"
-    VCF_READINESS = "vcf_readiness"
 
 
 class OsAccessSet(BaseModel):
@@ -93,26 +80,9 @@ class JobStep(BaseModel):
     finished_at: datetime | None = None
 
 
-def task_id_for(kind: JobKind, params: dict[str, Any]) -> str:
-    """The catalog task a job ran (see GET /tasks); install splits into re-image vs custom."""
-    if kind is JobKind.INSTALL:
-        return "os.custom" if params.get("config_set_id") else "os.reimage"
-    return {
-        JobKind.INVENTORY: "discover",
-        JobKind.PREFLIGHT: "preflight",
-        JobKind.OS_NETWORK: "os.read",
-        JobKind.OS_CAPTURE: "os.capture",
-        JobKind.ASSESS: "host.assess",
-        JobKind.HOST_PREP: "host.prep",
-        JobKind.VERIFY_JUMBO: "net.verify_jumbo",
-        JobKind.HOLOROUTER: "holodeck.router",
-        JobKind.VCF_READINESS: "vcf.readiness",
-    }.get(kind, kind.value)
-
-
 class Job(BaseModel):
     id: str
-    kind: JobKind
+    task: str = Field(description="The pipeline task this job ran (see GET /tasks)")
     host_id: str
     status: JobStatus
     progress: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -124,11 +94,6 @@ class Job(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     steps: list[JobStep] = Field(default_factory=list)
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def task(self) -> str:
-        return task_id_for(self.kind, self.params)
 
 
 class BmcAudit(BaseModel):

@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from groundzero.core.models import ConfigSet, Host, Job, JobError, JobKind, JobStatus, JobStep, OsAccess
+from groundzero.core.models import ConfigSet, Host, Job, JobError, JobStatus, JobStep, OsAccess
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS hosts (
@@ -94,7 +94,27 @@ _MIGRATIONS = (
     ("hosts", "os_epoch", "INTEGER NOT NULL DEFAULT 0"),  # bumped by every successful OS install
     ("results", "epoch", "INTEGER NOT NULL DEFAULT 0"),  # the host's os_epoch when the result was made
     ("config_sets", "secret_names", "TEXT"),  # names of the sealed secrets (values stay encrypted)
+    ("jobs", "task", "TEXT"),  # the pipeline task id; older rows are backfilled from kind on read
 )
+
+# Jobs created before the task column: their kind (and, for installs, params) says which task they ran.
+_LEGACY_TASKS = {
+    "inventory": "discover",
+    "preflight": "preflight",
+    "os_network": "os.read",
+    "os_capture": "os.capture",
+    "assess": "host.assess",
+    "host_prep": "host.prep",
+    "verify_jumbo": "net.verify_jumbo",
+    "holorouter": "holodeck.router",
+    "vcf_readiness": "vcf.readiness",
+}
+
+
+def legacy_task_id(kind: str, params: dict[str, Any]) -> str:
+    if kind == "install":
+        return "os.custom" if params.get("config_set_id") else "os.reimage"
+    return _LEGACY_TASKS.get(kind, kind)
 
 
 class OutputMeta:
@@ -346,10 +366,10 @@ class Store:
         return [(r["role"], r["address"], r["pem"], datetime.fromisoformat(r["pinned_at"])) for r in rows]
 
     # ── jobs ─────────────────────────────────────────────────────────────
-    def create_job(self, *, kind: JobKind, host_id: str, params: dict[str, Any]) -> Job:
+    def create_job(self, *, task: str, host_id: str, params: dict[str, Any]) -> Job:
         job = Job(
             id=new_id(),
-            kind=kind,
+            task=task,
             host_id=host_id,
             status=JobStatus.QUEUED,
             params=params,
@@ -357,10 +377,12 @@ class Store:
         )
         with self._tx() as cur:
             cur.execute(
-                "INSERT INTO jobs (id, kind, host_id, status, params, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO jobs (id, kind, task, host_id, status, params, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     job.id,
-                    kind.value,
+                    task,  # kind: kept NOT NULL for older databases; the task id is the job's identity
+                    task,
                     host_id,
                     job.status.value,
                     json.dumps(params),
@@ -508,14 +530,15 @@ def _row_to_host(row: sqlite3.Row) -> Host:
 
 
 def _row_to_job(row: sqlite3.Row) -> Job:
+    params = json.loads(row["params"])
     return Job(
         id=row["id"],
-        kind=JobKind(row["kind"]),
+        task=row["task"] or legacy_task_id(row["kind"], params),
         host_id=row["host_id"],
         status=JobStatus(row["status"]),
         progress=row["progress"],
         message=row["message"],
-        params=json.loads(row["params"]),
+        params=params,
         result=json.loads(row["result"]) if row["result"] else None,
         error=JobError.model_validate_json(row["error"]) if row["error"] else None,
         created_at=datetime.fromisoformat(row["created_at"]),

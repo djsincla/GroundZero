@@ -14,8 +14,8 @@ export async function viewHosts(app) {
   const running = new Map(jobs.filter(isActive).map((j) => [j.host_id, j]));
   const rows = await Promise.all(hosts.map(async (host) => {
     const [pre, net] = await Promise.all([
-      maybe(api("GET", `/hosts/${host.id}/preflight`)),
-      maybe(api("GET", `/hosts/${host.id}/os/network`)),
+      maybe(api("GET", `/hosts/${host.id}/outputs/preflight`)),
+      maybe(api("GET", `/hosts/${host.id}/outputs/os_network`)),
     ]);
     const job = running.get(host.id);
     return h("tr", { "data-host": host.name },
@@ -61,19 +61,19 @@ export async function viewHost(app, id, tab = "pipeline") {
   tab = TAB_ALIASES[tab] || tab;
   const host = await api("GET", `/hosts/${id}`);
   const [pre, osAccess, net, install, jobs, certs] = await Promise.all([
-    maybe(api("GET", `/hosts/${id}/preflight`)),
+    maybe(api("GET", `/hosts/${id}/outputs/preflight`)),
     maybe(api("GET", `/hosts/${id}/os`)),
-    maybe(api("GET", `/hosts/${id}/os/network`)),
-    maybe(api("GET", `/hosts/${id}/install`)),
+    maybe(api("GET", `/hosts/${id}/outputs/os_network`)),
+    maybe(api("GET", `/hosts/${id}/outputs/install`)),
     api("GET", `/jobs?host_id=${id}&limit=20`),
     api("GET", `/hosts/${id}/certificates`),
   ]);
   const pipeline = await api("GET", `/hosts/${id}/pipeline`);
-  const readiness = tab === "readiness" ? await maybe(api("GET", `/hosts/${id}/readiness`)) : null;
+  const readiness = tab === "readiness" ? await maybe(api("GET", `/hosts/${id}/outputs/readiness`)) : null;
   const active = jobs.find(isActive);
   const busy = Boolean(active);
   const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness,
-    lastInstallJob: jobs.find((j) => j.kind === "install") };
+    lastInstallJob: jobs.find((j) => j.task === "os.custom" || j.task === "os.reimage") };
 
   const tabs = h("nav", { class: "tabs", "aria-label": "Host sections" }, TABS.map(([key, label]) =>
     h("a", { href: `#/hosts/${id}/${key}`, class: key === tab ? "active" : null, "aria-current": key === tab ? "page" : null }, label)));
@@ -307,7 +307,7 @@ function applyDialog(ctx, actions, boxes) {
 
 function overviewTab(ctx) {
   const { host, id, pre, osAccess, net, install, busy, certs } = ctx;
-  const runPreflight = () => startJob("POST", `/hosts/${id}/preflight`, { profile: "holodeck-9" }, { onDone: refresh });
+  const runPreflight = () => startJob("POST", `/hosts/${id}/tasks/preflight`, {}, { onDone: refresh });
   return h("div", { class: "cards" },
     card({ "data-card": "hardware" },
       h("h2", {}, "Hardware"),
@@ -382,7 +382,7 @@ function removeHostDialog(host) {
 
 // Hardware preflight (BMC, read-only): shown under the readiness report, which builds on it.
 function preflightPanel({ id, pre, busy }) {
-  const run = () => startJob("POST", `/hosts/${id}/preflight`, { profile: "holodeck-9" }, { onDone: refresh });
+  const run = () => startJob("POST", `/hosts/${id}/tasks/preflight`, {}, { onDone: refresh });
   const header = h("div", { class: "row" }, h("h2", {}, "Hardware preflight"),
     pre ? badge(pre.overall) : null, h("span", { class: "spacer" }),
     h("button", { onclick: run, disabled: busy }, pre ? "Run again" : "Run preflight"));
@@ -397,7 +397,7 @@ function preflightPanel({ id, pre, busy }) {
 }
 
 function networkTab({ id, host, osAccess, net, busy }) {
-  const read = () => startJob("POST", `/hosts/${id}/os/network`, undefined, { onDone: refresh });
+  const read = () => startJob("POST", `/hosts/${id}/tasks/os.read`, {}, { onDone: refresh });
   const header = h("div", { class: "row" }, h("h2", {}, "ESXi networking"), h("span", { class: "spacer" }),
     osAccess ? h("button", { onclick: read, disabled: busy }, net ? "Read again" : "Read now") : null,
     osAccess ? h("button", { onclick: () => captureDialog(host), disabled: busy }, "Capture config set…") : null,
@@ -447,7 +447,7 @@ function captureDialog(host) {
   ], {
     submitLabel: "Capture",
     onSubmit: async (f) => {
-      const job = await api("POST", `/hosts/${host.id}/os/capture`, { name: f.get("name") });  // errors stay in the dialog
+      const job = await api("POST", `/hosts/${host.id}/tasks/os.capture`, { params: { name: f.get("name") } });  // errors stay in the dialog
       showJobDrawer(job, {
         onDone: (j) => { if (j.status === "succeeded") location.hash = `#/config-sets/${j.result.config_set_id}`; },
       });

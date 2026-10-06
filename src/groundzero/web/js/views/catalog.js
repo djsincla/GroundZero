@@ -80,7 +80,7 @@ async function captureFromServerDialog() {
       if (!access[id]) {
         await api("PUT", `/hosts/${id}/os`, { address: f.get("address"), username: f.get("user"), password: f.get("pass") });
       }
-      const job = await api("POST", `/hosts/${id}/os/capture`, { name: f.get("name") });  // errors stay in the dialog
+      const job = await api("POST", `/hosts/${id}/tasks/os.capture`, { params: { name: f.get("name") } });  // errors stay in the dialog
       showJobDrawer(job, {
         title: "Capture config set",
         onDone: (j) => { if (j.status === "succeeded") location.hash = `#/config-sets/${j.result.config_set_id}`; },

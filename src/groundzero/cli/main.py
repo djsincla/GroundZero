@@ -317,16 +317,47 @@ def pipeline(host: str) -> None:
 def run_task(
     host: str,
     task: Annotated[str, typer.Argument(help="Task id from `groundzero pipeline` (e.g. preflight, os.read)")],
+    param: Annotated[
+        list[str] | None,
+        typer.Option("--param", "-p", help="Task parameter KEY=VALUE (repeatable; VALUE may be JSON)"),
+    ] = None,
+    confirm: Annotated[str | None, typer.Option(help="Typed confirmation for destructive tasks")] = None,
     wait: Annotated[bool, typer.Option(help="Follow the job until it finishes")] = True,
 ) -> None:
-    """Run one pipeline task on a host (OS deployment: use `groundzero install`)."""
+    """Run one pipeline task on a host. Parameters are listed per task by GET /tasks (params_schema)."""
     h = _resolve_host(host)
-    job = _call("POST", f"/hosts/{h['id']}/tasks/{task}", json={})
+    body: dict[str, Any] = {"params": _parse_params(param or [])}
+    if confirm is not None:
+        body["confirm"] = confirm
+    job = _call("POST", f"/hosts/{h['id']}/tasks/{task}", json=body)
     console.print(f"Started {task} as job {job['id']}")
     if wait:
         job = _wait(job)
         for step in job.get("steps", []):
             console.print(Text(f"  {step['status']:<9} {step['title']}"))
+
+
+def _parse_params(pairs: list[str]) -> dict[str, Any]:
+    """KEY=VALUE pairs; VALUE is parsed as JSON when it is valid JSON (numbers, booleans, lists)."""
+    params: dict[str, Any] = {}
+    for pair in pairs:
+        key, sep, value = pair.partition("=")
+        if not sep or not key:
+            _fail(f"--param must be KEY=VALUE, got {pair!r}")
+        try:
+            params[key] = json.loads(value)
+        except ValueError:
+            params[key] = value
+    return params
+
+
+def _start_task(
+    host_id: str, task: str, params: dict[str, Any] | None = None, confirm: str | None = None
+) -> Any:
+    body: dict[str, Any] = {"params": params or {}}
+    if confirm is not None:
+        body["confirm"] = confirm
+    return _call("POST", f"/hosts/{host_id}/tasks/{task}", json=body)
 
 
 # ── inventory / preflight ────────────────────────────────────────────────
@@ -336,12 +367,12 @@ def inventory(
 ) -> None:
     """Collect hardware inventory from a host's BMC (read-only)."""
     h = _resolve_host(host)
-    job = _call("POST", f"/hosts/{h['id']}/inventory")
+    job = _start_task(h["id"], "discover")
     if not wait:
         console.print(f"Started job {job['id']}")
         return
     _wait(job)
-    inv = _call("GET", f"/hosts/{h['id']}/inventory")
+    inv = _call("GET", f"/hosts/{h['id']}/outputs/inventory")
     console.print_json(data=inv)
 
 
@@ -354,12 +385,12 @@ def preflight(
 ) -> None:
     """Check a host against Holodeck requirements (read-only). Exit code 2 when the result is FAIL."""
     h = _resolve_host(host)
-    job = _call("POST", f"/hosts/{h['id']}/preflight", json={"profile": profile, "variant": variant})
+    job = _start_task(h["id"], "preflight", {"profile": profile, "variant": variant})
     if not wait:
         console.print(f"Started job {job['id']}")
         return
     _wait(job)
-    report = _call("GET", f"/hosts/{h['id']}/preflight")
+    report = _call("GET", f"/hosts/{h['id']}/outputs/preflight")
     _print_report(report, h["name"])
     if report["overall"] == "fail":
         raise typer.Exit(EXIT_PREFLIGHT_FAILED)
@@ -386,17 +417,6 @@ def _print_report(report: dict[str, Any], host_name: str) -> None:
     console.print(f"Requirements source: {report['source']}", style="dim")
 
 
-@app.command()
-def profiles() -> None:
-    """List preflight profiles and variants."""
-    for p in _call("GET", "/profiles"):
-        console.print(f"[bold]{p['id']}[/bold] — {p['title']} (default: {p['default_variant']})")
-        for v in p["variants"]:
-            console.print(
-                f"  {v['id']:<22} {v['cores']:>3} cores  {v['memory_gb']:>5.0f} GB  {v['disk_tb']} TB"
-            )
-
-
 # ── installed OS ─────────────────────────────────────────────────────────
 @os_app.command("set")
 def os_set(
@@ -417,8 +437,8 @@ def os_set(
 def os_network(host: str) -> None:
     """Read the installed hypervisor's network configuration (read-only)."""
     h = _resolve_host(host)
-    _wait(_call("POST", f"/hosts/{h['id']}/os/network"))
-    _print_os_network(_call("GET", f"/hosts/{h['id']}/os/network"))
+    _wait(_start_task(h["id"], "os.read"))
+    _print_os_network(_call("GET", f"/hosts/{h['id']}/outputs/os_network"))
 
 
 def _print_os_network(cfg: dict[str, Any]) -> None:
@@ -517,13 +537,12 @@ def install(
                 console.print(Text(f"note: {note}"), style="dim")
         console.print(Text(f"This installs ESXi on {h['name']} (BMC {h['bmc_address']})."), style="yellow")
         confirm = typer.prompt(f'Type "{expected}" to continue')
-    body["confirm"] = confirm
-    job = _call("POST", f"/hosts/{h['id']}/install", json=body)
+    job = _start_task(h["id"], "os.custom" if config else "os.reimage", body, confirm)
     console.print(f"Install job {job['id']} started")
     try:
         _wait(job)
     finally:
-        report = _call_optional("GET", f"/hosts/{h['id']}/install")
+        report = _call_optional("GET", f"/hosts/{h['id']}/outputs/install")
         if report:
             _print_install(report)
 
@@ -574,7 +593,7 @@ def config_show(name: str) -> None:
 def config_capture(host: str, name: Annotated[str, typer.Option(help="Name for the new config set")]) -> None:
     """Create a config set (and the host's per-server values) from its running OS. Read-only."""
     h = _resolve_host(host)
-    job = _wait(_call("POST", f"/hosts/{h['id']}/os/capture", json={"name": name}))
+    job = _wait(_start_task(h["id"], "os.capture", {"name": name}))
     console.print(f"Captured config set {escape(name)} ({job['result']['config_set_id']})")
 
 
@@ -623,10 +642,10 @@ def _print_install(report: dict[str, Any]) -> None:
 # ── jobs ─────────────────────────────────────────────────────────────────
 @jobs_app.command("list")
 def jobs_list(limit: int = 20) -> None:
-    table = Table("ID", "Kind", "Host", "Status", "Progress", "Created")
+    table = Table("ID", "Task", "Host", "Status", "Progress", "Created")
     for j in _call("GET", "/jobs", params={"limit": limit}):
         table.add_row(
-            j["id"], j["kind"], j["host_id"], j["status"], f"{j['progress'] * 100:.0f}%", j["created_at"]
+            j["id"], j["task"], j["host_id"], j["status"], f"{j['progress'] * 100:.0f}%", j["created_at"]
         )
     console.print(table)
 

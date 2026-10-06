@@ -88,7 +88,7 @@ def test_live_esxi_network_read(tmp_path: Path) -> None:
         assert result.code == 0, result.output
         with gz.api() as api:
             host = api.get("/api/v1/hosts").json()[0]
-            cfg = api.get(f"/api/v1/hosts/{host['id']}/os/network").json()
+            cfg = api.get(f"/api/v1/hosts/{host['id']}/outputs/os_network").json()
         mgmt = next(v for v in cfg["vmkernel"] if "management" in v["services"])
         assert mgmt["ip"] == esxi.live_esxi
     finally:

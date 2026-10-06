@@ -39,7 +39,7 @@ def test_register_then_preflight_holodeck(simulated_r740xd: GroundZero) -> None:
     assert vcf.code == 0, vcf.output
     with gz.api() as api:
         host_id = api.get("/api/v1/hosts").json()[0]["id"]
-        report = api.get(f"/api/v1/hosts/{host_id}/vcf-readiness").json()
+        report = api.get(f"/api/v1/hosts/{host_id}/outputs/vcf_readiness").json()
     assert report["overall"] == "warn" and report["cpu_override_required"]
     assert "Skylake-SP" in report["checks"][0]["observed"]
 
@@ -63,7 +63,7 @@ def test_inventory_and_jobs_are_visible(simulated_r740xd: GroundZero) -> None:
     assert "Intel(R) Xeon(R) Platinum 8168" in inventory.output
 
     jobs = gz.cli("jobs", "list").output
-    assert "inventory" in jobs and "succeeded" in jobs
+    assert "discover" in jobs and "succeeded" in jobs
 
 
 def test_preflight_is_read_only_against_the_bmc(simulated_r740xd: GroundZero) -> None:
@@ -71,7 +71,7 @@ def test_preflight_is_read_only_against_the_bmc(simulated_r740xd: GroundZero) ->
     _add(gz)
     with gz.api() as api:
         host_id = api.get("/api/v1/hosts").json()[0]["id"]
-        job = api.post(f"/api/v1/hosts/{host_id}/preflight").json()
+        job = api.post(f"/api/v1/hosts/{host_id}/tasks/preflight", json={}).json()
         gz.cli("jobs", "show", job["id"])  # exercise the CLI path too
         for _ in range(100):
             job = api.get(f"/api/v1/jobs/{job['id']}").json()
@@ -109,7 +109,7 @@ def test_state_survives_restart(simulated_r740xd: GroundZero) -> None:
     assert "r740xd" in gz.cli("hosts", "list").output
     with gz.api() as api:
         host_id = api.get("/api/v1/hosts").json()[0]["id"]
-        report = api.get(f"/api/v1/hosts/{host_id}/preflight")
+        report = api.get(f"/api/v1/hosts/{host_id}/outputs/preflight")
     assert report.status_code == 200 and report.json()["overall"] == "pass"
 
 

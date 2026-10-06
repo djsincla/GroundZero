@@ -154,7 +154,7 @@ export const TASK_TITLES = {
   "host.prep": "Prepare host", "net.verify_jumbo": "Verify jumbo frames", "holodeck.router": "Deploy Holorouter",
   "holodeck.stage": "Stage binaries", "holodeck.deploy": "Deploy Holodeck",
 };
-export const jobLabel = (job) => TASK_TITLES[job.task] || job.task || job.kind;
+export const jobLabel = (job) => TASK_TITLES[job.task] || job.task;
 
 const STEP_ICON = { pending: "○", running: "◐", succeeded: "✓", failed: "✕", skipped: "–", cancelled: "✕" };
 function stepDuration(step) {

@@ -76,7 +76,7 @@ def test_install_from_a_set_when_the_old_os_is_unreachable(
     )
     assert result.code == 0, result.output
     with gz.api() as api:
-        report = api.get(f"/api/v1/hosts/{host_id}/install").json()
+        report = api.get(f"/api/v1/hosts/{host_id}/outputs/install").json()
         os_access = api.get(f"/api/v1/hosts/{host_id}/os").json()
     assert report["spec"]["install_firstdisk"] == "DELLBOSS" and report["previous_build"] is None
     datastores = next(c for c in report["validation"] if c["name"] == "datastores")
@@ -93,4 +93,4 @@ def test_install_without_set_or_os_access_is_refused(simulated_r740xd: GroundZer
     assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
     iso = _iso(gz)
     result = gz.cli("install", "esxi1", "--iso", iso, "--confirm", "install esxi1")
-    assert result.code == 1 and "No OS access configured" in result.output
+    assert result.code == 1 and "Set OS access, or deploy an OS" in result.output

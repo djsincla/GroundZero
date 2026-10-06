@@ -14,7 +14,7 @@ def test_read_esxi_management_network(simulated_r740xd: GroundZero) -> None:
     assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "r740xd").code == 0
 
     not_set = gz.cli("os", "network", "r740xd")
-    assert not_set.code == 1 and "No OS access configured" in not_set.output
+    assert not_set.code == 1 and "Set OS access" in not_set.output
 
     assert gz.cli("os", "set", "r740xd", "--address", "192.0.2.101").code == 0
     result = gz.cli("os", "network", "r740xd")

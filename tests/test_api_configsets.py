@@ -124,16 +124,15 @@ def test_settings_are_validated_with_field_locations(api: TestClient) -> None:
 
 def test_capture_creates_a_set_and_per_server_values(api: TestClient) -> None:
     host_id = _host(api)
-    job = _wait(
-        api, api.post(f"/api/v1/hosts/{host_id}/os/capture", json={"name": "from-esxi1"}).json()["id"]
-    )
+    capture = {"params": {"name": "from-esxi1"}}
+    job = _wait(api, api.post(f"/api/v1/hosts/{host_id}/tasks/os.capture", json=capture).json()["id"])
     assert job["status"] == "succeeded", job
     cs = api.get(f"/api/v1/config-sets/{job['result']['config_set_id']}").json()
     assert cs["source"].startswith("captured from esxi1") and cs["has_root_password"]
     assert cs["settings"]["vlan_id"] == 100 and cs["settings"]["extra_uplinks"] == ["vmnic1"]
     values = api.get(f"/api/v1/hosts/{host_id}/host-values/esxi").json()
     assert values["hostname"] == "esxi1"
-    assert api.post(f"/api/v1/hosts/{host_id}/os/capture", json={"name": "from-esxi1"}).status_code == 409
+    assert api.post(f"/api/v1/hosts/{host_id}/tasks/os.capture", json=capture).status_code == 409
 
 
 def test_host_values_are_validated(api: TestClient) -> None:
@@ -186,8 +185,8 @@ def test_install_with_a_set_needs_per_server_values(api: TestClient) -> None:
         json={"name": "lab", "os_family": "esxi", "settings": LAB, "root_password": SECRET},
     ).json()
     resp = api.post(
-        f"/api/v1/hosts/{host_id}/install",
-        json={"confirm": "install esxi1", "iso_id": iso["id"], "config_set_id": cs["id"]},
+        f"/api/v1/hosts/{host_id}/tasks/os.custom",
+        json={"params": {"iso_id": iso["id"], "config_set_id": cs["id"]}, "confirm": "install esxi1"},
     )
     assert resp.status_code == 422 and "Per-server values" in resp.json()["detail"]
     assert api.get("/api/v1/jobs").json() == []  # rejected before queuing
