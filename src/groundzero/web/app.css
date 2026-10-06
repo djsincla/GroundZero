@@ -225,6 +225,18 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
 .task.failed { border-color: var(--fail); }
 .task p { margin: 4px 0 0; }
 .task-output { font-size: 13px; }
+.flow { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; align-items: center; }
+.flow-group { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.flow-chip { font: inherit; font-size: 11.5px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: default; }
+button.flow-chip { cursor: pointer; }
+button.flow-chip:hover { border-color: var(--accent); }
+.flow-chip.ok { border-color: color-mix(in srgb, var(--pass) 55%, var(--line)); }
+.flow-chip.missing { border-style: dashed; color: var(--muted); }
+.flow-chip.stale { border-color: var(--warn); color: var(--warn); }
+.flow-chip.optional { opacity: .85; font-style: italic; }
+.flow-chip.feed { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.task.flash { outline: 2px solid var(--accent); outline-offset: 2px; transition: outline-color .3s; }
+.output-json { max-height: 60vh; overflow: auto; }
 .blocked-by { color: var(--unknown); }
 .warn-text { color: var(--warn); }
 .chip { font-size: 11px; padding: 0 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }

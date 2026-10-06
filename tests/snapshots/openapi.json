@@ -265,6 +265,75 @@
         "title": "HostCreate",
         "type": "object"
       },
+      "InputRef": {
+        "description": "One input of a task: which output, which task makes it, and whether it is there.",
+        "properties": {
+          "from_task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Task that produces it (null: OS access)",
+            "title": "From Task"
+          },
+          "from_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Title"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "produced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Produced At"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "missing",
+              "stale"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "required",
+          "status"
+        ],
+        "title": "InputRef",
+        "type": "object"
+      },
       "InstallPreview": {
         "description": "What a deployment would do, without touching the BMC or the server.",
         "properties": {
@@ -1067,6 +1136,14 @@
       },
       "TaskInfo": {
         "properties": {
+          "also_produces": {
+            "description": "Side outputs",
+            "items": {
+              "type": "string"
+            },
+            "title": "Also Produces",
+            "type": "array"
+          },
           "available": {
             "title": "Available",
             "type": "boolean"
@@ -1117,6 +1194,14 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "uses": {
+            "description": "Optional inputs: read when present",
+            "items": {
+              "type": "string"
+            },
+            "title": "Uses",
+            "type": "array"
           }
         },
         "required": [
@@ -1131,6 +1216,30 @@
           "available"
         ],
         "title": "TaskInfo",
+        "type": "object"
+      },
+      "TaskLink": {
+        "properties": {
+          "kind": {
+            "description": "The output that flows along this link",
+            "title": "Kind",
+            "type": "string"
+          },
+          "task": {
+            "title": "Task",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task",
+          "title",
+          "kind"
+        ],
+        "title": "TaskLink",
         "type": "object"
       },
       "TaskRun": {
@@ -1159,6 +1268,14 @@
       },
       "TaskState": {
         "properties": {
+          "also_produces": {
+            "description": "Side outputs",
+            "items": {
+              "type": "string"
+            },
+            "title": "Also Produces",
+            "type": "array"
+          },
           "available": {
             "title": "Available",
             "type": "boolean"
@@ -1178,9 +1295,25 @@
             "title": "Destructive",
             "type": "boolean"
           },
+          "feeds": {
+            "description": "Later tasks that read this task's outputs",
+            "items": {
+              "$ref": "#/components/schemas/TaskLink"
+            },
+            "title": "Feeds",
+            "type": "array"
+          },
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "inputs": {
+            "description": "What this task reads, and from where",
+            "items": {
+              "$ref": "#/components/schemas/InputRef"
+            },
+            "title": "Inputs",
+            "type": "array"
           },
           "last_job": {
             "anyOf": [
@@ -1249,6 +1382,14 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "uses": {
+            "description": "Optional inputs: read when present",
+            "items": {
+              "type": "string"
+            },
+            "title": "Uses",
+            "type": "array"
           }
         },
         "required": [

@@ -2,7 +2,7 @@
 import { schemaForm } from "../forms.js";
 import {
   age, api, badge, card, empty, fmtBytes, fmtTime, h, isActive, jobCard, jobLabel, maybe, mount, openDialog, pageHeader,
-  showJobDrawer, startJob, table, toast,
+  showJobDrawer, showOutput, startJob, table, toast,
 } from "../core.js";
 
 const refresh = () => window.dispatchEvent(new Event("gz:refresh"));
@@ -137,6 +137,59 @@ function lastRun(ctx, last) {
   return h("p", { class: "small-text muted" }, "Last run: ", link, when);
 }
 
+// Tasks whose parameters have their own screens (the install wizard, capture, prep, Holorouter dialogs).
+const CUSTOM_RUN = new Set(["os.custom", "os.reimage", "os.capture", "host.prep", "holodeck.router"]);
+
+function optionsButton(ctx, task) {
+  const props = Object.keys(task.params_schema?.properties || {});
+  if (!task.available || CUSTOM_RUN.has(task.id) || !props.length) return null;
+  return h("button", { class: "small", disabled: ctx.busy || task.state === "blocked" || task.state === "running",
+    "data-options": task.id, onclick: () => optionsDialog(ctx, task) }, "Options…");
+}
+
+// Run a task with chosen parameters: the form is generated from the task's JSON Schema.
+function optionsDialog(ctx, task) {
+  const form = schemaForm(task.params_schema, {}, { idPrefix: `opt-${task.id.replace(/\W/g, "-")}`, where: "params" });
+  openDialog(`${task.title}: options`, [h("p", { class: "muted" }, task.description), form.el], {
+    submitLabel: "Run", wide: true,
+    onSubmit: async () => {
+      form.clearErrors();
+      try {
+        const job = await api("POST", `/hosts/${ctx.id}/tasks/${task.id}`, { params: form.value() });
+        showJobDrawer(job, { onDone: refresh });
+      } catch (e) {
+        if (e.problem?.errors && form.setErrors(e.problem.errors)) throw new Error("Fix the highlighted values.");
+        throw e;
+      }
+    },
+  });
+}
+
+// Outputs of one step are inputs of the next: show both directions on every task.
+function flowRow(ctx, task) {
+  const uses = task.inputs.map((i) => {
+    const label = i.from_title && i.status !== "missing" ? `${i.title} · ${i.from_title}` : i.title;
+    const attrs = { class: `flow-chip ${i.status}${i.required ? "" : " optional"}`, "data-input": i.kind, "data-status": i.status,
+      title: i.status === "missing" ? `Missing: run “${i.from_title || "set OS access"}” first`
+        : i.status === "stale" ? "Out of date: the OS was reinstalled since" : `From ${i.from_title || "this host"}` };
+    if (i.status === "missing" || !i.from_task) return h("span", attrs, label);
+    return h("button", { ...attrs, type: "button", onclick: () => showOutput(ctx.id, i.kind, `${i.title} (from ${i.from_title})`) },
+      label, i.produced_at ? [" · ", age(i.produced_at)] : null);
+  });
+  const seen = new Set();
+  const feeds = task.feeds.filter((f) => !seen.has(f.task) && seen.add(f.task)).map((f) =>
+    h("button", { type: "button", class: "flow-chip feed", "data-feeds": f.task, onclick: () => {
+      const row = document.querySelector(`[data-task="${f.task}"]`);
+      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+      row?.classList.add("flash");
+      setTimeout(() => row?.classList.remove("flash"), 1200);
+    } }, f.title));
+  if (!uses.length && !feeds.length) return null;
+  return h("div", { class: "flow small-text", "data-role": "flow" },
+    uses.length ? h("span", { class: "flow-group" }, h("span", { class: "muted" }, "Uses "), uses) : null,
+    feeds.length ? h("span", { class: "flow-group" }, h("span", { class: "muted" }, "Feeds → "), feeds) : null);
+}
+
 function taskRow(ctx, task) {
   const last = task.last_job;
   return h("li", { class: `task ${task.state}`, "data-task": task.id, "data-state": task.state },
@@ -144,12 +197,15 @@ function taskRow(ctx, task) {
       h("strong", {}, task.title),
       task.optional ? h("span", { class: "chip" }, "optional") : null,
       task.destructive ? h("span", { class: "chip danger-chip" }, "changes the server") : null,
-      stateBadge(task.state), h("span", { class: "spacer" }), taskButton(ctx, task)),
+      stateBadge(task.state), h("span", { class: "spacer" }), optionsButton(ctx, task), taskButton(ctx, task)),
     h("p", { class: "muted small-text task-desc" }, task.description),
     task.state === "failed" && last?.error ? h("p", { class: "error small-text", "data-role": "error" }, last.error) : null,
     task.output ? h("p", { class: "task-output", "data-role": "output" }, "→ ", task.output.summary,
       task.output.fresh ? null : h("span", { class: "warn-text" }, " (from before the OS was reinstalled)"),
-      task.id === "host.assess" ? [" · ", h("a", { href: `#/hosts/${ctx.id}/readiness` }, "View report")] : null) : null,
+      task.id === "host.assess" ? [" · ", h("a", { href: `#/hosts/${ctx.id}/readiness` }, "View report")]
+        : [" · ", h("a", { href: `#/hosts/${ctx.id}/pipeline`, "data-view-output": task.produces,
+            onclick: (e) => { e.preventDefault(); showOutput(ctx.id, task.output.kind, `${task.title}: output`); } }, "View output")]) : null,
+    flowRow(ctx, task),
     task.state === "blocked" && task.blocked_by.length
       ? h("p", { class: "small-text blocked-by" }, "Needs: ", task.blocked_by.join("; ")) : null,
     last ? lastRun(ctx, last) : null);

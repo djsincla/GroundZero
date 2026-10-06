@@ -68,6 +68,7 @@ class Preflight(Module):
         "Check CPU, memory, disks, NICs, BIOS and BMC against the Holodeck requirements (read-only)."
     )
     produces = "preflight"
+    also_produces = ("inventory",)
     Params = PreflightParams
 
     @classmethod

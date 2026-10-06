@@ -368,3 +368,25 @@ def test_deploy_holorouter_after_prep(tmp_path: Path, idrac9: dict[str, Any]) ->
         )
         again = _wait(api, run().json()["id"])  # idempotent: the VM exists
         assert again["status"] == "succeeded" and again["steps"][0]["message"].endswith("left as is")
+
+
+def test_pipeline_shows_what_each_task_uses_and_feeds(api: TestClient) -> None:
+    """Outputs of one step are the inputs of the next: the pipeline names both directions."""
+    host = _host(api)
+    p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
+    assess = _task(p, "host.assess")
+    inputs = {i["kind"]: i for i in assess["inputs"]}
+    assert inputs["preflight"] == {**inputs["preflight"], "required": True, "status": "missing",
+                                   "from_task": "preflight", "from_title": "Holodeck preflight"}  # fmt: skip
+    assert inputs["os_access"]["status"] == "missing" and inputs["jumbo"]["required"] is False
+    assert {(f["task"], f["kind"]) for f in _task(p, "preflight")["feeds"]} >= {
+        ("host.assess", "preflight"), ("vcf.readiness", "inventory")}  # fmt: skip
+
+    _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/preflight", json={}).json()["id"])
+    p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
+    ref = next(i for i in _task(p, "host.assess")["inputs"] if i["kind"] == "preflight")
+    assert ref["status"] == "ok" and ref["produced_at"]
+    kinds = {o["kind"] for o in api.get(f"/api/v1/hosts/{host}/outputs").json()}
+    assert kinds == {"preflight", "inventory"}  # preflight also saved the inventory
+    assert api.get(f"/api/v1/hosts/{host}/outputs/inventory").json()["system"]["model"] == "PowerEdge R740xd"
+    assert api.get(f"/api/v1/hosts/{host}/outputs/nope").status_code == 404

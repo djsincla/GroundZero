@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
+import subprocess
 import sys
 import time
 from collections.abc import Iterator
@@ -144,6 +146,12 @@ def _esxi_credentials(user: str | None) -> tuple[str, str]:
 def serve(
     host: Annotated[str | None, typer.Option(help="API bind address (default 127.0.0.1)")] = None,
     port: Annotated[int | None, typer.Option(help="API port (default 7182)")] = None,
+    detach: Annotated[
+        bool,
+        typer.Option(
+            help="Run in the background (survives closing the terminal); stop with `groundzero stop`"
+        ),
+    ] = False,
 ) -> None:
     """Run the GroundZero API (localhost) and the HTTPS media endpoint BMCs install from."""
     settings = Settings()
@@ -151,7 +159,71 @@ def serve(
         settings.bind_host = host
     if port:
         settings.port = port
+    if detach:
+        _serve_detached(settings, host, port)
+        return
     asyncio.run(_serve(settings))
+
+
+def _pid_file(settings: Settings) -> Path:
+    return settings.home / "serve.pid"
+
+
+def _running_pid(settings: Settings) -> int | None:
+    """The detached server's pid, if it is still running (a stale pid file is removed)."""
+    path = _pid_file(settings)
+    try:
+        pid = int(path.read_text().strip())
+        os.kill(pid, 0)
+    except (OSError, ValueError):
+        path.unlink(missing_ok=True)
+        return None
+    return pid
+
+
+def _serve_detached(settings: Settings, host: str | None, port: int | None) -> None:
+    settings.ensure_home()
+    if pid := _running_pid(settings):
+        _fail(f"GroundZero is already running in the background (pid {pid}); `groundzero stop` first")
+    args = [sys.executable, "-c", "from groundzero.cli.main import app; app()", "serve"]
+    args += [*(["--host", host] if host else []), *(["--port", str(port)] if port else [])]
+    log = settings.home / "serve.log"
+    with log.open("ab") as out:
+        proc = subprocess.Popen(
+            args, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True
+        )
+    _pid_file(settings).write_text(str(proc.pid))
+    url = f"http://{settings.bind_host}:{settings.port}"
+    for _ in range(100):  # wait until the API answers, so the next command works
+        if proc.poll() is not None:
+            _pid_file(settings).unlink(missing_ok=True)
+            _fail(f"GroundZero exited at startup; see {log}")
+        try:
+            httpx.get(f"{url}/healthz", timeout=0.5)
+            break
+        except httpx.HTTPError:
+            time.sleep(0.2)
+    console.print(f"GroundZero running in the background (pid {proc.pid}) at {url}; log: {log}")
+
+
+@app.command()
+def stop() -> None:
+    """Stop the GroundZero server started with `serve --detach`."""
+    settings = Settings()
+    pid = _running_pid(settings)
+    if pid is None:
+        _fail("No background GroundZero server is running")
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(100):
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            break
+        time.sleep(0.1)
+    else:
+        _fail(f"GroundZero (pid {pid}) did not stop; it may still be finishing a job")
+    _pid_file(settings).unlink(missing_ok=True)
+    console.print(f"Stopped GroundZero (pid {pid})")
 
 
 async def _serve(settings: Settings) -> None:

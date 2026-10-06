@@ -11,6 +11,7 @@ before tasks that depend on them can run.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -53,6 +54,26 @@ class TaskSpec:
     optional: bool = False  # not on the recommended path (alternatives, utilities)
     destructive: bool = False
     available: bool = True  # False: designed, not implemented yet (shown as planned)
+    uses: tuple[str, ...] = ()  # optional inputs: read when present, never blocking
+    also_produces: tuple[str, ...] = ()  # side outputs (e.g. preflight also saves the inventory)
+
+
+# What each output kind is, in words (the pipeline's "Uses" / "Feeds" links).
+OUTPUT_TITLES = {
+    "inventory": "Hardware inventory",
+    "preflight": "Preflight report",
+    "vcf_readiness": "VCF 9 readiness report",
+    "os_network": "OS network",
+    "os_storage": "OS storage",
+    "install": "Install report",
+    "readiness": "Readiness report",
+    "host_prep": "Host preparation",
+    "jumbo": "Jumbo-frame result",
+    "holorouter": "Holorouter",
+    "staged": "Staged binaries",
+    "holodeck": "Holodeck",
+    OS_ACCESS: "OS access",
+}
 
 
 def catalog() -> tuple[TaskSpec, ...]:
@@ -68,7 +89,17 @@ def producers(specs: tuple[TaskSpec, ...]) -> dict[str, TaskSpec]:
     for spec in specs:
         if spec.produces and spec.produces not in found:
             found[spec.produces] = spec
+    for spec in specs:  # side outputs only when no task makes them as its main output
+        for kind in spec.also_produces:
+            found.setdefault(kind, spec)
     return found
+
+
+def params_schema(task_id: str) -> dict[str, Any]:
+    from groundzero.modules import REGISTRY  # modules import this module's types
+
+    module = REGISTRY.get(task_id)
+    return module.params_schema() if module else {}
 
 
 def summarize(task_id: str, kind: str, data: dict[str, Any]) -> str:
@@ -99,6 +130,8 @@ class TaskInfo(BaseModel):
     params_schema: dict[str, Any] = Field(
         default_factory=dict, description="JSON Schema of the task's parameters (POST .../tasks/{id} params)"
     )
+    uses: list[str] = Field(default_factory=list, description="Optional inputs: read when present")
+    also_produces: list[str] = Field(default_factory=list, description="Side outputs")
 
 
 class JobRef(BaseModel):
@@ -116,8 +149,30 @@ class OutputInfo(BaseModel):
     summary: str
 
 
+class InputRef(BaseModel):
+    """One input of a task: which output, which task makes it, and whether it is there."""
+
+    kind: str
+    title: str
+    required: bool
+    status: Literal["ok", "missing", "stale"]
+    from_task: str | None = Field(default=None, description="Task that produces it (null: OS access)")
+    from_title: str | None = None
+    produced_at: datetime | None = None
+
+
+class TaskLink(BaseModel):
+    task: str
+    title: str
+    kind: str = Field(description="The output that flows along this link")
+
+
 class TaskState(TaskInfo):
     state: TaskStateName
+    inputs: list[InputRef] = Field(default_factory=list, description="What this task reads, and from where")
+    feeds: list[TaskLink] = Field(
+        default_factory=list, description="Later tasks that read this task's outputs"
+    )
     blocked_by: list[str] = Field(default_factory=list)
     last_job: JobRef | None = None
     output: OutputInfo | None = None
@@ -162,6 +217,8 @@ def info(spec: TaskSpec, params_schema: dict[str, Any] | None = None) -> TaskInf
         destructive=spec.destructive,
         available=spec.available,
         params_schema=params_schema or {},
+        uses=list(spec.uses),
+        also_produces=list(spec.also_produces),
     )
 
 
@@ -249,7 +306,13 @@ def evaluate_pipeline(
         else:
             state = "ready"
         states[spec.id] = TaskState(
-            **info(spec).model_dump(), state=state, blocked_by=blocked, last_job=ref, output=output
+            **info(spec, params_schema(spec.id)).model_dump(),
+            state=state,
+            inputs=_inputs(spec, outputs, producer_of, fresh, has_os_access),
+            feeds=_feeds(spec, specs),
+            blocked_by=blocked,
+            last_job=ref,
+            output=output,
         )
 
     stages = []
@@ -261,6 +324,55 @@ def evaluate_pipeline(
     return Pipeline(
         host_id=host_id, os_epoch=os_epoch, stages=stages, next=_next(specs, states, has_os_access)
     )
+
+
+def _inputs(
+    spec: TaskSpec,
+    outputs: dict[str, OutputMeta | None],
+    producer_of: dict[str, TaskSpec],
+    fresh: Callable[[TaskSpec | None, OutputMeta], bool],
+    has_os_access: bool,
+) -> list[InputRef]:
+    refs = []
+    for kind, required in [*((k, True) for k in spec.requires), *((k, False) for k in spec.uses)]:
+        if kind == OS_ACCESS:
+            refs.append(
+                InputRef(
+                    kind=kind,
+                    title=OUTPUT_TITLES[kind],
+                    required=required,
+                    status="ok" if has_os_access else "missing",
+                )
+            )
+            continue
+        producer = producer_of.get(kind)
+        meta = outputs.get(kind)
+        status: Literal["ok", "missing", "stale"] = (
+            "missing" if meta is None else "ok" if fresh(producer, meta) else "stale"
+        )
+        refs.append(
+            InputRef(
+                kind=kind,
+                title=OUTPUT_TITLES.get(kind, kind),
+                required=required,
+                status=status,
+                from_task=producer.id if producer else None,
+                from_title=producer.title if producer else None,
+                produced_at=meta.created_at if meta else None,
+            )
+        )
+    return refs
+
+
+def _feeds(spec: TaskSpec, specs: tuple[TaskSpec, ...]) -> list[TaskLink]:
+    made = [k for k in (spec.produces, *spec.also_produces) if k]
+    return [
+        TaskLink(task=t.id, title=t.title, kind=kind)
+        for t in specs
+        if t.id != spec.id
+        for kind in made
+        if kind in t.requires or kind in t.uses
+    ]
 
 
 def _stage_state(tasks: list[TaskState]) -> TaskStateName:

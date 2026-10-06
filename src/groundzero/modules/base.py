@@ -132,6 +132,8 @@ class Module:
     optional: ClassVar[bool] = False  # not on the recommended path (alternatives, utilities)
     destructive: ClassVar[bool] = False
     available: ClassVar[bool] = True  # False: designed, not implemented yet (shown as planned)
+    uses: ClassVar[tuple[str, ...]] = ()  # optional inputs: read when present, never blocking
+    also_produces: ClassVar[tuple[str, ...]] = ()  # side outputs
     Params: ClassVar[type[BaseModel]] = NoParams
 
     @classmethod
@@ -147,6 +149,8 @@ class Module:
             optional=cls.optional,
             destructive=cls.destructive,
             available=cls.available,
+            uses=cls.uses,
+            also_produces=cls.also_produces,
         )
 
     @classmethod

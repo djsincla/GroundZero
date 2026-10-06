@@ -72,6 +72,7 @@ def install_config(
 class _DeployOs(Module):
     stage = Stage.OS
     produces = "install"
+    also_produces = ("os_network",)
     optional = True
     destructive = True
     Params = InstallParams
@@ -204,6 +205,7 @@ class OsRead(Module):
     stage = Stage.OS
     description = "Read the running hypervisor's network, NTP and storage (read-only)."
     produces = "os_network"
+    also_produces = ("os_storage",)
     requires = (OS_ACCESS,)
     os_bound = True
     optional = True

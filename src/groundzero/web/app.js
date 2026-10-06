@@ -1,6 +1,6 @@
 // GroundZero web UI: a thin client of the REST API (/api/v1). No build step, no dependencies.
 // The shell (sidebar, top bar, drawer, toasts) never unloads; only <main> is re-rendered per route.
-import { api, errorBox, h, isActive, setUnauthorizedHandler, showJobDrawer, signOut, token } from "./js/core.js";
+import { api, errorBox, h, isActive, loadTasks, setUnauthorizedHandler, showJobDrawer, signOut, token } from "./js/core.js";
 import { viewConfigSet, viewConfigSets, viewIsos } from "./js/views/catalog.js";
 import { viewDeploy } from "./js/views/deploy.js";
 import { viewHost, viewHosts } from "./js/views/hosts.js";
@@ -23,8 +23,10 @@ const ROUTES = [
 let current = null;
 let lastPath = null;
 
+let tasksLoaded = false;
 async function route() {
   if (!token()) return renderLogin();
+  if (!tasksLoaded) { tasksLoaded = true; await loadTasks(); }
   document.body.classList.remove("signed-out");
   const [path, qs] = (location.hash.replace(/^#/, "") || "/").split("?");
   const query = new URLSearchParams(qs || "");

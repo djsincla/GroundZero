@@ -41,9 +41,9 @@ uv run groundzero ui        # opens the UI in your browser, already signed in
 - **Port 443:** the media server listens on `0.0.0.0:443`. On Linux, binding below 1024 needs privileges.
   Either run with the capability (`sudo setcap 'cap_net_bind_service=+ep' "$(readlink -f .venv/bin/python)"`)
   or move it with `GROUNDZERO_MEDIA_PORT=8443` and allow that port from the BMC.
-- **Long jobs:** keep `groundzero serve` running for the whole install or OVA upload. If you start it
-  from a shell you'll close, detach it with
-  `nohup uv run groundzero serve > ~/.groundzero/serve.log 2>&1 &`.
+- **Long jobs:** keep the server running for the whole install or OVA upload. To run it in the
+  background, so it survives closing the terminal, use `uv run groundzero serve --detach`. The log goes
+  to `~/.groundzero/serve.log`; stop it with `uv run groundzero stop`.
 
 ### Option B: one container
 
@@ -153,7 +153,7 @@ The Holorouter applies its settings on **first boot only**. To change them later
 | The install stalls at "mount" or the BMC never boots the ISO | The BMC can't reach the media server. Allow TCP 443 (or your `GROUNDZERO_MEDIA_PORT`) from the BMC to the management machine, or set `GROUNDZERO_MEDIA_PUBLIC_URL=https://<address the BMC can reach>`. |
 | Install media loads extremely slowly over a VPN | Some VPN tunnels throttle uploads (IPsec in particular). See the **Info** page for forcing GlobalProtect into SSL mode, and the upload-speed check. |
 | "certificate changed" | A BMC or ESXi was reinstalled or renewed its certificate. After confirming it's legitimate: `uv run groundzero hosts trust esxi1 bmc` (or `os`). |
-| A job ends when you close the terminal | `groundzero serve` stopped. Run it detached (see section 2). |
+| A job ends when you close the terminal | `groundzero serve` stopped. Use `groundzero serve --detach` (see section 2). |
 | Something failed and you want details | Each job has **Download diagnostics** in the UI (`uv run groundzero jobs diag <job id>`): every BMC and ESXi exchange, with secrets removed. |
 
 ## Uninstall

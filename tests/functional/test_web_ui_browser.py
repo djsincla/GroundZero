@@ -564,3 +564,37 @@ def test_a_failed_task_shows_its_error_and_the_jobs_page_filters_to_it(
 
     page.get_by_label("Status").select_option("succeeded")
     expect(page.get_by_text("No jobs match these filters.")).to_be_visible()
+
+
+def test_pipeline_shows_data_flow_and_runs_tasks_with_options(
+    page: Page, simulated_r740xd: GroundZero
+) -> None:
+    gz = simulated_r740xd
+    assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+    _open(page, gz)
+    page.get_by_role("link", name="esxi1").click()
+
+    # Before preflight: Assess needs the preflight report (missing) and uses the jumbo result if any
+    assess = page.locator('[data-task="host.assess"]')
+    expect(assess.locator('[data-input="preflight"]')).to_have_attribute("data-status", "missing")
+    expect(assess.locator('[data-input="jumbo"]')).to_have_class(re.compile("optional"))
+    expect(page.locator('[data-task="preflight"] [data-feeds="host.assess"]')).to_be_visible()
+
+    # Run preflight with a chosen variant: the form is generated from the task's parameter schema
+    page.locator('[data-task="preflight"]').get_by_role("button", name="Options…").click()
+    dialog = page.locator("dialog")
+    dialog.get_by_label("Variant").select_option("vcf-9.0-esa-single")
+    dialog.get_by_role("button", name="Run").click()
+    expect(page.locator("#drawer")).to_contain_text("Holodeck preflight")  # titles come from GET /tasks
+    expect(page.locator('[data-task="preflight"]')).to_have_attribute("data-state", "done", timeout=20_000)
+
+    # Now Assess's input is there: click it to see exactly what Assess will read
+    chip = assess.locator('[data-input="preflight"]')
+    expect(chip).to_have_attribute("data-status", "ok")
+    chip.click()
+    expect(page.locator('[data-role="output-json"]')).to_contain_text('"variant": "vcf-9.0-esa-single"')
+    page.locator("dialog").get_by_role("button", name="Close").click()
+
+    # "Feeds" jumps to the task that reads this output
+    page.locator('[data-task="preflight"] [data-feeds="host.assess"]').click()
+    expect(assess).to_have_class(re.compile("flash"))

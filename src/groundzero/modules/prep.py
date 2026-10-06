@@ -46,7 +46,9 @@ class Assess(Module):
     stage = Stage.READINESS
     description = "Compare drives, datastores, network and NTP with what Holodeck needs, and plan the fixes."
     produces = "readiness"
+    also_produces = ("os_network", "os_storage")
     requires = ("preflight", OS_ACCESS)
+    uses = ("jumbo",)
     os_bound = True
     Params = AssessParams
 
@@ -117,7 +119,9 @@ class Prep(Module):
     stage = Stage.PREP
     description = "Apply the planned fixes: MTU, trunk and external port groups, NTP, Holodeck datastore."
     produces = "host_prep"
+    also_produces = ("os_network", "os_storage", "readiness")
     requires = ("readiness",)
+    uses = ("preflight", "jumbo")
     os_bound = True
     destructive = True
     Params = PrepParams
@@ -203,7 +207,9 @@ class VerifyJumbo(Module):
     stage = Stage.PREP
     description = "Send 9000-byte frames out of one uplink and back in the other through the physical switch."
     produces = "jumbo"
+    also_produces = ("readiness",)
     requires = ("host_prep",)
+    uses = ("readiness", "os_storage")
     os_bound = True
 
     def summarize(self, data: dict[str, Any]) -> str:

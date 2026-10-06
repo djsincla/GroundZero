@@ -148,13 +148,14 @@ export async function followJob(jobId, onEvent, signal) {
   }
 }
 
-export const TASK_TITLES = {
-  discover: "Discover hardware", preflight: "Holodeck preflight", "vcf.readiness": "VCF 9 readiness", "os.read": "Read installed OS", "os.reimage": "Deploy OS · custom ISO from current settings",
-  "os.custom": "Deploy OS · custom ISO from a config set", "os.capture": "Capture config set", "host.assess": "Assess readiness",
-  "host.prep": "Prepare host", "net.verify_jumbo": "Verify jumbo frames", "holodeck.router": "Deploy Holorouter",
-  "holodeck.stage": "Stage binaries", "holodeck.deploy": "Deploy Holodeck",
-};
-export const jobLabel = (job) => TASK_TITLES[job.task] || job.task;
+// Task titles come from the catalog (GET /tasks), loaded once after sign-in.
+const taskTitles = new Map();
+export async function loadTasks() {
+  try {
+    for (const t of await api("GET", "/tasks")) taskTitles.set(t.id, t.title);
+  } catch { /* signed out: retried on the next sign-in */ }
+}
+export const jobLabel = (job) => taskTitles.get(job.task) || job.task;
 
 const STEP_ICON = { pending: "○", running: "◐", succeeded: "✓", failed: "✕", skipped: "–", cancelled: "✕" };
 function stepDuration(step) {
@@ -267,5 +268,19 @@ export async function startJob(method, path, body, opts = {}) {
   } catch (e) {
     toast(e.message, "error");
     return null;
+  }
+}
+
+// Show one stored output (what a later task will read) as formatted JSON.
+export async function showOutput(hostId, kind, title) {
+  try {
+    const data = await api("GET", `/hosts/${hostId}/outputs/${kind}`);
+    const text = JSON.stringify(data, null, 2);
+    openDialog(title || kind, [
+      h("p", { class: "muted small-text" }, `Output kind "${kind}": later tasks read this as their input.`),
+      h("pre", { class: "code-block output-json", "data-role": "output-json" }, text),
+    ], { submitLabel: "Close", wide: true, onSubmit: async () => {} });
+  } catch (e) {
+    toast(e.status === 404 ? `No ${title || kind} yet` : e.message, "error");
   }
 }
