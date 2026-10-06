@@ -75,7 +75,8 @@ CATALOG: tuple[TaskSpec, ...] = (
         "vcf.readiness",
         "VCF 9 readiness",
         Stage.HARDWARE,
-        "Validate the hardware against the VCF 9 readiness rules (CA, Inc. VCF Readiness rules, read-only).",
+        "Validate the hardware against the VCF 9 readiness rules from John Nicholson's VCF Readiness tool "
+        "(CA, Inc. license; read-only).",
         produces="vcf_readiness",
         requires=("inventory",),
     ),

@@ -3,7 +3,8 @@ Copyright 2026 Dwayne Sinclair
 
 Licensed under the Apache License, Version 2.0 (see LICENSE), except for the parts listed below.
 
-GroundZero started as a fork of the VCF Readiness Assessment Tool v9.7.3, Copyright (c) CA, Inc.
+GroundZero started as a fork of the VCF Readiness Assessment Tool v9.7.3 by John Nicholson,
+Copyright (c) CA, Inc.
 The following parts are that work, or derived from it, and remain under the CA, Inc. Software
 License Agreement in the LICENSE.md file of each directory, not under Apache 2.0:
 

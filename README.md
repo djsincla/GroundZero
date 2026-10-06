@@ -8,12 +8,16 @@
   <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white">
   <img alt="Redfish" src="https://img.shields.io/badge/BMC-Redfish-6d28d9">
   <img alt="ESXi 9.x" src="https://img.shields.io/badge/OS-ESXi%209.x-607078?logo=vmware&logoColor=white">
-  <img alt="Private" src="https://img.shields.io/badge/repo-private-lightgrey">
+  <img alt="License: Apache-2.0 (with CA-licensed parts)" src="https://img.shields.io/badge/license-Apache--2.0%20%2B%20CA-blue">
 </p>
 
 <p align="center">
   <b>Point GroundZero at a server's BMC. It checks the hardware, installs ESXi unattended,<br>
   validates the result, and gets the host ready for VMware Holodeck.</b>
+</p>
+
+<p align="center">
+  <a href="docs/INSTALL.md"><b>Install it for your lab →</b></a>
 </p>
 
 ---
@@ -79,6 +83,10 @@ server.
 | M4 | NSX bare-metal Edge plugin, more OEM profiles, API explorer rework | 📋 planned |
 
 ## Quick start
+
+**Setting it up for your own lab?** Follow the step-by-step [installation guide](docs/INSTALL.md):
+prerequisites, network requirements, native or container install, and every step from preflight to the
+Holorouter.
 
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
@@ -209,13 +217,26 @@ src/groundzero/
   web/         the web UI (plain HTML/CSS/JS, no build step)
   cli/         Typer CLI (a thin API client) + dev tools
 scripts/       gz-container: build/run the single-container bundle
-docs/          lab network and Holodeck host-network notes
+docs/          installation guide, lab network and Holodeck host-network notes
 tests/         unit, functional, browser and live suites; recorded fixtures
 legacy/        the original VCF Readiness v9.7.3 code, kept for reference only
 ```
 
-## Origin & license
+## Origin, credits & license
 
-GroundZero began as a fork of the VCF Readiness Assessment Tool v9.7.3 (kept in `legacy/`) and was
-rebuilt API-first. It is licensed under the CA, Inc. Software License Agreement in `LICENSE.md`,
-which permits use in connection with CA, Inc. (Broadcom) products.
+GroundZero began as a fork of the **VCF Readiness Assessment Tool v9.7.3 by John Nicholson**, and was
+rebuilt API-first around taking bare metal to a running VMware Holodeck.
+
+- **GroundZero** is licensed under the [Apache License 2.0](LICENSE), Copyright 2026 Dwayne Sinclair.
+- **VCF Readiness**, John Nicholson's work, Copyright (c) CA, Inc., remains under the **CA, Inc.
+  Software License Agreement**. That license permits use, copying, modification and distribution in
+  connection with CA, Inc. (Broadcom) products. It covers:
+  - [`legacy/`](legacy/): the original tool, kept for reference ([license](legacy/LICENSE.md),
+    [third-party licenses](legacy/THIRD_PARTY_LICENSES.md))
+  - [`src/groundzero/vcf_readiness/`](src/groundzero/vcf_readiness/): the VCF 9 readiness rules (CPU
+    generation support tiers) carried over from it ([license](src/groundzero/vcf_readiness/LICENSE.md))
+
+See [NOTICE](NOTICE) for the details.
+
+VMware, VCF, ESXi and Holodeck are trademarks of Broadcom. GroundZero is an independent project and is
+not affiliated with or endorsed by Broadcom.
