@@ -141,9 +141,7 @@ def test_host_values_are_validated(api: TestClient) -> None:
     assert api.get(f"/api/v1/hosts/{host_id}/host-values/esxi").status_code == 404
     bad = api.put(f"/api/v1/hosts/{host_id}/host-values/esxi", json={"hostname": "esxi1", "ip": "999.1.1.1"})
     assert bad.status_code == 422
-    ok = api.put(
-        f"/api/v1/hosts/{host_id}/host-values/esxi", json={"hostname": "esxi9", "ip": "192.0.2.109"}
-    )
+    ok = api.put(f"/api/v1/hosts/{host_id}/host-values/esxi", json={"hostname": "esxi9", "ip": "192.0.2.109"})
     assert ok.status_code == 200 and ok.json()["install_nic"] is None
 
 
