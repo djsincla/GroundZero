@@ -230,14 +230,14 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
 .chip { font-size: 11px; padding: 0 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
 .danger-chip { color: var(--fail); border-color: color-mix(in srgb, var(--fail) 40%, var(--line)); }
 ol.steps { list-style: none; margin: 10px 0 6px; padding: 0; display: grid; gap: 4px; }
-.step { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 8px; align-items: baseline; font-size: 13px; }
-.step-icon { text-align: center; color: var(--muted); }
-.step.succeeded .step-icon { color: var(--pass); }
-.step.running .step-icon { color: var(--accent); }
-.step.failed .step-icon, .step.cancelled .step-icon { color: var(--fail); }
-.step.pending .step-title, .step.skipped .step-title { color: var(--muted); }
-.step-msg { grid-column: 2 / -1; color: var(--muted); overflow-wrap: anywhere; }
-.step.failed .step-msg { color: var(--fail); }
+.steps .step { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 8px; align-items: baseline; font-size: 13px; }
+.steps .step-icon { text-align: center; color: var(--muted); }
+.steps .step.succeeded .step-icon { color: var(--pass); }
+.steps .step.running .step-icon { color: var(--accent); }
+.steps .step.failed .step-icon, .steps .step.cancelled .step-icon { color: var(--fail); }
+.steps .step.pending .step-title, .steps .step.skipped .step-title { color: var(--muted); }
+.steps .step-msg { grid-column: 2 / -1; color: var(--muted); overflow-wrap: anywhere; }
+.steps .step.failed .step-msg { color: var(--fail); }
 
 /* ── readiness ── */
 .storage-proposal { border-left: 4px solid var(--line); padding: 4px 0 4px 12px; margin-top: 12px; }

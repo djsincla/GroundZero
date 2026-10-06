@@ -160,7 +160,7 @@
       "vswitch": "vSwitch0"
     }
   ],
-  "product": "VMware ESXi 192.0.2.11.24957456",
+  "product": "VMware ESXi 9.0.1.0.24957456",
   "search_domains": [
     "vcflab.local"
   ],
