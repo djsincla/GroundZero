@@ -82,8 +82,9 @@ server.
 | **M2.5** | Config sets with capture from a running host, ISO repository, deploy preview, web UI, certificate pinning | ✅ done (UI refresh in progress) |
 | **M3** | Holodeck readiness, host prep (MTU 9000, port groups, NTP, datastore), jumbo-frame verification, Holorouter | ✅ done |
 | **M3.5** | Modular pipeline (typed inputs and outputs), any OVA deployed from its own inputs, appliance profiles, replace | ✅ done (v0.3.0) |
-| M4 | Capture and adopt existing VMs, Configure BIOS, cluster mode with DNS checks, the Holodeck deploy job | ⏳ next |
-| M5 | Windows guest customisation, NSX bare-metal Edge plugin, more OEM profiles | 📋 planned |
+| **M4** | Capture profiles from running appliances, adopt existing VMs, outputs with a source | ✅ done (v0.4.0) |
+| M5 | Configure BIOS, cluster mode with DNS checks, the Holodeck deploy job | ⏳ next |
+| M6 | Windows guest customisation, NSX bare-metal Edge plugin, more OEM profiles | 📋 planned |
 
 ## Quick start
 

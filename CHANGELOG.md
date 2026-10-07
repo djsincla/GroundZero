@@ -5,6 +5,10 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-06
+
+Appliances you already have: capture their settings, adopt them, and correct their records.
+
 ### Added
 - **Reading VMs:** a host's VMs and their layout (NICs and port groups, datastore, size, guest IPs) and the
   OVF settings each was deployed with, read from its `.vmx`, since the vSphere API returns them empty
@@ -124,7 +128,8 @@ R740xd.
   - Functional, browser and live test suites.
   - A single-container bundle.
 
-[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/djsincla/GroundZero/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/djsincla/GroundZero/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/djsincla/GroundZero/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/djsincla/GroundZero/releases/tag/v0.1.0

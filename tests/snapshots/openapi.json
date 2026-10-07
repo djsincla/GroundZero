@@ -1945,7 +1945,7 @@
   "info": {
     "summary": "Bare metal \u2192 ESXi \u2192 VMware Holodeck, driven through one REST API.",
     "title": "GroundZero API",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "openapi": "3.1.0",
   "paths": {
