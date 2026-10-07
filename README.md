@@ -84,8 +84,9 @@ server.
 | **M3.5** | Modular pipeline (typed inputs and outputs), any OVA deployed from its own inputs, appliance profiles, replace | ✅ done (v0.3.0) |
 | **M4** | Capture profiles from running appliances, adopt existing VMs, outputs with a source | ✅ done (v0.4.0) |
 | **M5** | Configure BIOS (VT-x, VT-d, UEFI boot mode) over Redfish | ✅ done (v0.5.0) |
-| M5.5 | Cluster mode with DNS checks, the Holodeck deploy job | ⏳ next |
-| M6 | Windows guest customisation, NSX bare-metal Edge plugin, more OEM profiles | 📋 planned |
+| **M5.5** | Cluster mode: names from the BMC, addresses from a pool, optional DNS check | ✅ done (v0.6.0) |
+| M6 | The Holodeck deploy job (stage binaries, deploy) | ⏳ next |
+| M7 | Windows guest customisation, NSX bare-metal Edge plugin, more OEM profiles | 📋 planned |
 
 ## Quick start
 
