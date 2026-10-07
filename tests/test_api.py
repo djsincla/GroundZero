@@ -166,3 +166,16 @@ def test_os_network_read_flow(api: TestClient) -> None:
     assert cfg["address"] == "192.0.2.101"
     mgmt = next(p for p in cfg["portgroups"] if p["name"] == "Management Network")
     assert (mgmt["vlan_id"], mgmt["active_uplinks"]) == (100, ["vmnic0", "vmnic1"])
+
+
+def test_one_version_everywhere(api: TestClient) -> None:
+    """pyproject.toml is the single source: the package, /healthz and the changelog agree with it."""
+    import tomllib
+
+    from groundzero import __version__
+
+    root = Path(__file__).resolve().parents[1]
+    declared = tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
+    assert __version__ == declared
+    assert api.get("/healthz").json()["version"] == declared
+    assert f"## [{declared}]" in (root / "CHANGELOG.md").read_text()  # every version has release notes

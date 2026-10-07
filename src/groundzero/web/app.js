@@ -131,6 +131,10 @@ pill.addEventListener("click", () => {
 fetch("/healthz").then((r) => r.json()).then((hz) => {
   const el = document.getElementById("mode");
   if (hz.mode === "simulated") { el.textContent = "simulation mode"; el.hidden = false; }
+  const version = document.getElementById("version");
+  version.textContent = `GroundZero v${hz.version}`;
+  version.title = "Release notes";
+  version.hidden = false;
 }).catch(() => {});
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { document.getElementById("drawer").hidden = true; closeMenu(); }

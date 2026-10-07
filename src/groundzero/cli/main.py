@@ -24,6 +24,26 @@ from rich.text import Text
 from groundzero.core.config import Settings
 
 app = typer.Typer(help="GroundZero: bare metal → ESXi → VMware Holodeck.", no_args_is_help=True)
+
+
+def _print_version(value: bool) -> None:
+    if value:
+        from groundzero import __version__
+
+        console.print(f"GroundZero {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: Annotated[
+        bool,
+        typer.Option("--version", callback=_print_version, is_eager=True, help="Show the version, then exit"),
+    ] = False,
+) -> None:
+    """GroundZero: bare metal → ESXi → VMware Holodeck."""
+
+
 hosts_app = typer.Typer(help="Manage BMC targets.", no_args_is_help=True)
 jobs_app = typer.Typer(help="Inspect and cancel jobs.", no_args_is_help=True)
 token_app = typer.Typer(help="API token.", no_args_is_help=True)

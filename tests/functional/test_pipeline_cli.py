@@ -11,6 +11,11 @@ from .harness import GroundZero
 pytestmark = pytest.mark.functional
 
 
+def test_version_flag(simulated_r740xd: GroundZero) -> None:
+    result = simulated_r740xd.cli("--version")
+    assert result.code == 0 and result.output.startswith("GroundZero ")
+
+
 def test_pipeline_run_and_diagnostics(simulated_r740xd: GroundZero) -> None:
     gz = simulated_r740xd
     assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
