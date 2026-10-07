@@ -5,6 +5,10 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-06
+
+Read the server's storage, and install to the boot volume it finds.
+
 ### Added
 - **Read storage:** a new hardware task that reads the controllers, RAID volumes and drives over Redfish
   (read-only) and finds the boot volume the OS installs to. On a Dell with a BOSS card that's the BOSS
@@ -181,7 +185,8 @@ R740xd.
   - Functional, browser and live test suites.
   - A single-container bundle.
 
-[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/djsincla/GroundZero/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/djsincla/GroundZero/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/djsincla/GroundZero/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/djsincla/GroundZero/compare/v0.4.0...v0.5.0
