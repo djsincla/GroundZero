@@ -1,4 +1,4 @@
-// Hosts list and the tabbed host page (Pipeline · Readiness · Overview · Networking · Install · Jobs).
+// Hosts list and the tabbed host page (Pipeline · Readiness · Overview · Storage · Networking · Install · Jobs).
 import { schemaForm } from "../forms.js";
 import {
   age, api, badge, card, empty, fmtBytes, fmtTime, h, isActive, jobCard, jobLabel, maybe, mount, openDialog, pageHeader,
@@ -53,8 +53,8 @@ function addHostDialog() {
 }
 
 // ── host page ──
-const TABS = [["pipeline", "Pipeline"], ["readiness", "Readiness"], ["overview", "Overview"], ["network", "Networking"],
-  ["install", "Install"], ["jobs", "Jobs"]];
+const TABS = [["pipeline", "Pipeline"], ["readiness", "Readiness"], ["overview", "Overview"], ["storage", "Storage"],
+  ["network", "Networking"], ["install", "Install"], ["jobs", "Jobs"]];
 const TAB_ALIASES = { preflight: "readiness" };  // Preflight is part of Readiness now; old links still land
 
 export async function viewHost(app, id, tab = "pipeline") {
@@ -74,16 +74,18 @@ export async function viewHost(app, id, tab = "pipeline") {
   const appliances = await Promise.all(outputs.filter((o) => o.kind.startsWith("appliance:")).map(async (o) =>
     ({ ...o, data: await api("GET", `/hosts/${id}/outputs/${encodeURIComponent(o.kind)}`) })));
   const readiness = tab === "readiness" ? await maybe(api("GET", `/hosts/${id}/outputs/readiness`)) : null;
+  const storage = tab === "storage" ? await maybe(api("GET", `/hosts/${id}/outputs/storage`)) : null;
   const active = jobs.find(isActive);
   const busy = Boolean(active);
-  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness, appliances,
+  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness, appliances, storage,
     lastInstallJob: jobs.find((j) => j.task === "os.custom" || j.task === "os.reimage") };
 
   const tabs = h("nav", { class: "tabs", "aria-label": "Host sections" }, TABS.map(([key, label]) =>
     h("a", { href: `#/hosts/${id}/${key}`, class: key === tab ? "active" : null, "aria-current": key === tab ? "page" : null }, label)));
 
   const body = {
-    pipeline: pipelineTab, readiness: readinessTab, overview: overviewTab, network: networkTab, install: installTab,
+    pipeline: pipelineTab, readiness: readinessTab, overview: overviewTab, storage: storageTab, network: networkTab,
+    install: installTab,
     jobs: jobsTab,
   }[tab] || pipelineTab;
 
@@ -636,6 +638,59 @@ function applyDialog(ctx, actions, boxes) {
     submit.disabled = true;
     input.addEventListener("input", () => { submit.disabled = input.value !== phrase; });
   }
+}
+
+// ── storage: what Read storage found (controllers, RAID volumes, drives) and the boot volume the OS installs to ──
+const CONTROLLER_KIND = { raid: "RAID controller", boot: "Boot card", passthrough: "Pass-through", software: "Software RAID",
+  other: "Controller" };
+const gb = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)} TB` : `${Math.round(n)} GB`);
+
+function storageTab(ctx) {
+  const { storage } = ctx;
+  const task = pipelineTasks(ctx.pipeline)["storage.read"];
+  const read = h("div", { class: "row" },
+    task ? taskButton(ctx, task, { primary: !storage, label: storage ? "Read again" : "Read storage" }) : null,
+    storage ? h("span", { class: "muted small-text" }, "Read-only: nothing on the server changes.") : null);
+  if (!storage) {
+    return card({ "data-card": "storage" }, h("h2", {}, "Storage"),
+      h("p", { class: "muted" }, "Not read yet. Read storage asks the BMC for the controllers, RAID volumes and drives, and finds the boot volume the OS installs to."),
+      read);
+  }
+  const b = storage.boot_volume;
+  const boot = card({ "data-card": "boot-volume" }, h("h2", {}, "Boot volume"),
+    b ? h("dl", { class: "kv" },
+        h("dt", {}, "Volume"), h("dd", {}, [b.name || b.volume_id, b.raid, gb(b.capacity_gb)].filter(Boolean).join(" · ")),
+        h("dt", {}, "Controller"), h("dd", {}, b.controller_model || b.controller_id),
+        h("dt", {}, "Drives"), h("dd", {}, String(b.drives)),
+        h("dt", {}, "Installer match"), h("dd", { class: "mono" }, b.install_match || "unknown: use a first-match or exact disk rule"))
+      : h("p", { class: "muted" }, "No boot volume found: no boot card volume and no volume marked as boot."),
+    h("p", { class: "help" }, "A config set whose install disk is \"boot-volume\" installs here."),
+    read);
+  // Boot card first, then controllers by how many drives they hold; empty ones last.
+  const order = (c) => (c.kind === "boot" ? -1 : 0) * 1e6 - c.drives.length;
+  const controllers = [...storage.controllers].sort((x, y) => order(x) - order(y)).map((c) => {
+    const volumes = c.volumes.filter((v) => !v.raw);
+    const facts = [CONTROLLER_KIND[c.kind] || c.kind, c.mode && c.mode !== "NotSupported" ? `mode ${c.mode}` : null,
+      c.supported_raid.length ? `supports ${c.supported_raid.join(", ")}` : null].filter(Boolean).join(" · ");
+    return card({ "data-controller": c.id },
+      h("h2", {}, c.model || c.name || c.id), h("p", { class: "muted small-text" }, facts),
+      volumes.length ? [h("h3", {}, "RAID volumes"), table(["Volume", "RAID", "Size", "Drives"], volumes.map((v) =>
+        h("tr", { "data-volume": v.id }, h("td", {}, v.name || v.id), h("td", {}, v.raid || "—"), h("td", {}, gb(v.capacity_gb)),
+          h("td", {}, String(v.drives.length)))))] : null,
+      c.drives.length
+        ? [h("h3", {}, "Drives"), table(["Drive", "Model", "Type", "Size", "State", "Use"], c.drives.map((d) =>
+            h("tr", { "data-drive": d.id },
+              h("td", { class: "mono small-text" }, d.id.split(":")[0]),
+              h("td", {}, d.model || "—"),
+              h("td", {}, [d.media, d.protocol].filter(Boolean).join(" ") || "—"),
+              h("td", {}, gb(d.capacity_gb)),
+              h("td", {}, d.state || "—"),
+              h("td", {}, d.hotspare ? `${d.hotspare} spare`
+                : d.volumes.some((v) => volumes.find((x) => x.id === v)) ? "in a RAID volume"
+                : c.kind === "passthrough" ? "pass-through" : "unused"))))]
+        : h("p", { class: "muted" }, "No drives."));
+  });
+  return h("div", { class: "stack" }, boot, ...controllers);
 }
 
 function overviewTab(ctx) {

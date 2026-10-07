@@ -286,3 +286,6 @@ ul.plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 
 .appliance-list { margin-top: 10px; }
 .appliance-list .eyebrow { margin: 0 0 6px; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.stack > * { margin: 0; }
+.stack h3 { font-size: 13px; margin: 14px 0 6px; }

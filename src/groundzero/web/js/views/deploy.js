@@ -105,7 +105,8 @@ export async function viewDeploy(app, id, query = new URLSearchParams()) {
     }
     const s = esxiSets.find((x) => x.id === setSelect.value);
     const st = s.settings;
-    const disk = st.install_disk.mode === "current-boot-disk" ? "current boot disk" : `${st.install_disk.mode}: ${st.install_disk.value}`;
+    const disk = { "current-boot-disk": "current boot disk", "boot-volume": "the boot volume (from Read storage)" }[st.install_disk.mode]
+      || `${st.install_disk.mode}: ${st.install_disk.value}`;
     setSummary.replaceChildren(h("dl", { class: "kv compact" },
       h("dt", {}, "Network"), h("dd", {}, `VLAN ${st.vlan_id || "untagged"} · ${[st.install_nic, ...st.extra_uplinks].join(" + ")} · gw ${st.gateway}`),
       h("dt", {}, "DNS / NTP"), h("dd", {}, `${st.nameservers.join(", ")} / ${st.ntp_servers.join(", ") || "none"}`),

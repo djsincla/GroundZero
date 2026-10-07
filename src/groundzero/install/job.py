@@ -229,6 +229,7 @@ class InstallConfig(BaseModel):
     settings: EsxiSettings
     values: EsxiHostValues
     root_password: str
+    boot_volume_match: str | None = None  # from Read storage, for the boot-volume disk rule
 
 
 class Installer:
@@ -318,6 +319,7 @@ class Installer:
                 root_password=self.config.root_password,
                 legacy_cpu_detected=legacy_cpu,
                 current_boot_disk=before.boot_disk if before else None,
+                boot_volume_match=self.config.boot_volume_match,
             )
         else:
             if network is None or before is None or self.os_password is None:

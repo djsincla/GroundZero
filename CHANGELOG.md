@@ -5,6 +5,16 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+### Added
+- **Read storage:** a new hardware task that reads the controllers, RAID volumes and drives over Redfish
+  (read-only) and finds the boot volume the OS installs to. On a Dell with a BOSS card that's the BOSS
+  RAID1, and the installer finds it as `DELLBOSS`.
+  - A new **Storage** tab on the host page shows what it read: the boot volume, then each controller with
+    its volumes and drives.
+- **Install to the boot volume:** a config set's install disk can be `boot-volume`, which installs to the
+  boot volume Read storage found. It works without a running OS, so a blank server installs to the right
+  disk. The OS deploy tasks now list the storage layout as an input.
+
 ## [0.7.0] - 2026-10-06
 
 Configure BIOS moves up behind Discover, and steps aside when the BIOS is already right.

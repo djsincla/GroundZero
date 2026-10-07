@@ -16,6 +16,7 @@ from groundzero.inventory.models import HostInventory
 from groundzero.preflight.evaluate import PreflightReport
 from groundzero.readiness import ReadinessReport
 from groundzero.redfish.bios import BiosChange
+from groundzero.redfish.storage import StorageLayout
 from groundzero.vcf_readiness.validate import VcfReadinessReport
 
 
@@ -25,6 +26,27 @@ class BiosResult(BaseModel):
     changes: list[BiosChange] = Field(default_factory=list)
     unsupported: list[str] = Field(default_factory=list, description="Settings this BIOS does not expose")
     applied: dict[str, Any] = Field(default_factory=dict, description="The values read back after the reboot")
+
+
+class BootVolume(BaseModel):
+    """The volume the OS installs to, and how the installer finds it."""
+
+    controller_id: str
+    controller_model: str | None = None
+    volume_id: str
+    name: str | None = None
+    raid: str | None = None
+    capacity_gb: float = 0
+    drives: int = 0
+    install_match: str | None = Field(
+        default=None, description="Kickstart --firstdisk match for this volume, e.g. DELLBOSS (None: unknown)"
+    )
+
+
+class StorageReport(StorageLayout):
+    """Read storage: the server's controllers, volumes and drives, and its boot volume."""
+
+    boot_volume: BootVolume | None = None
 
 
 class HostPrep(BaseModel):
@@ -90,4 +112,5 @@ OUTPUTS: dict[str, type[BaseModel]] = {
     "appliance": ApplianceDeployment,
     "bios": BiosResult,
     "dns": DnsCheck,
+    "storage": StorageReport,
 }

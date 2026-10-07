@@ -13,6 +13,7 @@ from groundzero.core.models import ConfigSetWrite, Host
 from groundzero.install.job import InstallConfig, Installer, InstallRequest, InstallTimings
 from groundzero.modules.base import OS_ACCESS, Deps, Inputs, Module, Prepared, Stage
 from groundzero.modules.dns import require_dns
+from groundzero.modules.outputs import StorageReport
 from groundzero.osconfig import OsConfigError
 from groundzero.osconfig.esxi import EsxiHostValues, EsxiPlugin, EsxiSettings
 from groundzero.preflight.evaluate import UnknownProfileError, load_profile
@@ -68,8 +69,24 @@ def install_config(
         raise OsConfigError(
             f"Config set '{config_set.name}' has no root password and the host has no OS access"
         )
+    settings = EsxiSettings.model_validate(config_set.settings)
+    boot_volume_match = None
+    if settings.install_disk.mode == "boot-volume":
+        storage = Inputs(deps.store, host.id).get("storage", StorageReport)
+        if storage is None or storage.boot_volume is None or not storage.boot_volume.install_match:
+            found = storage.boot_volume if storage else None
+            raise OsConfigError(
+                f"Config set '{config_set.name}' installs to the boot volume, but "
+                + (
+                    f"the installer can't be told how to find {found.name or found.volume_id} "
+                    f"on {found.controller_model}: use a first-match or exact disk rule"
+                    if found
+                    else f"no boot volume has been read on {host.name}: run Read storage first"
+                )
+            )
+        boot_volume_match = storage.boot_volume.install_match
     return InstallConfig(
-        settings=EsxiSettings.model_validate(config_set.settings), values=values, root_password=root_password
+        settings=settings, values=values, root_password=root_password, boot_volume_match=boot_volume_match
     )
 
 
@@ -77,7 +94,7 @@ class _DeployOs(Module):
     stage = Stage.OS
     produces = "install"
     also_produces = ("os_network",)
-    uses = ("dns",)
+    uses = ("dns", "storage")
     optional = True
     destructive = True
     Params = InstallParams

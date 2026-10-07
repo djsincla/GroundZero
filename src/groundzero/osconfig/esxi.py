@@ -23,10 +23,11 @@ class OsConfigError(ValueError):
 class DiskRule(BaseModel):
     """Which disk ESXi is installed on; rules keep a config set reusable across servers."""
 
-    mode: Literal["current-boot-disk", "first-match", "exact"] = Field(
+    mode: Literal["current-boot-disk", "boot-volume", "first-match", "exact"] = Field(
         title="Rule",
         default="current-boot-disk",
         description="current-boot-disk: the disk the running OS boots from (needs the OS reachable); "
+        "boot-volume: the boot volume Read storage found (e.g. a BOSS RAID1; no running OS needed); "
         "first-match: first disk whose vendor/model/driver matches (kickstart --firstdisk, e.g. DELLBOSS); "
         "exact: a canonical device name",
     )
@@ -36,7 +37,7 @@ class DiskRule(BaseModel):
 
     @model_validator(mode="after")
     def _value_required(self) -> DiskRule:
-        if self.mode != "current-boot-disk" and not self.value:
+        if self.mode in ("first-match", "exact") and not self.value:
             raise ValueError(f"disk rule '{self.mode}' needs a value")
         return self
 
@@ -159,6 +160,7 @@ class EsxiPlugin:
         root_password: str,
         legacy_cpu_detected: bool,
         current_boot_disk: str | None,
+        boot_volume_match: str | None = None,
     ) -> InstallSpec:
         rule = settings.install_disk
         disk = firstdisk = None
@@ -169,6 +171,13 @@ class EsxiPlugin:
                     "Use a first-match or exact disk rule to install without a running OS."
                 )
             disk = current_boot_disk
+        elif rule.mode == "boot-volume":
+            if not boot_volume_match:
+                raise OsConfigError(
+                    "The config set installs to the boot volume, but no boot volume with a known installer "
+                    "match has been read: run Read storage first, or use a first-match or exact disk rule."
+                )
+            firstdisk = boot_volume_match
         elif rule.mode == "exact":
             disk = rule.value
         else:

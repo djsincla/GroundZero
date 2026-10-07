@@ -76,6 +76,7 @@ OUTPUT_TITLES = {
     "appliance": "Appliance",
     "bios": "BIOS changes",
     "dns": "DNS records",
+    "storage": "Storage layout",
     "staged": "Staged binaries",
     "holodeck": "Holodeck",
     OS_ACCESS: "OS access",

@@ -761,6 +761,35 @@ def test_configure_bios_from_the_pipeline(page: Page, tmp_path: Path) -> None:
         gz.stop()
 
 
+def test_storage_tab_reads_the_layout_and_shows_the_boot_volume(page: Page, tmp_path: Path) -> None:
+    from .conftest import _simulated
+
+    gz = _simulated(tmp_path)
+    gz.start()
+    try:
+        _open(page, gz)
+        _add_host(page)
+        page.get_by_role("link", name="esxi1").click()
+        _tab(page, "Storage")
+        expect(page.get_by_text("Not read yet")).to_be_visible()
+        page.get_by_role("button", name="Read storage").click()
+        expect(page.locator('#drawer [data-step="read"]')).to_have_attribute(
+            "data-status", "succeeded", timeout=30_000
+        )
+        page.reload()
+        boot = page.locator('[data-card="boot-volume"]')
+        expect(boot).to_contain_text("boss · RAID1 · 480 GB")
+        expect(boot).to_contain_text("BOSS-S1")
+        expect(boot).to_contain_text("DELLBOSS")
+        expect(page.locator('[data-controller="RAID.Slot.6-1"]')).to_contain_text("No drives.")
+        nvme = page.locator('[data-controller="PCIeExtender.Slot.3"] tr[data-drive]')
+        expect(nvme).to_have_count(12)
+        expect(nvme.first).to_contain_text("pass-through")
+        expect(boot.get_by_role("button", name="Read again")).to_be_visible()
+    finally:
+        gz.stop()
+
+
 def test_a_bios_that_is_already_right_shows_as_not_needed(page: Page, tmp_path: Path) -> None:
     from .conftest import _simulated
 

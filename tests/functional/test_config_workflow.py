@@ -94,3 +94,52 @@ def test_install_without_set_or_os_access_is_refused(simulated_r740xd: GroundZer
     iso = _iso(gz)
     result = gz.cli("install", "esxi1", "--iso", iso, "--confirm", "install esxi1")
     assert result.code == 1 and "Set OS access, or deploy an OS" in result.output
+
+
+def test_read_storage_then_install_to_the_boot_volume(simulated_r740xd_os_unreachable: GroundZero) -> None:
+    """No running OS to read the boot disk from: the boot volume Read storage found is the install target."""
+    gz = simulated_r740xd_os_unreachable
+    assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+    with gz.api() as api:
+        host_id = api.get("/api/v1/hosts").json()[0]["id"]
+        settings = {"netmask": "255.255.255.0", "gateway": "192.0.2.1", "nameservers": ["192.0.2.53"],
+                    "install_disk": {"mode": "boot-volume"}}  # fmt: skip
+        body = {
+            "name": "boot-volume",
+            "os_family": "esxi",
+            "settings": settings,
+            "root_password": "simulated",
+        }
+        cs = api.post("/api/v1/config-sets", json=body)
+        assert cs.status_code == 201, cs.text
+        values = {"hostname": "esxi1", "ip": "192.0.2.101"}
+        assert api.put(f"/api/v1/hosts/{host_id}/host-values/esxi", json=values).status_code == 200
+        iso = _iso(gz)
+        images = api.post("/api/v1/images/rescan").json()
+        image_id = next(i["id"] for i in images if i["filename"] == iso)
+        body = {"iso_id": image_id, "config_set_id": cs.json()["id"], "confirm": "install esxi1"}
+        early = api.post(f"/api/v1/hosts/{host_id}/install/preview", json=body)
+        assert early.status_code in (409, 422) and "run Read storage first" in early.text
+
+    read = gz.cli("run", "esxi1", "storage.read", timeout=120)
+    assert read.code == 0, read.output
+    shown = gz.cli("pipeline", "esxi1").output
+    assert "storage.read" in shown and "boss RAID1 480 GB" in " ".join(shown.split())
+    with gz.api() as api:
+        storage = api.get(f"/api/v1/hosts/{host_id}/outputs/storage").json()
+        assert storage["boot_volume"]["install_match"] == "DELLBOSS"
+        assert len(storage["controllers"]) == 5
+        preview = api.post(f"/api/v1/hosts/{host_id}/install/preview", json=body)
+        assert preview.status_code == 200, preview.text
+        assert "--firstdisk=DELLBOSS" in preview.json()["kickstart"]
+        p = api.get(f"/api/v1/hosts/{host_id}/pipeline").json()
+        custom = next(t for s in p["stages"] for t in s["tasks"] if t["id"] == "os.custom")
+        storage_in = next(i for i in custom["inputs"] if i["kind"] == "storage")
+        assert storage_in["status"] == "ok" and storage_in["from_task"] == "storage.read"
+
+    result = gz.cli("install", "esxi1", "--iso", iso, "--config", "boot-volume", "--confirm", "install esxi1",
+                    timeout=180)  # fmt: skip
+    assert result.code == 0, result.output
+    with gz.api() as api:
+        report = api.get(f"/api/v1/hosts/{host_id}/outputs/install").json()
+    assert report["spec"]["install_firstdisk"] == "DELLBOSS"

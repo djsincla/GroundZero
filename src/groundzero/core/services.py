@@ -299,6 +299,7 @@ class Services:
             root_password=config.root_password,
             legacy_cpu_detected=True,
             current_boot_disk=current_disk,
+            boot_volume_match=config.boot_volume_match,
         )
         masked = render_kickstart(spec).replace(spec.root_password_hash, "$6$<hidden>")
         return InstallPreview(

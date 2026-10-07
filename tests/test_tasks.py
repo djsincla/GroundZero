@@ -184,7 +184,7 @@ WRONG_BIOS = {"bios": {"cpu_virtualization": False, "iommu": True, "boot_mode": 
 
 def test_configure_bios_comes_straight_after_discover() -> None:
     hardware = next(s for s in _pipeline([], {}).stages if s.id == "hardware")
-    assert [t.id for t in hardware.tasks] == ["discover", "bios.configure", "preflight", "vcf.readiness"]
+    assert [t.id for t in hardware.tasks] == ["discover", "bios.configure", "storage.read", "preflight", "vcf.readiness"]
 
 
 def test_a_bios_that_is_already_right_needs_nothing() -> None:

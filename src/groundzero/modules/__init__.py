@@ -10,10 +10,12 @@ from groundzero.modules.hardware import Discover, Preflight, VcfReadiness
 from groundzero.modules.holodeck import DeployHolodeck, Holorouter, StageBinaries
 from groundzero.modules.os import OsCapture, OsCustom, OsRead, OsReimage
 from groundzero.modules.prep import Assess, Prep, VerifyJumbo
+from groundzero.modules.storage import ReadStorage
 
 MODULES: tuple[Module, ...] = (
     Discover(),
     ConfigureBios(),  # before preflight, so preflight passes first time
+    ReadStorage(),
     Preflight(),
     VcfReadiness(),
     OsReimage(),
