@@ -5,6 +5,30 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+Planned as 0.3.0: the modular pipeline and appliance (OVA) deployment.
+
+### Added
+- **Modules:** every pipeline task is a module that declares its inputs, outputs and parameters. Outputs
+  are typed, and one task's outputs are the next task's inputs.
+- **Data flow in the UI:** each task shows what it uses (and from where, how old) and what it feeds;
+  click an input to see exactly what the task reads.
+- **Task options:** forms generated from each task's parameter schema. The CLI has
+  `run --param KEY=VALUE --confirm …`.
+- **Background server:** `groundzero serve --detach` and `groundzero stop`.
+- **Any OVA's inputs:** read from its OVF descriptor and shown as a form (`GET /images/{id}/descriptor`,
+  `groundzero images show`). Every declared property reaches the guest, with its default when unset.
+
+### Changed (API)
+- Work starts one way, `POST /hosts/{id}/tasks/{task}` (pipeline-gated). Results are read one way,
+  `GET /hosts/{id}/outputs[/{kind}]`.
+- **Removed:**
+  - The duplicate job routes (`POST /hosts/{id}/inventory|preflight|os/network|os/capture|install`).
+  - The per-result getters.
+  - `GET /profiles`: the preflight variants are now choices in the task's parameter schema.
+- `/isos` is now `/images` (ISOs and OVAs); the CLI's `isos list` is now `images list`.
+- Jobs carry their task id (`task`); `kind` is gone.
+- VCF 9 readiness is optional.
+
 ## [0.2.0] - 2026-10-06
 
 The first public release.
