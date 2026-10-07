@@ -478,3 +478,41 @@ def test_the_simulated_host_rejects_properties_the_ova_does_not_declare(tmp_path
                 progress=lambda f, m: None,
             )
         )
+
+
+def test_capture_a_profile_from_a_deployed_appliance(tmp_path: Path, idrac9: dict[str, Any]) -> None:
+    """Read an existing deployment to make the next one easy: the OVA is matched by the VM's settings."""
+    esxi = SimulatedEsxi(ESXI1)
+    _fake_ova(tmp_path / "isos")
+    with _app(tmp_path, idrac9, esxi) as api:
+        host = _host(api)
+        api.put(f"/api/v1/hosts/{host}/os", json={"address": "192.0.2.101", "password": "esxi-pw"})
+        image = next(i for i in api.post("/api/v1/images/rescan").json() if i["kind"] == "ova")
+        params = {"image_id": image["id"], "vm_name": "router-a", "datastore": "localHolodeck",
+                  "values": {"ip": "192.0.2.150", "gateway": "192.0.2.1", "webtop_enabled": False},
+                  "secrets": {"password": "Holo-pass1!"},
+                  "networks": dict.fromkeys(("VM Management Network", "Trunk Portgroup for Site A",
+                                             "Trunk Portgroup for Site B"), "VM Network")}  # fmt: skip
+        deployed = api.post(f"/api/v1/hosts/{host}/tasks/appliance.deploy", json={"params": params}).json()
+        assert _wait(api, deployed["id"])["status"] == "succeeded"
+
+        capture = {"params": {"vm_name": "router-a", "name": "from-router-a"}}
+        job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/appliance.capture", json=capture).json()["id"])
+        assert job["status"] == "succeeded", job
+        assert job["result"]["passwords_not_copied"] == ["network.password"]
+        profile = api.get(f"/api/v1/appliance-profiles/{job['result']['profile_id']}").json()
+        assert profile["product"] == "HoloRouter" and profile["image_id"] == image["id"]
+        assert profile["source"].startswith("captured from router-a")
+        assert (
+            profile["values"]["network.ip"] == "192.0.2.150"
+            and profile["values"]["extra.webtop_enabled"] is False
+        )
+        assert profile["secrets_set"] == []  # passwords are never copied out of a VM
+        assert profile["networks"]["VM Management Network"] == "VM Network"
+        assert "Holo-pass1!" not in json.dumps(job)
+
+        again = api.post(f"/api/v1/hosts/{host}/tasks/appliance.capture", json=capture)
+        assert again.status_code == 409  # the name is taken
+        missing = {"params": {"vm_name": "nope", "name": "x"}}
+        job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/appliance.capture", json=missing).json()["id"])
+        assert job["status"] == "failed" and "No VM named nope" in job["error"]["message"]

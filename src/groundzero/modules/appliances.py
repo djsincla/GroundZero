@@ -22,8 +22,8 @@ from groundzero.isos import Image
 from groundzero.modules.base import OS_ACCESS, Deps, Inputs, Module, Prepared, Stage
 from groundzero.modules.outputs import ApplianceDeployment, HostPrep
 from groundzero.osconfig import OsConfigError
-from groundzero.ova.descriptor import OvfDescriptor, environment_values, read_ova_descriptor
-from groundzero.ova.profiles import check_values
+from groundzero.ova.descriptor import DescriptorError, OvfDescriptor, environment_values, read_ova_descriptor
+from groundzero.ova.profiles import ApplianceProfileWrite, check_values
 
 VM_NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$"
 _IP_KEYS = ("ip", "ip0", "ip_address", "ipaddress", "mgmt_ip", "management_ip")
@@ -259,3 +259,105 @@ class ApplianceDeploy(Module):
             return {"appliance": output.model_dump(mode="json")}
 
         return Prepared(run, params.model_dump(exclude={"secrets"}) | {"datastore": plan.datastore})
+
+
+def match_ova(deps: Deps, env: dict[str, str]) -> tuple[Image, OvfDescriptor] | None:
+    """The repository OVA whose properties best explain a VM's OVF settings (newest wins a tie)."""
+    best: tuple[float, tuple[str, str], Image, OvfDescriptor] | None = None
+    for image in deps.isos.list():
+        if image.kind != "ova":
+            continue
+        resolved = deps.isos.resolve(image.id)
+        if resolved is None:
+            continue
+        try:
+            desc = read_ova_descriptor(resolved[1])
+        except DescriptorError:
+            continue
+        declared = {p.qualified_key for p in desc.properties}
+        if not declared or not env:
+            continue
+        known = len(set(env) & declared) / len(set(env))  # how much of the VM's settings this OVA declares
+        if known < 0.9:
+            continue
+        rank = (known, (image.version or "", image.build or ""))
+        if best is None or rank > (best[0], best[1]):
+            best = (known, rank[1], image, desc)
+    return (best[2], best[3]) if best else None
+
+
+class CaptureParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    vm_name: str = Field(description="A VM on the host (one you deployed, or one GroundZero did)")
+    name: str = Field(min_length=1, max_length=80, description="Name for the new appliance profile")
+    image_id: str | None = Field(
+        default=None, description="The OVA it came from; default: matched by the VM's OVF settings"
+    )
+
+
+class ApplianceCapture(Module):
+    id = "appliance.capture"
+    title = "Capture appliance profile"
+    stage = Stage.APPLIANCES
+    description = "Read a VM's OVF settings and networks (read-only) and save them as an appliance profile."
+    requires = (OS_ACCESS,)
+    optional = True
+    Params = CaptureParams
+
+    def prepare(
+        self, deps: Deps, host: Host, params: CaptureParams, inputs: Inputs, confirm: str | None
+    ) -> Prepared:
+        from groundzero.core.services import ConflictError  # avoid an import cycle
+
+        if deps.store.find_appliance_profile_by_name(params.name):
+            raise ConflictError(f"An appliance profile named '{params.name}' already exists")
+        access, password = deps.os_access(host.id)
+        chosen = resolve_image(deps, params.image_id) if params.image_id else None
+
+        async def run(ctx: JobContext) -> dict[str, Any]:
+            ctx.plan([("read", f"Read {params.vm_name}"), ("save", "Save the profile")])
+            async with ctx.step("read", f"Read {params.vm_name}") as step:
+                target = await asyncio.to_thread(deps.os_target, host.id, access)
+                vm = await deps.esxi.read_vm(target, password, params.vm_name)
+                step.message = f"{len(vm.ovf_env)} OVF settings, {len(vm.nics)} network adapters"
+            async with ctx.step("save", "Save the profile") as step:
+                if chosen is not None:
+                    image, desc = chosen[0], read_ova_descriptor(chosen[1])
+                else:
+                    if not vm.ovf_env:
+                        raise OsConfigError(
+                            f"{params.vm_name} has no OVF settings to read; choose its OVA (params.image_id)"
+                        )
+                    found = match_ova(deps, vm.ovf_env)
+                    if found is None:
+                        raise OsConfigError(
+                            f"No OVA in the image repository declares {params.vm_name}'s settings; "
+                            "add its OVA and rescan, or choose one (params.image_id)"
+                        )
+                    image, desc = found
+                by_key = {p.qualified_key: p for p in desc.properties}
+                # The values a person sets; passwords are never copied (set them on the profile).
+                values = {
+                    k: v
+                    for k, v in vm.ovf_env.items()
+                    if k in by_key and by_key[k].user_configurable and not by_key[k].password and v != ""
+                }
+                networks = {
+                    n.name: nic.portgroup
+                    for n, nic in zip(desc.networks, vm.nics, strict=False)
+                    if nic.portgroup
+                }
+                profile = deps.save_appliance_profile(
+                    ApplianceProfileWrite(
+                        name=params.name, image_id=image.id, values=values, networks=networks
+                    ),
+                    source=f"captured from {params.vm_name} on {host.name}",
+                )
+                skipped = sorted(k for k, p in by_key.items() if p.password and vm.ovf_env.get(k))
+                step.message = f"{profile.name}: {len(values)} values, {len(networks)} networks" + (
+                    f"; passwords not copied ({', '.join(skipped)})" if skipped else ""
+                )
+            return {"profile_id": profile.id, "product": profile.product, "passwords_not_copied": skipped}
+
+        return Prepared(run, params.model_dump())

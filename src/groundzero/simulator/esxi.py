@@ -34,6 +34,7 @@ from groundzero.esxi.models import (
 )
 from groundzero.esxi.ovf import OvaDeployResult
 from groundzero.esxi.reader import EsxiError
+from groundzero.esxi.vms import VmInfo, VmNic, VmSummary
 
 
 def _read_iso_file(iso_bytes: bytes, path: str) -> str:
@@ -287,6 +288,36 @@ class SimulatedEsxi:
             vm_name=vm_name, created=True, powered_on=True, uploaded_bytes=size, replaced=replaced
         )
 
+    async def list_vms(self, access: OsAccess, password: str) -> list[VmSummary]:
+        self._reachable(access.address)
+        return [
+            VmSummary(name=n, power_state="poweredOn", guest_ip=_guest_ip(vm))
+            for n, vm in sorted(self.vms.items())
+        ]
+
+    async def read_vm(self, access: OsAccess, password: str, name: str) -> VmInfo:
+        self._reachable(access.address)
+        vm = self.vms.get(name)
+        if vm is None:
+            raise EsxiError(f"No VM named {name} on {access.address}")
+        ip = _guest_ip(vm)
+        return VmInfo(
+            name=name,
+            power_state="poweredOn",
+            guest_ip=ip,
+            guest_ips=[ip] if ip else [],
+            tools_running=True,
+            cpus=vm.get("cpus", 2),
+            memory_mb=vm.get("memory_mb", 4096),
+            datastore=vm["datastore"],
+            vmx_path=f"[{vm['datastore']}] {name}/{name}.vmx",
+            nics=[
+                VmNic(label=f"Network adapter {i + 1}", portgroup=pg, connected=True)
+                for i, pg in enumerate(vm["networks"].values())
+            ],
+            ovf_env=dict(vm["properties"]),
+        )
+
     def _reachable(self, address: str) -> None:
         if self.unreachable or self.about is None:
             raise EsxiError(f"Cannot connect to ESXi at {address}: simulated host is not answering")
@@ -368,3 +399,13 @@ class SimulatedEsxi:
         self.about = EsxiAbout(product=f"VMware ESXi {version}", version=version, build=build)
         self.installs += 1
         self.unreachable = False
+
+
+def _guest_ip(vm: dict[str, Any]) -> str | None:
+    """What VMware Tools would report: the appliance's configured IP, if it has one."""
+    for key, value in vm.get("properties", {}).items():
+        parts = key.split(".")
+        name = parts[1] if len(parts) == 3 else parts[-1]  # network.ip, vami.ip0.<instance>
+        if name in ("ip", "ip0") and value:
+            return str(value)
+    return None

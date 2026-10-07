@@ -14,10 +14,11 @@ from pydantic import BaseModel
 from groundzero.core import diagnostics
 from groundzero.core.models import OsAccess
 from groundzero.core.tls import pinned_context
-from groundzero.esxi import jumbo, ovf, writer
+from groundzero.esxi import jumbo, ovf, vms, writer
 from groundzero.esxi.models import ChangeRecord, EsxiAbout, EsxiNetworkConfig, EsxiStorage, JumboResult
 from groundzero.esxi.ovf import OvaDeployResult
 from groundzero.esxi.reader import EsxiError, connect_host, probe_about, read_network, read_storage
+from groundzero.esxi.vms import VmInfo, VmSummary
 
 
 class EsxiOps(Protocol):
@@ -60,6 +61,14 @@ class EsxiOps(Protocol):
         replace: bool = False,
     ) -> OvaDeployResult:
         """Deploy (or find) a VM from an OVA, powered on."""
+        ...
+
+    async def list_vms(self, access: OsAccess, password: str) -> list[VmSummary]:
+        """The VMs on the host (name, power state, guest IP)."""
+        ...
+
+    async def read_vm(self, access: OsAccess, password: str, name: str) -> VmInfo:
+        """One VM's layout and the OVF settings it was deployed with."""
         ...
 
 
@@ -196,6 +205,30 @@ class LiveEsxiOps:
                 )
 
         return await _traced("deploy_ova", access.address, asyncio.to_thread(run))
+
+    async def list_vms(self, access: OsAccess, password: str) -> list[VmSummary]:
+        diagnostics.add_secret(password)
+
+        def run() -> list[VmSummary]:
+            with connect_host(
+                access.address, access.username, password, access.verify_tls, _pin(access)
+            ) as host:
+                return vms.list_vms(host)
+
+        return await _traced("list_vms", access.address, asyncio.to_thread(run))
+
+    async def read_vm(self, access: OsAccess, password: str, name: str) -> VmInfo:
+        diagnostics.add_secret(password)
+
+        def run() -> VmInfo:
+            pem = _pin(access)
+            ctx = pinned_context(pem) if pem else _insecure_context()
+            with connect_host(access.address, access.username, password, access.verify_tls, pem) as host:
+                info = vms.read_vm(host, access.address, access.username, password, ctx, name)
+            diagnostics.add_secret(*[v for k, v in info.ovf_env.items() if "password" in k.lower()])
+            return info
+
+        return await _traced("read_vm", access.address, asyncio.to_thread(run))
 
     async def verify_jumbo(
         self,
