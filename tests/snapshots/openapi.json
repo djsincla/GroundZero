@@ -1568,6 +1568,7 @@
           "os",
           "readiness",
           "prep",
+          "appliances",
           "holodeck"
         ],
         "title": "Stage",

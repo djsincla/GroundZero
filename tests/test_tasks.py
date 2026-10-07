@@ -52,7 +52,7 @@ def test_a_new_host_starts_with_preflight() -> None:
     assert _state(p, "host.prep") == "blocked"
     assert _state(p, "holodeck.router") == "blocked"
     assert _state(p, "holodeck.stage") == "planned"
-    assert [s.id for s in p.stages] == ["hardware", "os", "readiness", "prep", "holodeck"]
+    assert [s.id for s in p.stages] == ["hardware", "os", "readiness", "prep", "appliances", "holodeck"]
 
 
 def test_without_os_access_the_next_step_is_deploying_an_os() -> None:

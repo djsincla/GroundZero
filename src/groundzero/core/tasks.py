@@ -28,6 +28,7 @@ class Stage(StrEnum):
     OS = "os"
     READINESS = "readiness"
     PREP = "prep"
+    APPLIANCES = "appliances"
     HOLODECK = "holodeck"
 
 
@@ -36,6 +37,7 @@ STAGE_TITLES = {
     Stage.OS: "Operating system",
     Stage.READINESS: "Holodeck readiness",
     Stage.PREP: "Host preparation",
+    Stage.APPLIANCES: "Appliances",
     Stage.HOLODECK: "Holodeck",
 }
 
@@ -70,6 +72,7 @@ OUTPUT_TITLES = {
     "host_prep": "Host preparation",
     "jumbo": "Jumbo-frame result",
     "holorouter": "Holorouter",
+    "appliance": "Appliance",
     "staged": "Staged binaries",
     "holodeck": "Holodeck",
     OS_ACCESS: "OS access",

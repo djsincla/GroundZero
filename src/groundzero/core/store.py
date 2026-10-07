@@ -546,6 +546,11 @@ class Store:
             json.loads(row["data"]), row["job_id"], datetime.fromisoformat(row["created_at"]), row["epoch"]
         )
 
+    def output_kinds(self, host_id: str) -> list[str]:
+        with self._tx() as cur:
+            rows = cur.execute("SELECT DISTINCT kind FROM results WHERE host_id = ?", (host_id,)).fetchall()
+        return [r["kind"] for r in rows]
+
     def os_epoch(self, host_id: str) -> int:
         with self._tx() as cur:
             row = cur.execute("SELECT os_epoch FROM hosts WHERE id = ?", (host_id,)).fetchone()

@@ -2,25 +2,31 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from groundzero.core.jobs import JobContext
 from groundzero.core.models import Host
+from groundzero.modules.appliances import deploy_appliance, plan_appliance, resolve_image
 from groundzero.modules.base import Deps, Inputs, Module, Prepared, Stage
 from groundzero.modules.outputs import HolorouterDeployment, HostPrep
 from groundzero.osconfig import OsConfigError
-from groundzero.osconfig.holodeck import HolodeckHostValues, HolodeckPlugin, HolodeckSettings
+from groundzero.osconfig.holodeck import HolodeckHostValues, HolodeckPlugin
 from groundzero.readiness import ReadinessReport
 
 
 class HolorouterParams(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    config_set_id: str = Field(default="", description="Holodeck config set (GET /config-sets)")
-    reapply: bool = Field(default=False, description="Power-cycle an existing VM to write its settings again")
+    profile_id: str = Field(default="", description="HoloRouter appliance profile (GET /appliance-profiles)")
+    image_id: str | None = Field(
+        default=None, description="Holorouter OVA; default: the newest in the repository"
+    )
+    values: dict[str, Any] = Field(default_factory=dict, description="Overrides of the profile's values")
+    replace: bool = Field(
+        default=False, description='Delete an existing Holorouter VM first (confirm "replace <vm>")'
+    )
 
 
 class Holorouter(Module):
@@ -39,87 +45,66 @@ class Holorouter(Module):
     def prepare(
         self, deps: Deps, host: Host, params: HolorouterParams, inputs: Inputs, confirm: str | None
     ) -> Prepared:
-        """Deploy the Holorouter OVA on the prepared datastore and port groups, then wait for SSH."""
-        from groundzero.core.services import ConflictError, NotFoundError
+        """The Holorouter is an appliance deployment with Holodeck's networks and this host's IP."""
+        from groundzero.core.services import ConfirmationError, ConflictError, NotFoundError  # import cycle
 
-        access, password = deps.os_access(host.id)
-        if not params.config_set_id:
-            raise OsConfigError("Choose a Holodeck config set (params.config_set_id)")
-        config_set = deps.get_config_set(params.config_set_id)
-        if config_set.os_family != HolodeckPlugin.family:
-            raise OsConfigError(f"{config_set.name} is not a Holodeck config set")
+        deps.os_access(host.id)
+        if not params.profile_id:
+            raise OsConfigError("Choose a HoloRouter appliance profile (params.profile_id)")
         stored_values = deps.store.get_host_values(host.id, HolodeckPlugin.family)
         if stored_values is None:
             raise OsConfigError("Set this host's Holodeck values first (Holorouter IP, instance ID)")
-        settings = HolodeckSettings.model_validate(config_set.settings)
         values = HolodeckHostValues.model_validate(stored_values)
-        secrets = deps.config_set_secrets(config_set.id)
-        if not secrets.get("holorouter_password"):
-            raise OsConfigError(f"Set the Holorouter password in config set {config_set.name}")
+        vm_name = f"{values.instance_id}-holorouter"
+        if params.replace and confirm != f"replace {vm_name}":
+            raise ConfirmationError(
+                f'Replacing deletes the Holorouter first: confirm with exactly "replace {vm_name}"'
+            )
         readiness = inputs.require("readiness", ReadinessReport, "Assess Holodeck readiness first")
         if not readiness.ready:
             raise ConflictError("The host is not ready for Holodeck yet; see the readiness report")
         prep = inputs.get("host_prep", HostPrep)
         if prep is None or not prep.trunk_portgroup or not prep.external_portgroup:
             raise ConflictError("Prepare host must have created the trunk and external port groups")
-        datastore = prep.datastore or readiness.storage.datastore
-        images = [i for i in deps.isos.list() if i.os_family == "holorouter"]
-        if not images:
-            raise NotFoundError(f"No Holorouter OVA in the image repository ({deps.settings.iso_dir})")
-        image = max(images, key=lambda i: (i.version or "", i.build or ""))
-        resolved = deps.isos.resolve(image.id)
-        assert resolved is not None
-        ova = resolved[1]
-        bools = {True: "True", False: "False"}
-        properties = {
-            "hostname": values.holorouter_hostname,
-            "password": secrets["holorouter_password"],
-            "ip": values.holorouter_ip,
-            "mask": str(settings.holorouter_prefix),
-            "gateway": settings.holorouter_gateway,
-            "dns_server": settings.holorouter_dns,
-            "ntp_server": settings.holorouter_ntp,
-            **({"dns_domain": settings.holorouter_dns_domain} if settings.holorouter_dns_domain else {}),
-            "ssh_enabled": "True",
-            "webtop_enabled": bools[settings.webtop],
-            "gitops_enabled": bools[settings.gitops],
-        }
-        networks = {
-            "VM Management Network": prep.external_portgroup,
-            "Trunk Portgroup for Site A": prep.trunk_portgroup,
-            "Trunk Portgroup for Site B": prep.trunk_portgroup,
-        }
-        vm_name = f"{values.instance_id}-holorouter"
+        if params.image_id:
+            image, path = resolve_image(deps, params.image_id)
+        else:
+            images = [i for i in deps.isos.list() if i.os_family == "holorouter"]
+            if not images:
+                raise NotFoundError(f"No Holorouter OVA in the image repository ({deps.settings.iso_dir})")
+            image, path = resolve_image(deps, max(images, key=lambda i: (i.version or "", i.build or "")).id)
+        plan = plan_appliance(
+            deps,
+            inputs,
+            image=image,
+            path=path,
+            vm_name=vm_name,
+            profile_id=params.profile_id,
+            # this host's Holorouter: its own IP and hostname; SSH on, so GroundZero can reach it
+            values={
+                "network.ip": values.holorouter_ip,
+                "network.hostname": values.holorouter_hostname,
+                "extra.ssh_enabled": True,
+                **params.values,
+            },
+            secrets={},
+            networks={
+                "VM Management Network": prep.external_portgroup,
+                "Trunk Portgroup for Site A": prep.trunk_portgroup,
+                "Trunk Portgroup for Site B": prep.trunk_portgroup,
+            },
+            datastore=prep.datastore or readiness.storage.datastore,
+            address=values.holorouter_ip,
+        )
+        if "network.password" not in plan.properties or not plan.properties["network.password"]:
+            raise OsConfigError("The HoloRouter profile has no password; set it in the profile")
+        webtop = plan.properties.get("extra.webtop_enabled", "").lower() == "true"
 
         async def run(ctx: JobContext) -> dict[str, Any]:
             ctx.plan(
                 [("deploy", f"Deploy {image.filename}"), ("ssh", "Wait for the Holorouter to answer on SSH")]
             )
-            loop = asyncio.get_running_loop()
-
-            def progress(fraction: float, message: str) -> None:  # called from the upload thread
-                loop.call_soon_threadsafe(ctx.progress, fraction, message)
-
-            target = await asyncio.to_thread(deps.os_target, host.id, access)
-            async with ctx.step("deploy", f"Deploy {image.filename}") as step:
-                result = await deps.esxi.deploy_ova(
-                    target,
-                    password,
-                    ova,
-                    vm_name=vm_name,
-                    datastore=datastore or "",
-                    networks=networks,
-                    properties=properties,
-                    progress=progress,
-                    reapply=params.reapply,
-                )
-                step.message = (
-                    f"uploaded {result.uploaded_bytes / 1e9:.2f} GB in {result.seconds / 60:.0f} min"
-                    if result.created
-                    else result.message
-                )
-                if not result.settings_applied:
-                    raise OsConfigError(result.message)
+            result = await deploy_appliance(deps, host, ctx, plan, replace=params.replace)
             async with ctx.step("ssh", "Wait for the Holorouter to answer on SSH") as step:
                 await deps.wait_for_port(values.holorouter_ip, 22, minutes=20, ctx=ctx)
                 step.message = f"{values.holorouter_ip}:22 answers"
@@ -129,11 +114,11 @@ class Holorouter(Module):
                 hostname=values.holorouter_hostname,
                 version=image.version,
                 image=image.filename,
-                config_set_id=config_set.id,
-                datastore=datastore,
-                networks=networks,
+                profile_id=params.profile_id,
+                datastore=plan.datastore,
+                networks=plan.networks,
                 created=result.created,
-                webtop_url=f"http://{values.holorouter_ip}:30000" if settings.webtop else None,
+                webtop_url=f"http://{values.holorouter_ip}:30000" if webtop else None,
             )
             deps.save_output(host.id, "holorouter", ctx.job.id, output)
             return {"holorouter": output.model_dump(mode="json")}
@@ -141,10 +126,10 @@ class Holorouter(Module):
         return Prepared(
             run,
             {
-                "config_set_id": config_set.id,
+                "profile_id": params.profile_id,
                 "vm_name": vm_name,
                 "image": image.filename,
-                "reapply": params.reapply,
+                "replace": params.replace,
             },
         )
 

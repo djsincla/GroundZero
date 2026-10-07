@@ -46,6 +46,7 @@ from groundzero.modules.outputs import OUTPUTS
 from groundzero.modules.prep import current_jumbo
 from groundzero.osconfig import PLUGINS, OsConfigError, plugin_for
 from groundzero.osconfig.esxi import EsxiPlugin
+from groundzero.osconfig.holodeck import HolodeckPlugin
 from groundzero.ova.descriptor import OvfDescriptor, descriptor_schema, read_ova_descriptor
 from groundzero.ova.profiles import ApplianceProfile, ApplianceProfileWrite, check_values
 from groundzero.preflight.evaluate import PreflightReport, load_profile
@@ -161,6 +162,57 @@ class Services:
         settings.ensure_home()
         self.isos = IsoRepository(settings.iso_dir, settings.home / "iso-cache.json")
         self.esxi: EsxiOps = esxi or self.sim_esxi or LiveEsxiOps()
+        self._migrate_holorouter_settings()
+
+    def _migrate_holorouter_settings(self) -> None:
+        """Holodeck config sets used to hold the Holorouter's settings; they now live in a HoloRouter
+        appliance profile. Each old set is turned into "<set>-holorouter" once (password included) and
+        the moved keys are dropped from the set. Idempotent."""
+        moved = {
+            "holorouter_prefix": "network.mask",
+            "holorouter_gateway": "network.gateway",
+            "holorouter_dns": "network.dns_server",
+            "holorouter_dns_domain": "network.dns_domain",
+            "holorouter_ntp": "network.ntp_server",
+            "webtop": "extra.webtop_enabled",
+            "gitops": "extra.gitops_enabled",
+        }
+        for config_set in self.store.list_config_sets():
+            if config_set.os_family != HolodeckPlugin.family or not set(moved) & set(config_set.settings):
+                continue
+            values: dict[str, Any] = {"extra.ssh_enabled": True}
+            for old, key in moved.items():
+                value = config_set.settings.get(old)
+                if value is not None and value != "":
+                    values[key] = str(value) if old == "holorouter_prefix" else value
+            secrets = self.config_set_secrets(config_set.id)
+            password = secrets.get("holorouter_password")
+            name = f"{config_set.name}-holorouter"
+            if self.store.find_appliance_profile_by_name(name) is None:
+                self.store.save_appliance_profile(
+                    profile_id=None,
+                    name=name,
+                    product="HoloRouter",
+                    image_id=None,
+                    values=values,
+                    networks={},
+                    source=f"migrated from config set {config_set.name}",
+                    secrets=self._seal_all({"network.password": password}) if password else None,
+                    secret_names=["network.password"] if password else [],
+                )
+                logger.info(
+                    "Moved the Holorouter settings of config set %s to profile %s", config_set.name, name
+                )
+            kept = {k: v for k, v in config_set.settings.items() if k not in moved}
+            rest = {k: v for k, v in secrets.items() if k != "holorouter_password"}
+            self.store.update_config_set(
+                config_set.id,
+                name=config_set.name,
+                settings=kept,
+                secrets=self._seal_all(rest) if rest else None,
+                secret_names=sorted(rest),
+                keep_secrets=False,
+            )
 
     # ── hosts ────────────────────────────────────────────────────────────
     def add_host(self, req: HostCreate) -> Host:
@@ -435,7 +487,11 @@ class Services:
         self.get_host(host_id)
         epoch = self.store.os_epoch(host_id)
         found = []
-        for kind in sorted({t.produces for t in catalog() if t.produces} | set(OUTPUTS)):
+        for kind in sorted(
+            {t.produces for t in catalog() if t.produces}
+            | set(OUTPUTS)
+            | set(self.store.output_kinds(host_id))
+        ):
             meta = self.store.latest_output(host_id=host_id, kind=kind)
             if meta is not None:
                 found.append(
@@ -478,7 +534,7 @@ class Services:
     def save_output(self, host_id: str, kind: str, job_id: str, output: BaseModel | dict[str, Any]) -> None:
         """Store a module's output, checked against the output registry so the next module can read it."""
         data = output.model_dump(mode="json") if isinstance(output, BaseModel) else output
-        model = OUTPUTS.get(kind)
+        model = OUTPUTS.get(kind.split(":", 1)[0])  # "appliance:<vm>" is an appliance output
         if model is not None:
             model.model_validate(data)  # an output that doesn't match its type is a bug, not bad input
         self.store.save_result(host_id=host_id, kind=kind, job_id=job_id, data=data)

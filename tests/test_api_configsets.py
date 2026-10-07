@@ -206,28 +206,32 @@ def test_isos_are_listed_after_a_restart_without_a_rescan(api: TestClient) -> No
     assert "VMware-VMvisor-Installer-9.1.1.0.25714478.x86_64.iso" in names
 
 
-HOLODECK = {"holorouter_gateway": "192.0.2.1", "holorouter_dns": "8.8.8.8"}
+HOLODECK = {"version": "9.1.1.0", "vsan_mode": "ESA"}
 
 
 def test_holodeck_settings_are_a_config_set_family_with_named_secrets(api: TestClient) -> None:
     fam = next(f for f in api.get("/api/v1/os-families").json() if f["family"] == "holodeck")
     assert fam["install_supported"] is False
-    assert fam["secret_fields"] == ["holorouter_password", "download_token", "offline_depot_password"]
-    assert {"version", "depot_type", "holorouter_gateway"} <= set(fam["settings_schema"]["properties"])
+    assert fam["secret_fields"] == ["download_token", "offline_depot_password"]
+    props = set(fam["settings_schema"]["properties"])
+    assert {
+        "version",
+        "depot_type",
+    } <= props and "holorouter_gateway" not in props  # now a HoloRouter profile
     assert set(fam["host_values_schema"]["required"]) == {"holorouter_ip"}
 
     body = {"name": "lab-holodeck", "os_family": "holodeck", "settings": HOLODECK,
-            "secrets": {"holorouter_password": "Holo-pass1!", "download_token": "tok-123456"}}  # fmt: skip
+            "secrets": {"download_token": "tok-123456"}}  # fmt: skip
     created = api.post("/api/v1/config-sets", json=body)
     assert created.status_code == 201, created.text
     cs = created.json()
-    assert cs["secrets_set"] == ["download_token", "holorouter_password"]
+    assert cs["secrets_set"] == ["download_token"]
     assert cs["settings"]["version"] == "9.1.1.0" and cs["settings"]["management_only"] is True
 
     # Updating one secret keeps the others; values never come back
     upd = api.put(f"/api/v1/config-sets/{cs['id']}",
                   json={**body, "secrets": {"offline_depot_password": "depot-pw"}})  # fmt: skip
-    assert upd.json()["secrets_set"] == ["download_token", "holorouter_password", "offline_depot_password"]
+    assert upd.json()["secrets_set"] == ["download_token", "offline_depot_password"]
     for resp in (created, upd, api.get(f"/api/v1/config-sets/{cs['id']}"), api.get("/api/v1/config-sets")):
         assert (
             "Holo-pass1!" not in resp.text and "tok-123456" not in resp.text and "depot-pw" not in resp.text
@@ -377,3 +381,46 @@ def test_appliance_profiles_are_checked_against_the_ova(api: TestClient) -> None
     assert api.post("/api/v1/appliance-profiles", json=body).status_code == 409  # duplicate name
     assert api.delete(f"/api/v1/appliance-profiles/{p['id']}").status_code == 204
     assert api.get(f"/api/v1/appliance-profiles/{p['id']}").status_code == 404
+
+
+def test_holorouter_settings_move_from_old_config_sets_to_a_profile(tmp_path: Path) -> None:
+    """Upgrade path: a Holodeck config set that still holds the Holorouter's settings and password
+    becomes "<set>-holorouter" (a HoloRouter appliance profile) on startup, exactly once."""
+    settings = Settings(home=tmp_path / "home", api_token=TOKEN, iso_repository=tmp_path / "isos")
+    old = {
+        "version": "9.1.1.0",
+        "holorouter_prefix": 24,
+        "holorouter_gateway": "192.0.2.1",
+        "holorouter_dns": "192.0.2.53",
+        "holorouter_ntp": "pool.ntp.org",
+        "webtop": True,
+        "gitops": False,
+    }
+    with TestClient(create_app(settings, esxi=SimulatedEsxi(ESXI1))) as client:
+        services = client.app.state.services  # type: ignore[attr-defined]
+        sealed = services._seal_all({"holorouter_password": "Holo-pass1!", "download_token": "tok-123456"})
+        cs = services.store.add_config_set(
+            name="lab-holodeck",
+            os_family="holodeck",
+            settings=old,
+            secrets=sealed,
+            secret_names=["download_token", "holorouter_password"],
+            source="manual",
+        )
+    for _ in range(2):  # restart twice: the second start finds nothing left to move
+        with TestClient(create_app(settings, esxi=SimulatedEsxi(ESXI1))) as client:
+            client.headers["Authorization"] = f"Bearer {TOKEN}"
+            profiles = client.get("/api/v1/appliance-profiles").json()
+            assert [p["name"] for p in profiles] == ["lab-holodeck-holorouter"]
+            moved = profiles[0]
+            assert moved["product"] == "HoloRouter" and moved["secrets_set"] == ["network.password"]
+            assert moved["values"] == {
+                "extra.ssh_enabled": True, "network.mask": "24", "network.gateway": "192.0.2.1",
+                "network.dns_server": "192.0.2.53", "network.ntp_server": "pool.ntp.org",
+                "extra.webtop_enabled": True, "extra.gitops_enabled": False,
+            }  # fmt: skip
+            services = client.app.state.services  # type: ignore[attr-defined]
+            assert services.appliance_profile_secrets(moved["id"]) == {"network.password": "Holo-pass1!"}
+            left = client.get(f"/api/v1/config-sets/{cs.id}").json()
+            assert left["settings"] == {"version": "9.1.1.0"} and left["secrets_set"] == ["download_token"]
+            assert services.config_set_secrets(cs.id) == {"download_token": "tok-123456"}

@@ -1,9 +1,9 @@
 """Holodeck settings as a config-set family: everything a Holodeck deployment needs, filled in the UI.
 
 Not an OS installer (``install_supported`` is False). The shared settings describe the Holodeck
-deployment and the Holorouter's network; per-server values hold the instance ID and the Holorouter's
-own IP. Secrets (Holorouter password, Broadcom download token, offline depot password) are encrypted
-and never returned.
+deployment; per-server values hold the instance ID and the Holorouter's own IP and hostname (its other
+settings are a HoloRouter appliance profile). Secrets (Broadcom download token, offline depot password)
+are encrypted and never returned.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import ipaddress
 from pathlib import Path
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from groundzero.osconfig.base import IsoMeta
 
@@ -23,7 +23,13 @@ def _ipv4(value: str) -> str:
 
 
 class HolodeckSettings(BaseModel):
-    """A Holodeck deployment (shared, reusable across hosts)."""
+    """A Holodeck deployment (shared, reusable across hosts).
+
+    The Holorouter's own settings (gateway, DNS, NTP, password, Webtop, GitOps) live in a HoloRouter
+    appliance profile; older config sets that still carry them are migrated on startup.
+    """
+
+    model_config = ConfigDict(extra="ignore")
 
     version: str = Field(
         default="9.1.1.0",
@@ -59,32 +65,6 @@ class HolodeckSettings(BaseModel):
         description="Default 10 (site A uses 16 consecutive VLANs)",
     )
     dns_domain: str | None = Field(default=None, title="Nested DNS domain", description="Default vcf.lab")
-    holorouter_prefix: int = Field(
-        default=24,
-        ge=8,
-        le=30,
-        title="Holorouter network prefix",
-        description="CIDR prefix of the Holorouter's management network",
-    )
-    holorouter_gateway: str = Field(title="Holorouter gateway")
-    holorouter_dns: str = Field(title="Holorouter DNS server")
-    holorouter_dns_domain: str | None = Field(
-        default=None,
-        title="Holorouter DNS domain",
-        description="Optional; Holodeck's documentation uses site-a.vcf.lab",
-    )
-    holorouter_ntp: str = Field(default="pool.ntp.org", title="Holorouter NTP server")
-    webtop: bool = Field(default=True, title="Webtop UI", description="Browser desktop on the Holorouter")
-    gitops: bool = Field(
-        default=False,
-        title="GitOps (GitLab)",
-        description="Installs GitLab on the Holorouter (uses extra resources)",
-    )
-
-    @field_validator("holorouter_gateway")
-    @classmethod
-    def _gw(cls, v: str) -> str:
-        return _ipv4(v)
 
     @field_validator("cidr")
     @classmethod
@@ -123,7 +103,6 @@ class HolodeckPlugin:
     settings_model: ClassVar[type[BaseModel]] = HolodeckSettings
     host_values_model: ClassVar[type[BaseModel]] = HolodeckHostValues
     secret_fields: ClassVar[tuple[str, ...]] = (
-        "holorouter_password",
         "download_token",
         "offline_depot_password",
     )

@@ -109,6 +109,7 @@ function runTask(ctx, task) {
   if (task.id === "os.reimage") { location.hash = `#/hosts/${id}/deploy?mode=keep`; return; }
   if (task.id === "os.capture") { captureDialog(host); return; }
   if (task.id === "holodeck.router") { holorouterDialog(ctx); return; }
+  if (task.id === "appliance.deploy") { applianceDialog(ctx); return; }
   startJob("POST", `/hosts/${id}/tasks/${task.id}`, {}, { onDone: refresh });
 }
 
@@ -138,7 +139,7 @@ function lastRun(ctx, last) {
 }
 
 // Tasks whose parameters have their own screens (the install wizard, capture, prep, Holorouter dialogs).
-const CUSTOM_RUN = new Set(["os.custom", "os.reimage", "os.capture", "host.prep", "holodeck.router"]);
+const CUSTOM_RUN = new Set(["os.custom", "os.reimage", "os.capture", "host.prep", "holodeck.router", "appliance.deploy"]);
 
 function optionsButton(ctx, task) {
   const props = Object.keys(task.params_schema?.properties || {});
@@ -286,39 +287,59 @@ function readinessTab(ctx) {
   ];
 }
 
-// Deploy Holorouter: pick the Holodeck config set and this host's values (all editable here).
+// A typed confirmation that only appears (and is only required) when "replace" is ticked.
+function replaceControl(vmName) {
+  const box = h("input", { type: "checkbox", id: "rep-box" });
+  const phrase = () => `replace ${vmName()}`;
+  const label = h("label", { for: "rep-confirm" });
+  const input = h("input", { id: "rep-confirm", autocomplete: "off" });
+  const wrap = h("div", { hidden: true, "data-role": "replace-confirm" }, label, input);
+  const sync = () => { wrap.hidden = !box.checked; label.textContent = `Type "${phrase()}" to confirm`; };
+  box.addEventListener("change", sync);
+  return {
+    el: h("div", {}, h("label", { class: "inline danger-text", for: "rep-box" }, box,
+      "Replace an existing VM of this name (it is deleted and deployed fresh; appliances apply their settings on first boot only)"), wrap),
+    checked: () => box.checked,
+    confirm: () => (box.checked ? input.value : null),
+    sync,
+  };
+}
+
+// Deploy Holorouter: a HoloRouter appliance profile plus this host's own values (IP, hostname).
 async function holorouterDialog(ctx) {
   const { id, host } = ctx;
-  const [families, sets, stored, isos] = await Promise.all([
-    api("GET", "/os-families"), api("GET", "/config-sets"), maybe(api("GET", `/hosts/${id}/host-values/holodeck`)),
+  const [families, profiles, stored, images] = await Promise.all([
+    api("GET", "/os-families"), api("GET", "/appliance-profiles"), maybe(api("GET", `/hosts/${id}/host-values/holodeck`)),
     api("GET", "/images"),
   ]);
   const holodeck = families.find((f) => f.family === "holodeck");
-  const choices = sets.filter((s) => s.os_family === "holodeck");
-  const image = isos.filter((i) => i.os_family === "holorouter").sort((a, b) => (b.version || "").localeCompare(a.version || ""))[0];
+  const choices = profiles.filter((p) => p.product === "HoloRouter");
+  const image = images.filter((i) => i.os_family === "holorouter").sort((a, b) => (b.version || "").localeCompare(a.version || ""))[0];
   if (!choices.length || !image) {
     openDialog("Deploy Holorouter", [h("p", {}, !image
       ? "Put the Holorouter OVA in the image repository first (Images page)."
-      : "Create a Holodeck config set first (Config sets → New, family VMware Holodeck).")],
+      : "Create a HoloRouter appliance profile first (Config sets → New appliance profile).")],
       { submitLabel: "OK", onSubmit: async () => {} });
     return;
   }
-  const select = h("select", { id: "hr-set" }, choices.map((s) => h("option", { value: s.id }, s.name)));
+  const select = h("select", { id: "hr-profile" }, choices.map((p) => h("option", { value: p.id }, p.name)));
   const values = schemaForm(holodeck.host_values_schema, stored || {}, { idPrefix: "hr", where: "host_values" });
   const missing = h("p", { class: "notice" });
   const check = () => {
-    const s = choices.find((c) => c.id === select.value);
-    const gaps = ["holorouter_password"].filter((k) => !(s.secrets_set || []).includes(k));
-    missing.hidden = !gaps.length;
-    missing.replaceChildren("This config set has no Holorouter password yet. ",
-      h("a", { href: `#/config-sets/${s.id}` }, "Set it in the config set"), ".");
+    const p = choices.find((c) => c.id === select.value);
+    missing.hidden = p.secrets_set.includes("network.password");
+    missing.replaceChildren("This profile has no Holorouter password yet. ",
+      h("a", { href: `#/appliance-profiles/${p.id}` }, "Set it in the profile"), ".");
   };
   select.addEventListener("change", check);
   check();
+  const vmName = () => `${values.value().instance_id || "holo1"}-holorouter`;
+  const replace = replaceControl(vmName);
+  values.el.addEventListener("input", replace.sync);
   openDialog(`Deploy the Holorouter on ${host.name}`, [
     h("p", { class: "muted" }, `Image: ${image.filename} (${fmtBytes(image.size)}). It is uploaded from this machine to the host; over a VPN this can take hours (SSL mode is much faster than IPsec, see Info).`),
-    h("label", { for: "hr-set" }, "Holodeck config set"), select, missing,
-    h("h3", {}, "This host"), values.el,
+    h("label", { for: "hr-profile" }, "HoloRouter profile"), select, missing,
+    h("h3", {}, "This host"), values.el, replace.el,
   ], {
     submitLabel: "Deploy", wide: true,
     onSubmit: async () => {
@@ -329,10 +350,114 @@ async function holorouterDialog(ctx) {
         if (e.problem?.errors && values.setErrors(e.problem.errors)) throw new Error("Fix the highlighted values.");
         throw e;
       }
-      const job = await api("POST", `/hosts/${id}/tasks/holodeck.router`, { params: { config_set_id: select.value } });
+      const job = await api("POST", `/hosts/${id}/tasks/holodeck.router`,
+        { params: { profile_id: select.value, replace: replace.checked() }, confirm: replace.confirm() });
       showJobDrawer(job, { title: `Deploy the Holorouter on ${host.name}`, onDone: refresh });
     },
   });
+  replace.sync();
+}
+
+// Deploy any OVA: image → profile → VM name, datastore, networks and value overrides (form from the OVA).
+async function applianceDialog(ctx) {
+  const { id, host } = ctx;
+  const [images, profiles, network, storage] = await Promise.all([
+    api("GET", "/images"), api("GET", "/appliance-profiles"),
+    maybe(api("GET", `/hosts/${id}/outputs/os_network`)), maybe(api("GET", `/hosts/${id}/outputs/os_storage`)),
+  ]);
+  const ovas = images.filter((i) => i.kind === "ova");
+  if (!ovas.length) {
+    openDialog("Deploy appliance", [h("p", {}, "Put an OVA in the image repository first (Images page).")],
+      { submitLabel: "OK", onSubmit: async () => {} });
+    return;
+  }
+  const portgroups = (network?.portgroups || []).map((p) => p.name).sort();
+  const datastores = (storage?.datastores || []).filter((d) => d.type === "VMFS");
+  const imageSelect = h("select", { id: "ad-image" }, ovas.map((i) =>
+    h("option", { value: i.id }, `${i.product || i.filename} ${i.version || ""}`)));
+  const profileSelect = h("select", { id: "ad-profile" });
+  const vm = h("input", { id: "ad-vm", required: true, autocomplete: "off" });
+  const ds = datastores.length
+    ? h("select", { id: "ad-ds" }, datastores.map((d) => h("option", { value: d.name },
+        `${d.name} (${Math.round(d.free_gb || 0).toLocaleString()} GB free)`)))
+    : h("input", { id: "ad-ds", placeholder: "datastore name" });
+  const netSlot = h("div");
+  const formSlot = h("div");
+  let form = null;
+  let secretKeys = [];
+  let netInputs = {};
+  const replace = replaceControl(() => vm.value.trim());
+  vm.addEventListener("input", replace.sync);
+
+  async function load() {
+    const image = ovas.find((i) => i.id === imageSelect.value);
+    const mine = profiles.filter((p) => p.product === image.product);
+    profileSelect.replaceChildren(h("option", { value: "" }, mine.length ? "No profile: values below only" : "No profiles for this OVA"),
+      mine.map((p) => h("option", { value: p.id }, p.name)));
+    if (mine.length) profileSelect.value = mine[0].id;
+    if (!vm.value) vm.value = (image.product || "appliance").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    await render();
+  }
+  async function render() {
+    const info = await api("GET", `/images/${imageSelect.value}/descriptor`);
+    const profile = profiles.find((p) => p.id === profileSelect.value);
+    secretKeys = info.schema["x-secret-fields"] || [];
+    form = schemaForm(info.schema, profile?.values || {}, { idPrefix: "ad" });
+    for (const key of secretKeys) {
+      const input = form.el.querySelector(`[data-field="${CSS.escape(key)}"] input`);
+      if (input && profile?.secrets_set.includes(key)) input.placeholder = "from the profile: leave blank to keep";
+    }
+    formSlot.replaceChildren(h("h3", {}, "Values"), h("p", { class: "help" }, "Prefilled from the profile; what you change here applies to this deployment only."), form.el);
+    netInputs = {};
+    netSlot.replaceChildren(h("h3", {}, "Networks"), ...info.descriptor.networks.map((n) => {
+      const current = profile?.networks?.[n.name] || "";
+      const input = portgroups.length
+        ? h("select", { id: `ad-net-${n.name.replace(/\W/g, "-")}`, "data-network": n.name },
+            h("option", { value: "" }, "choose a port group"), portgroups.map((pg) => h("option", { value: pg, selected: pg === current }, pg)))
+        : h("input", { id: `ad-net-${n.name.replace(/\W/g, "-")}`, value: current, placeholder: "port group", "data-network": n.name });
+      netInputs[n.name] = input;
+      return h("div", { class: "field" }, h("label", { for: input.id }, n.name), input);
+    }));
+  }
+  imageSelect.addEventListener("change", load);
+  profileSelect.addEventListener("change", render);
+  await load();
+
+  openDialog(`Deploy an appliance on ${host.name}`, [
+    h("div", { class: "grid two" },
+      h("div", { class: "field" }, h("label", { for: "ad-image" }, "OVA"), imageSelect),
+      h("div", { class: "field" }, h("label", { for: "ad-profile" }, "Profile"), profileSelect),
+      h("div", { class: "field" }, h("label", { for: "ad-vm" }, "VM name"), vm),
+      h("div", { class: "field" }, h("label", { for: "ad-ds" }, "Datastore"), ds)),
+    netSlot, formSlot, replace.el,
+  ], {
+    submitLabel: "Deploy", wide: true,
+    onSubmit: async () => {
+      form.clearErrors();
+      const profile = profiles.find((p) => p.id === profileSelect.value);
+      const values = {};
+      const secrets = {};
+      for (const [k, v] of Object.entries(form.value())) {
+        if (secretKeys.includes(k)) { if (v) secrets[k] = v; continue; }
+        if (v === null || v === undefined || v === "") continue;
+        if (profile && JSON.stringify(profile.values[k]) === JSON.stringify(v)) continue;  // unchanged
+        values[k] = v;
+      }
+      const networks = Object.fromEntries(Object.entries(netInputs).map(([k, i]) => [k, i.value]).filter(([, v]) => v));
+      const params = { image_id: imageSelect.value, profile_id: profileSelect.value || null, vm_name: vm.value.trim(),
+        datastore: ds.value || null, values, secrets, networks, replace: replace.checked() };
+      try {
+        const job = await api("POST", `/hosts/${id}/tasks/appliance.deploy`, { params, confirm: replace.confirm() });
+        showJobDrawer(job, { title: `Deploy ${params.vm_name} on ${host.name}`, onDone: refresh });
+      } catch (e) {
+        const errors = (e.problem?.errors || []).filter((x) => x.loc[0] === "values")  // checked against the OVA
+          .map((x) => ({ ...x, loc: x.loc.slice(1) }));
+        if (errors.length) form.setErrors(errors);
+        throw e;
+      }
+    },
+  });
+  replace.sync();
 }
 
 // Confirm exactly what will change on the server; erasing a disk needs its typed phrase.

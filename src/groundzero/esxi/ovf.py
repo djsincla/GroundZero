@@ -2,7 +2,8 @@
 
 ImportVApp hands back an NFC lease with one upload URL per disk; each disk is streamed out of the OVA
 (a tar) without unpacking it, with progress reported to the lease so it does not expire. Idempotent:
-if a VM with the target name already exists it is left alone (and powered on).
+if a VM with the target name already exists it is left alone (and powered on), unless ``replace`` asks
+for it to be deleted and deployed fresh (appliances apply their settings on first boot only).
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ class OvaDeployResult(BaseModel):
     uploaded_bytes: int = 0
     seconds: float = 0.0
     settings_applied: bool = True
+    replaced: bool = False  # an existing VM of that name was deleted first
     message: str = ""
 
 
@@ -122,7 +124,7 @@ def deploy_ova(
     ssl_context: ssl.SSLContext,
     progress: Callable[[float, str], None] = lambda f, m: None,
     power_on: bool = True,
-    reapply: bool = False,
+    replace: bool = False,
 ) -> OvaDeployResult:
     """``networks`` maps the OVF network names to port groups; ``properties`` are OVF property values."""
     import pyVmomi
@@ -135,38 +137,35 @@ def deploy_ova(
     existing = next(
         (vm for vm in datacenter.vmFolder.childEntity if getattr(vm, "name", None) == vm_name), None
     )
-    if existing is not None:
-        on = existing.runtime.powerState == "poweredOn"
-        if has_ovf_environment(existing) and not reapply:
-            if power_on and not on:
-                _wait_task(existing.PowerOnVM_Task())
-            return OvaDeployResult(
-                vm_name=vm_name,
-                created=False,
-                powered_on=power_on or on,
-                message=f"{vm_name} already exists; left as is",
-            )
-        if on and not reapply:
-            return OvaDeployResult(
-                vm_name=vm_name,
-                created=False,
-                powered_on=True,
-                settings_applied=False,
-                message=f"{vm_name} is running without its settings; run again with reapply "
-                "(power-cycles it to apply them)",
-            )
-        if on:
-            progress(0.2, f"Powering off {vm_name} to apply its settings")
+    if existing is not None and replace:
+        # Appliances apply their OVF settings on first boot only: changing them means a fresh VM.
+        if existing.runtime.powerState == "poweredOn":
+            progress(0.02, f"Powering off {vm_name} to replace it")
             _wait_task(existing.PowerOffVM_Task())
-        inject_ovf_environment(existing, properties)
-        progress(0.5, f"Powering on {vm_name}")
-        _wait_task(existing.PowerOnVM_Task())
+        progress(0.04, f"Deleting {vm_name} to replace it")
+        _wait_task(existing.Destroy_Task())
+        replaced = True
+    elif existing is not None:
+        on = existing.runtime.powerState == "poweredOn"
+        if not has_ovf_environment(existing):
+            return OvaDeployResult(
+                vm_name=vm_name,
+                created=False,
+                powered_on=on,
+                settings_applied=False,
+                message=f"{vm_name} exists without its settings, and an appliance applies them only on first "
+                "boot; deploy again with replace to delete it and deploy it fresh",
+            )
+        if power_on and not on:
+            _wait_task(existing.PowerOnVM_Task())
         return OvaDeployResult(
             vm_name=vm_name,
             created=False,
-            powered_on=True,
-            message=f"{vm_name} existed; settings written and powered on",
+            powered_on=power_on or on,
+            message=f"{vm_name} already exists; left as is",
         )
+    else:
+        replaced = False
 
     ds = next((d for d in host.datastore if d.summary.name == datastore), None)
     if ds is None:
@@ -261,6 +260,7 @@ def deploy_ova(
         powered_on=power_on,
         uploaded_bytes=sent[0],
         seconds=round(time.monotonic() - started, 1),
+        replaced=replaced,
     )
 
 

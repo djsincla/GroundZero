@@ -135,16 +135,20 @@ Open the host's **Pipeline** tab and follow **Next step**:
 
 ## 8. Deploy the Holorouter
 
-1. Create a Holodeck config set (**Config sets → New**, family *VMware Holodeck*) with the Holorouter
-   gateway, DNS and password.
-2. On the Pipeline, run **Deploy Holorouter** and enter the Holorouter's IP.
+1. Create a HoloRouter appliance profile: **Config sets → New appliance profile**, choose the Holorouter
+   OVA, and fill in the gateway, DNS, NTP and password. The form comes from the OVA itself, so it shows
+   exactly the properties the Holorouter reads.
+2. On the Pipeline, run **Deploy Holorouter**, pick the profile and enter this host's Holorouter IP.
 
-GroundZero then:
-1. Uploads the OVA to the host's datastore.
-2. Sets the appliance's network properties.
-3. Powers it on and waits for SSH.
+GroundZero then uploads the OVA to the host's datastore, writes the appliance's properties, powers it on
+and waits for SSH.
 
-The Holorouter applies its settings on **first boot only**. To change them later, redeploy it.
+Be aware that the Holorouter applies its settings on first boot only, and quietly ignores any change after
+that. To change a deployed Holorouter, tick **Replace** and type the confirmation: it is deleted and
+deployed fresh, so anything you set up inside it by hand goes with it.
+
+The same applies to any other OVA through **Deploy appliance** in the Appliances stage: pick the OVA and
+a profile, map its networks to port groups, and override values for that one deployment.
 
 ## Troubleshooting
 

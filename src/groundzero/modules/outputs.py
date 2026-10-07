@@ -38,11 +38,30 @@ class HolorouterDeployment(BaseModel):
     hostname: str
     version: str | None = None
     image: str
-    config_set_id: str | None = None
+    profile_id: str | None = None
+    config_set_id: str | None = None  # deployments before appliance profiles
     datastore: str | None = None
     networks: dict[str, str] = {}
     created: bool = True
     webtop_url: str | None = None
+
+
+class ApplianceDeployment(BaseModel):
+    """A deployed appliance (any OVA). Saved as "appliance" (the latest) and "appliance:<vm name>"."""
+
+    model_config = ConfigDict(extra="allow")
+
+    vm_name: str
+    product: str | None = None
+    version: str | None = None
+    image: str
+    profile_id: str | None = None
+    ip: str | None = None
+    datastore: str | None = None
+    networks: dict[str, str] = {}
+    created: bool = True
+    replaced: bool = False
+    powered_on: bool = True
 
 
 OUTPUTS: dict[str, type[BaseModel]] = {
@@ -56,4 +75,5 @@ OUTPUTS: dict[str, type[BaseModel]] = {
     "host_prep": HostPrep,
     "jumbo": JumboResult,
     "holorouter": HolorouterDeployment,
+    "appliance": ApplianceDeployment,
 }

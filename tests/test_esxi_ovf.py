@@ -71,6 +71,9 @@ class FakeVm:
         self.runtime.powerState = "poweredOff"
         return self._task("off")
 
+    def Destroy_Task(self) -> Any:
+        return self._task("destroy")
+
     def ReconfigVM_Task(self, spec: Any) -> Any:
         self.config.extraConfig = list(spec.extraConfig)
         return self._task("reconfig")
@@ -90,7 +93,7 @@ def _deploy(monkeypatch: Any, vm: FakeVm, tmp_path: Path, **kw: Any) -> ovf.OvaD
 
     monkeypatch.setattr(pyVmomi.vim, "ServiceInstance", SI)
     return ovf.deploy_ova(
-        NS(_stub=None),
+        NS(_stub=None, datastore=[]),
         "esxi",
         _ova(tmp_path),
         vm_name=vm.name,
@@ -112,12 +115,18 @@ def test_a_running_vm_without_settings_is_reported_not_touched(monkeypatch: Any,
     """Regression (live): the Holorouter booted without IP; a re-run must say so, not pretend success."""
     vm = FakeVm("holo1-holorouter", on=True, env=False)
     result = _deploy(monkeypatch, vm, tmp_path)
-    assert not result.settings_applied and "reapply" in result.message and vm.calls == []
+    assert not result.settings_applied and "replace" in result.message and vm.calls == []
+    assert "first boot" in result.message  # why writing the settings again would not help
 
 
-def test_reapply_power_cycles_and_writes_the_settings(monkeypatch: Any, tmp_path: Path) -> None:
+def test_replace_deletes_the_vm_then_deploys_fresh(monkeypatch: Any, tmp_path: Path) -> None:
+    """Live finding: the Holorouter applies its OVF settings on first boot only, so a reapply did nothing."""
     vm = FakeVm("holo1-holorouter", on=True, env=False)
-    result = _deploy(monkeypatch, vm, tmp_path, reapply=True)
-    assert result.settings_applied and vm.calls == ["off", "reconfig", "on"]
-    env = next(o.value for o in vm.config.extraConfig if o.key == ovf.OVF_ENV_KEY)
+    with pytest.raises(ovf.EsxiError, match="Datastore ds not found"):  # this fake host has no datastores:
+        _deploy(monkeypatch, vm, tmp_path, replace=True)  # reaching that check means it went on to create
+    assert vm.calls == ["off", "destroy"]
+
+
+def test_the_guest_receives_qualified_keys() -> None:
+    env = ovf.ovf_environment(ovf.qualify_properties(DESCRIPTOR, {"ip": "192.0.2.150"}))
     assert 'oe:key="network.ip" oe:value="192.0.2.150"' in env  # qualified, as the guest reads it

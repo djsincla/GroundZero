@@ -278,13 +278,15 @@ def test_a_switch_dropping_jumbo_frames_fails_the_check(tmp_path: Path, idrac9: 
 
 
 def _fake_ova(isos: Path, name: str = "holorouter-9.1.1.0456.ova") -> None:
+    """The Holorouter OVA with its real (trimmed) descriptor: the simulator rejects undeclared properties."""
     import tarfile
 
     isos.mkdir(parents=True, exist_ok=True)
-    ovf = isos.parent / name.replace(".ova", ".ovf")
-    ovf.write_text("<Envelope><ProductSection><Product>HoloRouter</Product></ProductSection></Envelope>")
     with tarfile.open(isos / name, "w") as tar:
-        tar.add(ovf, arcname=ovf.name)
+        tar.add(
+            Path(__file__).parent / "fixtures" / "ova" / "holorouter-9.1.1.ovf",
+            arcname=name.replace(".ova", ".ovf"),
+        )
 
 
 def test_deploy_holorouter_after_prep(tmp_path: Path, idrac9: dict[str, Any]) -> None:
@@ -292,15 +294,15 @@ def test_deploy_holorouter_after_prep(tmp_path: Path, idrac9: dict[str, Any]) ->
     _fake_ova(tmp_path / "isos")
     with _app(tmp_path, idrac9, esxi) as api:
         host = _assessed(api)
-        settings = {"holorouter_gateway": "192.0.2.1", "holorouter_dns": "8.8.8.8"}
-        cs = api.post(
-            "/api/v1/config-sets", json={"name": "lab-holo", "os_family": "holodeck", "settings": settings}
-        ).json()
+        image = next(i for i in api.post("/api/v1/images/rescan").json() if i["os_family"] == "holorouter")
+        profile = {"name": "lab-router", "image_id": image["id"],
+                   "values": {"mask": "24", "gateway": "192.0.2.1", "dns_server": "192.0.2.53"}}  # fmt: skip
+        created = api.post("/api/v1/appliance-profiles", json=profile).json()
 
-        def run() -> Any:
+        def run(**params: Any) -> Any:
             return api.post(
                 f"/api/v1/hosts/{host}/tasks/holodeck.router",
-                json={"params": {"config_set_id": cs["id"]}},
+                json={"params": {"profile_id": created["id"], **params.pop("p", {})}, **params},
             )
 
         assert run().status_code == 409  # readiness/prep first (pipeline inputs)
@@ -309,34 +311,18 @@ def test_deploy_holorouter_after_prep(tmp_path: Path, idrac9: dict[str, Any]) ->
             for a in api.get(f"/api/v1/hosts/{host}/outputs/readiness").json()["plan"]
             if a["task"] == "host.prep"
         ]
-        prep = _wait(
-            api,
-            api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={"params": {"checks": checks}}).json()[
-                "id"
-            ],
-        )
-        assert prep["status"] == "succeeded"
-        assert (
-            _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/net.verify_jumbo", json={}).json()["id"])[
-                "status"
-            ]
-            == "succeeded"
-        )
+        prep = api.post(f"/api/v1/hosts/{host}/tasks/host.prep", json={"params": {"checks": checks}}).json()
+        assert _wait(api, prep["id"])["status"] == "succeeded"
+        jumbo = api.post(f"/api/v1/hosts/{host}/tasks/net.verify_jumbo", json={}).json()
+        assert _wait(api, jumbo["id"])["status"] == "succeeded"
 
         no_values = run()
         assert no_values.status_code == 422 and "Holodeck values" in no_values.json()["detail"]
         api.put(f"/api/v1/hosts/{host}/host-values/holodeck", json={"holorouter_ip": "192.0.2.150"})
         no_password = run()
-        assert no_password.status_code == 422 and "Holorouter password" in no_password.json()["detail"]
-        api.put(
-            f"/api/v1/config-sets/{cs['id']}",
-            json={
-                "name": "lab-holo",
-                "os_family": "holodeck",
-                "settings": settings,
-                "secrets": {"holorouter_password": "Holo-pass1!"},
-            },
-        )
+        assert no_password.status_code == 422 and "no password" in no_password.json()["detail"]
+        api.put(f"/api/v1/appliance-profiles/{created['id']}",
+                json={**profile, "secrets": {"password": "Holo-pass1!"}})  # fmt: skip
 
         job = _wait(api, run().json()["id"])
         assert job["status"] == "succeeded", job
@@ -348,14 +334,12 @@ def test_deploy_holorouter_after_prep(tmp_path: Path, idrac9: dict[str, Any]) ->
             "Trunk Portgroup for Site A": vm["networks"]["Trunk Portgroup for Site A"],
             "Trunk Portgroup for Site B": vm["networks"]["Trunk Portgroup for Site A"],
         }
-        props = vm["properties"]
-        assert (props["ip"], props["mask"], props["gateway"], props["dns_server"]) == (
-            "192.0.2.150",
-            "24",
-            "192.0.2.1",
-            "8.8.8.8",
-        )
-        assert props["ssh_enabled"] == "True" and props["password"] == "Holo-pass1!"
+        props = vm["properties"]  # as the guest reads them: qualified, every declared property present
+        assert (props["network.ip"], props["network.mask"], props["network.gateway"]) == (
+            "192.0.2.150", "24", "192.0.2.1")  # fmt: skip
+        assert props["network.hostname"] == "holorouter"  # this host's value, from its Holodeck values
+        assert props["extra.ssh_enabled"] == "True" and props["network.password"] == "Holo-pass1!"
+        assert props["extra.webtop_enabled"] == "true"  # not in the profile: the OVA's default
         assert (
             "Holo-pass1!" not in json.dumps(job)
             and "Holo-pass1!" not in api.get(f"/api/v1/jobs/{job['id']}/diagnostics").text
@@ -368,6 +352,14 @@ def test_deploy_holorouter_after_prep(tmp_path: Path, idrac9: dict[str, Any]) ->
         )
         again = _wait(api, run().json()["id"])  # idempotent: the VM exists
         assert again["status"] == "succeeded" and again["steps"][0]["message"].endswith("left as is")
+
+        # Changing a deployed Holorouter means a fresh VM (it applies settings on first boot only)
+        unconfirmed = run(p={"replace": True, "values": {"network.gateway": "192.0.2.254"}})
+        assert unconfirmed.status_code == 422 and "replace holo1-holorouter" in unconfirmed.json()["detail"]
+        replaced = _wait(api, run(p={"replace": True, "values": {"network.gateway": "192.0.2.254"}},
+                                  confirm="replace holo1-holorouter").json()["id"])  # fmt: skip
+        assert replaced["status"] == "succeeded" and replaced["steps"][0]["message"].startswith("replaced")
+        assert esxi.vms["holo1-holorouter"]["properties"]["network.gateway"] == "192.0.2.254"
 
 
 def test_pipeline_shows_what_each_task_uses_and_feeds(api: TestClient) -> None:
@@ -390,3 +382,99 @@ def test_pipeline_shows_what_each_task_uses_and_feeds(api: TestClient) -> None:
     assert kinds == {"preflight", "inventory"}  # preflight also saved the inventory
     assert api.get(f"/api/v1/hosts/{host}/outputs/inventory").json()["system"]["model"] == "PowerEdge R740xd"
     assert api.get(f"/api/v1/hosts/{host}/outputs/nope").status_code == 404
+
+
+def test_deploy_any_appliance_from_a_profile(tmp_path: Path, idrac9: dict[str, Any]) -> None:
+    import tarfile
+
+    esxi = SimulatedEsxi(ESXI1)
+    repo = tmp_path / "isos"
+    repo.mkdir(parents=True, exist_ok=True)
+    name = "VCF-SDDC-Manager-Appliance-9.1.1.0.25713928.ova"
+    with tarfile.open(repo / name, "w") as tar:
+        tar.add(
+            Path(__file__).parent / "fixtures" / "ova" / "sddc-manager-9.1.1.ovf", arcname=name[:-4] + ".ovf"
+        )
+    with _app(tmp_path, idrac9, esxi) as api:
+        host = _host(api)
+        api.put(f"/api/v1/hosts/{host}/os", json={"address": "192.0.2.101", "password": "esxi-pw"})
+        image = next(i for i in api.post("/api/v1/images/rescan").json() if i["kind"] == "ova")
+        profile = api.post("/api/v1/appliance-profiles", json={
+            "name": "lab-sddc", "image_id": image["id"],
+            "values": {"vami.hostname": "sddc-manager", "ip0": "192.0.2.20", "netmask0": "255.255.255.0"},
+            "secrets": {"ROOT_PASSWORD": "Example-pass-15chars"},
+        }).json()  # fmt: skip
+
+        def deploy(confirm: str | None = None, **params: Any) -> Any:
+            body = {
+                "params": {
+                    "image_id": image["id"],
+                    "profile_id": profile["id"],
+                    "vm_name": "sddc-manager",
+                    "datastore": "localHolodeck",
+                    **params,
+                }
+            }
+            return api.post(f"/api/v1/hosts/{host}/tasks/appliance.deploy", json={**body, "confirm": confirm})
+
+        unmapped = deploy(values={"bogus": "1"})
+        assert unmapped.status_code == 422
+        assert {tuple(e["loc"]) for e in unmapped.json()["errors"]} == {
+            ("values", "bogus"),
+            ("networks", "Network 1"),
+        }
+        assert api.get("/api/v1/jobs").json() == []  # nothing queued
+
+        job = _wait(api, deploy(networks={"Network 1": "VM Network"}).json()["id"])
+        assert job["status"] == "succeeded", job
+        assert "Example-pass-15chars" not in json.dumps(job)  # passwords never land on the job
+        vm = esxi.vms["sddc-manager"]
+        assert (
+            vm["properties"]["vami.ip0.SDDC-Manager"] == "192.0.2.20"
+        )  # instance-qualified, as the guest reads it
+        assert vm["properties"]["ROOT_PASSWORD"] == "Example-pass-15chars"
+        assert vm["properties"]["vami.ip_address_version.SDDC-Manager"] == "IPv4"  # the OVA's default
+        out = api.get(f"/api/v1/hosts/{host}/outputs/appliance:sddc-manager").json()
+        assert (out["product"], out["ip"], out["datastore"]) == (
+            "VMware VCF SDDC Manager Appliance",
+            "192.0.2.20",
+            "localHolodeck",
+        )
+        assert "appliance:sddc-manager" in {
+            o["kind"] for o in api.get(f"/api/v1/hosts/{host}/outputs").json()
+        }
+
+        again = deploy(networks={"Network 1": "VM Network"}, replace=True)
+        assert again.status_code == 422 and 'exactly "replace sddc-manager"' in again.json()["detail"]
+        replaced = _wait(
+            api,
+            deploy("replace sddc-manager", networks={"Network 1": "VM Network"}, replace=True).json()["id"],
+        )
+        assert replaced["status"] == "succeeded" and replaced["result"]["appliance"]["replaced"] is True
+
+
+def test_the_simulated_host_rejects_properties_the_ova_does_not_declare(tmp_path: Path) -> None:
+    """Like a real appliance: an undeclared key would be ignored by the guest, so it is an error."""
+    import asyncio
+    import tarfile
+
+    from groundzero.core.models import OsAccess
+    from groundzero.esxi.reader import EsxiError
+
+    ova = tmp_path / "holorouter.ova"
+    with tarfile.open(ova, "w") as tar:
+        tar.add(Path(__file__).parent / "fixtures" / "ova" / "holorouter-9.1.1.ovf", arcname="holorouter.ovf")
+    esxi = SimulatedEsxi(ESXI1)
+    with pytest.raises(EsxiError, match="declares no property bogus"):
+        asyncio.run(
+            esxi.deploy_ova(
+                OsAccess(address="192.0.2.101", username="root", verify_tls=False),
+                "pw",
+                ova,
+                vm_name="x",
+                datastore="localHolodeck",
+                networks={},
+                properties={"bogus": "1"},
+                progress=lambda f, m: None,
+            )
+        )

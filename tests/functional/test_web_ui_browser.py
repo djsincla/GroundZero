@@ -483,13 +483,17 @@ def test_readiness_report_shows_checks_storage_and_planned_fixes(
     expect(plan).to_contain_text("Nothing to fix")
 
 
+def _ova(gz: GroundZero, fixture: str, filename: str) -> None:
+    (gz.home / "isos").mkdir(exist_ok=True)
+    with tarfile.open(gz.home / "isos" / filename, "w") as tar:
+        tar.add(
+            Path(__file__).resolve().parents[1] / "fixtures" / "ova" / fixture, arcname=filename[:-4] + ".ovf"
+        )
+
+
 def test_deploy_holorouter_from_the_pipeline(page: Page, simulated_r740xd: GroundZero) -> None:
     gz = simulated_r740xd
-    ovf = gz.home / "holorouter-9.1.1.0456.ovf"
-    ovf.write_text("<Envelope><ProductSection><Product>HoloRouter</Product></ProductSection></Envelope>")
-    (gz.home / "isos").mkdir(exist_ok=True)
-    with tarfile.open(gz.home / "isos" / "holorouter-9.1.1.0456.ova", "w") as tar:
-        tar.add(ovf, arcname=ovf.name)
+    _ova(gz, "holorouter-9.1.1.ovf", "holorouter-9.1.1.0456.ova")
     _host_with_os(gz)
     for task in ("preflight", "vcf.readiness", "host.assess"):
         assert gz.cli("run", "esxi1", task, timeout=120).code == 0
@@ -505,17 +509,10 @@ def test_deploy_holorouter_from_the_pipeline(page: Page, simulated_r740xd: Groun
         assert api.get(f"/api/v1/jobs/{job['id']}").json()["status"] == "succeeded"
     assert gz.cli("run", "esxi1", "net.verify_jumbo", timeout=120).code == 0
     with gz.api() as api:
-        settings = {"holorouter_gateway": "192.0.2.1", "holorouter_dns": "8.8.8.8"}
-        api.post(
-            "/api/v1/config-sets",
-            json={
-                "name": "lab-holo",
-                "os_family": "holodeck",
-                "settings": settings,
-                "secrets": {"holorouter_password": "Holo-pass1!"},
-            },
-        )
-        api.post("/api/v1/images/rescan")
+        image = next(i for i in api.post("/api/v1/images/rescan").json() if i["kind"] == "ova")
+        profile = {"name": "lab-router", "image_id": image["id"], "secrets": {"password": "Holo-pass1!"},
+                   "values": {"mask": "24", "gateway": "192.0.2.1", "dns_server": "192.0.2.53"}}  # fmt: skip
+        assert api.post("/api/v1/appliance-profiles", json=profile).status_code == 201
 
     _open(page, gz)
     page.get_by_role("link", name="esxi1").click()
@@ -523,6 +520,7 @@ def test_deploy_holorouter_from_the_pipeline(page: Page, simulated_r740xd: Groun
     nxt.get_by_role("button", name="Deploy Holorouter").click()
     dialog = page.locator("dialog")
     expect(dialog).to_contain_text("holorouter-9.1.1.0456.ova")
+    expect(dialog.get_by_label("HoloRouter profile")).to_have_value(re.compile(r"\w+"))
     dialog.get_by_label("Holorouter IP").fill("192.0.2.150")
     dialog.get_by_role("button", name="Deploy").click()
     drawer = page.locator("#drawer")
@@ -637,3 +635,36 @@ def test_appliance_profile_form_comes_from_the_ova(page: Page, simulated_r740xd:
         "placeholder", "stored: leave blank to keep"
     )
     expect(page.get_by_label("VM Management Network")).to_have_value("Holodeck-External")
+
+
+def test_deploy_any_appliance_from_the_pipeline(page: Page, simulated_r740xd: GroundZero) -> None:
+    gz = simulated_r740xd
+    _ova(gz, "sddc-manager-9.1.1.ovf", "VCF-SDDC-Manager-Appliance-9.1.1.0.25713928.ova")
+    _host_with_os(gz)
+    assert gz.cli("run", "esxi1", "os.read", timeout=120).code == 0  # the host's port groups and datastores
+    with gz.api() as api:
+        api.post("/api/v1/images/rescan")
+    _open(page, gz)
+    page.get_by_role("link", name="esxi1").click()
+    page.locator('[data-task="appliance.deploy"]').get_by_role("button", name="Run").click()
+    dialog = page.locator("dialog")
+    expect(dialog.get_by_label("VM name")).to_have_value("vmware-vcf-sddc-manager-appliance")
+    dialog.get_by_label("VM name").fill("sddc-manager")
+    dialog.get_by_label("Network 1", exact=True).select_option("VM Network")  # read from the host
+    expect(dialog.locator('fieldset[data-group="Networking Configuration"]')).to_be_visible()
+    dialog.locator('[data-field="vami.ip0.SDDC-Manager"] input').fill("192.0.2.20")
+    dialog.locator('[data-field="ROOT_PASSWORD"] input').fill("short")
+    dialog.get_by_role("button", name="Deploy").click()
+    password = dialog.locator('[data-field="ROOT_PASSWORD"] input')  # MinLen(15) from the OVA: the browser
+    assert password.evaluate("el => el.validity.tooShort")  # blocks the submit (the API checks it too)
+    expect(page.locator("#drawer")).to_be_hidden()
+    dialog.locator('[data-field="ROOT_PASSWORD"] input').fill("Example-pass-15chars")
+    dialog.get_by_role("button", name="Deploy").click()
+    drawer = page.locator("#drawer")
+    expect(drawer.locator('[data-step="deploy"]')).to_have_attribute(
+        "data-status", "succeeded", timeout=20_000
+    )
+    page.reload()
+    expect(page.locator('[data-task="appliance.deploy"] [data-role="output"]')).to_contain_text(
+        "sddc-manager at 192.0.2.20"
+    )

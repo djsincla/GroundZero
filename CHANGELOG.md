@@ -19,6 +19,12 @@ Planned as 0.3.0: the modular pipeline and appliance (OVA) deployment.
   `groundzero images show`). Every declared property reaches the guest, with its default when unset.
 - **Appliance profiles:** saved values for an OVA (properties, network mapping, encrypted passwords),
   checked against the OVA's descriptor (`/appliance-profiles`, and an editor generated from the OVA).
+- **Deploy appliance:** a new Appliances stage deploys any OVA with a profile, per-deployment value
+  overrides, network mapping to the host's port groups, a datastore, and an optional wait for a TCP
+  port. Each deployment is saved as an `appliance:<vm>` output.
+- **Replace:** deletes an existing VM of the same name and deploys it fresh, confirmed with
+  `replace <vm>`. Appliances apply their OVF settings on first boot only, so this is the way to change
+  one. It replaces `reapply`, which did not work for that reason.
 
 ### Changed (API)
 - Work starts one way, `POST /hosts/{id}/tasks/{task}` (pipeline-gated). Results are read one way,
@@ -30,6 +36,11 @@ Planned as 0.3.0: the modular pipeline and appliance (OVA) deployment.
 - `/isos` is now `/images` (ISOs and OVAs); the CLI's `isos list` is now `images list`.
 - Jobs carry their task id (`task`); `kind` is gone.
 - VCF 9 readiness is optional.
+- The Holorouter's settings (gateway, DNS, NTP, password, Webtop, GitOps) moved from the Holodeck config
+  set to a HoloRouter appliance profile, and Deploy Holorouter takes `profile_id`. Existing config sets
+  are migrated on startup into a `<set>-holorouter` profile, password included.
+- The simulated ESXi host rejects OVF properties that the OVA does not declare, as the guest would ignore
+  them.
 
 ## [0.2.0] - 2026-10-06
 

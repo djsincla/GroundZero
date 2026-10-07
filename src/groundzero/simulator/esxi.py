@@ -19,6 +19,7 @@ from typing import Any
 import pycdlib
 
 from groundzero.core.models import OsAccess
+from groundzero.esxi import ovf
 from groundzero.esxi.models import (
     ChangeRecord,
     Datastore,
@@ -251,24 +252,22 @@ class SimulatedEsxi:
         networks: dict[str, str],
         properties: dict[str, str],
         progress: Callable[[float, str], None],
-        reapply: bool = False,
+        replace: bool = False,
     ) -> OvaDeployResult:
         self._reachable(access.address)
+        # Like the real host: the OVA's descriptor decides which properties exist (undeclared keys fail)
+        properties = ovf.qualify_properties(ovf.read_descriptor(ova)[0], properties)
+        replaced = False
         if vm_name in self.vms:
-            if reapply:
-                self.vms[vm_name]["properties"] = properties
+            if not replace:
                 return OvaDeployResult(
                     vm_name=vm_name,
                     created=False,
                     powered_on=True,
-                    message=f"{vm_name} existed; settings written and powered on",
+                    message=f"{vm_name} already exists; left as is",
                 )
-            return OvaDeployResult(
-                vm_name=vm_name,
-                created=False,
-                powered_on=True,
-                message=f"{vm_name} already exists; left as is",
-            )
+            del self.vms[vm_name]
+            replaced = True
         if not any(d.name == datastore for d in self.storage.datastores):
             raise EsxiError(f"Datastore {datastore} not found on the host")
         missing = sorted(
@@ -284,7 +283,9 @@ class SimulatedEsxi:
             "networks": networks,
             "properties": properties,
         }
-        return OvaDeployResult(vm_name=vm_name, created=True, powered_on=True, uploaded_bytes=size)
+        return OvaDeployResult(
+            vm_name=vm_name, created=True, powered_on=True, uploaded_bytes=size, replaced=replaced
+        )
 
     def _reachable(self, address: str) -> None:
         if self.unreachable or self.about is None:
