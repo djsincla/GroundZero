@@ -679,6 +679,17 @@ def config_delete(name: str) -> None:
     console.print(f"Deleted config set {escape(cs['name'])}")
 
 
+@app.command("hwreport", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def hwreport(ctx: typer.Context) -> None:
+    """A hardware report straight from BMCs, no server needed (the same as gz-hwreport; try --help there).
+
+    groundzero hwreport 192.0.2.5 192.0.2.6 -o reports
+    """
+    from groundzero.hwreport import main as hwreport_main
+
+    raise typer.Exit(hwreport_main(list(ctx.args)))
+
+
 # ── BIOS profiles ────────────────────────────────────────────────────────
 bios_app = typer.Typer(
     help="BIOS profiles: saved BIOS settings that Configure BIOS applies.", no_args_is_help=True

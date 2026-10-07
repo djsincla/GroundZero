@@ -176,6 +176,30 @@ pick *the Holorouter* as the role and the Holodeck steps will use yours.
 `.vmx` and saves them as a profile for the next deployment. Passwords are not copied out of a VM, so set
 them on the profile before you deploy from it.
 
+## Just want a hardware report?
+
+You don't need any of the above. Grab `gz-hwreport` for your platform from the
+[latest release](https://github.com/djsincla/GroundZero/releases/latest) and point it at a BMC:
+
+```sh
+chmod +x gz-hwreport-macos-arm64
+GZ_BMC_PASSWORD='...' ./gz-hwreport-macos-arm64 192.0.2.50
+```
+
+It reads the server over Redfish (read-only) and writes a folder with one HTML page and one JSON file per
+server: firmware versions, CPUs, memory modules, drives and RAID volumes, network adapters, PCIe devices,
+power supplies, BIOS and BMC. The page opens anywhere and prints to PDF.
+
+Give it several BMCs, or a file with one per line (`address` or `address username`), and it adds an
+`index.html` comparing them, with anything that differs highlighted. Handy for spotting the one host in a
+cluster that's a BIOS release behind.
+
+With GroundZero installed, `groundzero hwreport` is the same tool. Inside GroundZero itself every host
+has a **Report** button, and every cluster has one too.
+
+macOS will want you to allow the file the first time (System Settings → Privacy & Security). The file
+isn't signed.
+
 ## Troubleshooting
 
 | Symptom | What to check |

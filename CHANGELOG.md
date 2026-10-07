@@ -6,6 +6,13 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 ## [Unreleased]
 
 ### Added
+- **gz-hwreport:** a standalone hardware report, with nothing to set up. It reads one or more BMCs
+  over Redfish (read-only) and writes a self-contained HTML page and a JSON file per server.
+  - With several servers it adds a comparison page with differences highlighted.
+  - Each release has a single-file executable for Linux (x86_64, arm64), macOS (arm64) and Windows. No
+    Python needed.
+  - `groundzero hwreport` is the same tool inside GroundZero. See "Just want a hardware report?" in the
+    install guide.
 - **Full hardware inventory:** Discover hardware now also reads the following, and the Overview tab shows
   all of it:
   - every installed firmware version (BIOS, BMC, controllers, NICs, drives, power supplies, backplanes)

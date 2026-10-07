@@ -9,17 +9,12 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from groundzero.core.store import utcnow
-from groundzero.esxi.models import EsxiNetworkConfig
 from groundzero.inventory.models import HostInventory
-from groundzero.modules.base import Inputs
-from groundzero.modules.outputs import StorageReport
-from groundzero.readiness import ReadinessReport
 
 if TYPE_CHECKING:
     from groundzero.core.services import Services
@@ -74,7 +69,17 @@ class ClusterReport(BaseModel):
 
 
 # ── building ─────────────────────────────────────────────────────────────
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
 def host_report(services: Services, host_id: str) -> HostReport:
+    # Imported here so the standalone hardware report (groundzero.hwreport) stays light.
+    from groundzero.esxi.models import EsxiNetworkConfig
+    from groundzero.modules.base import Inputs
+    from groundzero.modules.outputs import StorageReport
+    from groundzero.readiness import ReadinessReport
+
     host = services.get_host(host_id)
     inputs = Inputs(services.store, host_id)
     inventory = inputs.get("inventory", HostInventory)

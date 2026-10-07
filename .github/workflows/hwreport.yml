@@ -1,0 +1,56 @@
+name: hwreport
+
+# Builds gz-hwreport, the standalone hardware report, as one executable per platform and attaches them to
+# the GitHub release. Runs when a release is published, or by hand (the files are then kept as artifacts).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: gz-hwreport-linux-x86_64
+          - os: ubuntu-24.04-arm
+            asset: gz-hwreport-linux-arm64
+          - os: macos-latest
+            asset: gz-hwreport-macos-arm64
+          - os: windows-latest
+            asset: gz-hwreport-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - name: Build
+        shell: bash
+        run: |
+          uv run pyinstaller --onefile --name gz-hwreport --collect-submodules groundzero.redfish \
+            --distpath dist --noconfirm --log-level WARN packaging/gz-hwreport.py
+          ext=""; [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
+          mv "dist/gz-hwreport$ext" "dist/${{ matrix.asset }}"
+      - name: Check it runs (a recorded R740xd, no network)
+        shell: bash
+        run: |
+          "dist/${{ matrix.asset }}" --version
+          "dist/${{ matrix.asset }}" --replay tests/fixtures/dell-r740xd 192.0.2.10 -o check
+          ls check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "dist/${{ matrix.asset }}" --clobber
