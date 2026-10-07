@@ -362,8 +362,8 @@ def hosts_trust(
 
 
 # ── pipeline and tasks ───────────────────────────────────────────────────
-_STATE_STYLE = {"done": "green", "running": "cyan", "failed": "red", "stale": "yellow", "blocked": "magenta",
-                "ready": "white", "planned": "dim"}  # fmt: skip
+_STATE_STYLE = {"done": "green", "not_needed": "green", "running": "cyan", "failed": "red", "stale": "yellow",
+                "blocked": "magenta", "ready": "white", "planned": "dim"}  # fmt: skip
 
 
 @app.command()
@@ -374,7 +374,8 @@ def pipeline(host: str) -> None:
     table = Table("Stage", "Task", "State", "Output / needs")
     for stage in p["stages"]:
         for i, t in enumerate(stage["tasks"]):
-            detail = t["output"]["summary"] if t["output"] else "; ".join(t["blocked_by"])
+            detail = (t["output"]["summary"] if t["output"]
+                      else t.get("not_needed") or "; ".join(t["blocked_by"]))  # fmt: skip
             table.add_row(
                 Text(stage["title"] if i == 0 else ""), Text(t["id"]),
                 Text(t["state"], style=_STATE_STYLE.get(t["state"], "")), Text(detail or ""),

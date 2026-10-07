@@ -54,6 +54,7 @@ class TaskSpec:
     requires: tuple[str, ...] = ()
     os_bound: bool = False  # the output describes the installed OS: stale after a reinstall
     optional: bool = False  # not on the recommended path (alternatives, utilities)
+    conditional: bool = False  # optional, but recommended once ready (the module knows when it is needed)
     destructive: bool = False
     available: bool = True  # False: designed, not implemented yet (shown as planned)
     uses: tuple[str, ...] = ()  # optional inputs: read when present, never blocking
@@ -107,6 +108,17 @@ def params_schema(task_id: str) -> dict[str, Any]:
     return module.params_schema() if module else {}
 
 
+def satisfied(task_id: str, outputs: dict[str, dict[str, Any]]) -> str | None:
+    """Why a task has nothing to do on this host (the module's own judgement), or None."""
+    from groundzero.modules import REGISTRY
+
+    module = REGISTRY.get(task_id)
+    try:
+        return module.satisfied(outputs) if module else None
+    except (KeyError, TypeError, AttributeError):
+        return None
+
+
 def summarize(task_id: str, kind: str, data: dict[str, Any]) -> str:
     """One line describing an output, for the pipeline view (the producing module's own wording)."""
     from groundzero.modules import REGISTRY
@@ -119,7 +131,7 @@ def summarize(task_id: str, kind: str, data: dict[str, Any]) -> str:
 
 
 # ── API models ───────────────────────────────────────────────────────────
-TaskStateName = Literal["done", "stale", "ready", "blocked", "running", "failed", "planned"]
+TaskStateName = Literal["done", "not_needed", "stale", "ready", "blocked", "running", "failed", "planned"]
 
 
 class TaskInfo(BaseModel):
@@ -130,6 +142,9 @@ class TaskInfo(BaseModel):
     produces: str | None
     requires: list[str]
     optional: bool
+    conditional: bool = Field(
+        default=False, description="Optional, but recommended once ready: needed only on some hosts"
+    )
     destructive: bool
     available: bool
     params_schema: dict[str, Any] = Field(
@@ -183,6 +198,9 @@ class TaskState(TaskInfo):
         default_factory=list, description="Later tasks that read this task's outputs"
     )
     blocked_by: list[str] = Field(default_factory=list)
+    not_needed: str | None = Field(
+        default=None, description="Why there is nothing to do (state not_needed), from the task's inputs"
+    )
     last_job: JobRef | None = None
     output: OutputInfo | None = None
 
@@ -223,6 +241,7 @@ def info(spec: TaskSpec, params_schema: dict[str, Any] | None = None) -> TaskInf
         produces=spec.produces,
         requires=list(spec.requires),
         optional=spec.optional,
+        conditional=spec.conditional,
         destructive=spec.destructive,
         available=spec.available,
         params_schema=params_schema or {},
@@ -252,6 +271,11 @@ def evaluate_pipeline(
     def fresh(spec: TaskSpec | None, meta: OutputMeta) -> bool:
         return not (spec and spec.os_bound) or meta.epoch >= os_epoch
 
+    current = {  # what modules judge "nothing to do" from: fresh outputs only
+        kind: meta.data
+        for kind, meta in outputs.items()
+        if meta is not None and fresh(producer_of.get(kind), meta)
+    }
     states: dict[str, TaskState] = {}
     for spec in specs:
         blocked: list[str] = []
@@ -315,12 +339,16 @@ def evaluate_pipeline(
             state = "blocked"
         else:
             state = "ready"
+        reason = satisfied(spec.id, current) if state == "ready" else None
+        if reason:
+            state = "not_needed"
         states[spec.id] = TaskState(
             **info(spec, params_schema(spec.id)).model_dump(),
             state=state,
             inputs=_inputs(spec, outputs, producer_of, fresh, has_os_access),
             feeds=_feeds(spec, specs),
             blocked_by=blocked,
+            not_needed=reason,
             last_job=ref,
             output=output,
         )
@@ -391,7 +419,8 @@ def _stage_state(tasks: list[TaskState]) -> TaskStateName:
     available = [t for t in tasks if t.available]
     if not available:
         return "planned"
-    core = [t for t in available if not t.optional]
+    # Conditional tasks count once they have something to do (a BIOS that needs changing).
+    core = [t for t in available if not t.optional or (t.conditional and t.state in ("ready", "failed"))]
     if not core:
         # Only alternatives/utilities (the OS stage): done once any of them has done its job. Runnable
         # alternatives such as a config-set deployment don't make an installed OS look unfinished.
@@ -412,7 +441,8 @@ def _next(specs: tuple[TaskSpec, ...], states: dict[str, TaskState], has_os_acce
         return NextStep(task=None, title=running[0].title, reason=f"{running[0].title} is running")
     for spec in specs:
         s = states[spec.id]
-        if spec.optional or not spec.available:
+        needed = spec.conditional and s.state in ("ready", "failed")
+        if (spec.optional and not needed) or not spec.available:
             continue
         if s.state == "ready":
             return NextStep(task=spec.id, title=spec.title, reason=spec.description)

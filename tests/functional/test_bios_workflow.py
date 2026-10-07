@@ -41,6 +41,30 @@ def _writes(gz: GroundZero, job_id: str) -> list[str]:
     return [f"{e['method']} {e['path']}" for e in writes if "Sessions" not in e.get("path", "")]
 
 
+def test_a_bios_that_is_already_right_is_marked_not_needed(simulated_r740xd: GroundZero) -> None:
+    gz = simulated_r740xd
+    assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+    assert gz.cli("run", "esxi1", "discover", timeout=120).code == 0
+    with gz.api() as api:
+        host = api.get("/api/v1/hosts").json()[0]["id"]
+        p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
+        bios = next(t for s in p["stages"] for t in s["tasks"] if t["id"] == "bios.configure")
+        assert bios["state"] == "not_needed" and bios["last_job"] is None  # judged from the inventory
+        assert bios["not_needed"].startswith("Already on: processor virtualization")
+        assert p["next"]["task"] == "preflight"
+        assert api.get(f"/api/v1/hosts/{host}/outputs/bios").status_code == 404  # nothing was recorded
+    shown = gz.cli("pipeline", "esxi1")
+    assert "not_needed" in shown.output and "Already on" in shown.output
+
+
+def test_configure_bios_is_next_after_discover_when_the_bios_is_wrong(wrong_bios: GroundZero) -> None:
+    gz = wrong_bios
+    assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+    assert gz.cli("run", "esxi1", "discover", timeout=120).code == 0
+    shown = gz.cli("pipeline", "esxi1")
+    assert "Next: Configure BIOS" in shown.output and "run esxi1 bios.configure" in shown.output
+
+
 def test_configure_bios_fixes_what_preflight_flagged(wrong_bios: GroundZero) -> None:
     gz = wrong_bios
     assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0

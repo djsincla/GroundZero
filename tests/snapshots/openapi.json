@@ -1746,6 +1746,7 @@
           "state": {
             "enum": [
               "done",
+              "not_needed",
               "stale",
               "ready",
               "blocked",
@@ -1801,6 +1802,12 @@
           },
           "available": {
             "title": "Available",
+            "type": "boolean"
+          },
+          "conditional": {
+            "default": false,
+            "description": "Optional, but recommended once ready: needed only on some hosts",
+            "title": "Conditional",
             "type": "boolean"
           },
           "description": {
@@ -1942,6 +1949,12 @@
             "title": "Blocked By",
             "type": "array"
           },
+          "conditional": {
+            "default": false,
+            "description": "Optional, but recommended once ready: needed only on some hosts",
+            "title": "Conditional",
+            "type": "boolean"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -1979,6 +1992,18 @@
                 "type": "null"
               }
             ]
+          },
+          "not_needed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why there is nothing to do (state not_needed), from the task's inputs",
+            "title": "Not Needed"
           },
           "optional": {
             "title": "Optional",
@@ -2024,6 +2049,7 @@
           "state": {
             "enum": [
               "done",
+              "not_needed",
               "stale",
               "ready",
               "blocked",

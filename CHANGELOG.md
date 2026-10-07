@@ -5,6 +5,15 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+### Changed
+- **Configure BIOS** now comes straight after Discover hardware, before Preflight, so Preflight passes the
+  first time.
+  - When the inventory shows the BIOS already right, the task is marked **not needed** (with what was
+    checked) and nothing is run or recorded. A later inventory showing a setting off makes it ready again.
+  - When a setting is off, Configure BIOS becomes the recommended next step.
+- **API:** a new task state `not_needed` with a `not_needed` reason, and a `conditional` flag on tasks that
+  are recommended only when needed.
+
 ## [0.6.0] - 2026-10-06
 
 Cluster mode: servers named after their BMC, addresses from a pool, and an optional DNS check.

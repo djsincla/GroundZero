@@ -13,9 +13,9 @@ from groundzero.modules.prep import Assess, Prep, VerifyJumbo
 
 MODULES: tuple[Module, ...] = (
     Discover(),
+    ConfigureBios(),  # before preflight, so preflight passes first time
     Preflight(),
     VcfReadiness(),
-    ConfigureBios(),
     OsReimage(),
     VerifyDns(),
     OsCustom(),

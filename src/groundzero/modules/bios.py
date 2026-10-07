@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from groundzero.core.jobs import JobContext
 from groundzero.core.models import Host
-from groundzero.inventory.models import HostInventory
+from groundzero.inventory.models import BiosSettings, HostInventory
 from groundzero.modules.base import Deps, Inputs, Module, Prepared, Stage
 from groundzero.modules.outputs import BiosResult
 from groundzero.redfish import bios
@@ -37,8 +37,39 @@ class ConfigureBios(Module):
     requires = ("inventory",)
     also_produces = ("inventory",)
     optional = True
+    conditional = True  # recommended only when the inventory shows something off
     destructive = True
     Params = BiosParams
+
+    def satisfied(self, outputs: dict[str, dict[str, Any]]) -> str | None:
+        inventory = outputs.get("inventory")
+        if inventory is None:
+            return None
+        b = BiosSettings.model_validate(inventory.get("bios") or {})
+        if bios.wanted_from_inventory(b.cpu_virtualization, b.iommu, b.boot_mode):
+            return None
+        right = [
+            title
+            for title, ok in (
+                ("processor virtualization", b.cpu_virtualization),
+                ("IOMMU", b.iommu),
+                ("UEFI boot mode", b.boot_mode is not None),
+            )
+            if ok
+        ]
+        unknown = [
+            title
+            for title, value in (
+                ("processor virtualization", b.cpu_virtualization),
+                ("IOMMU", b.iommu),
+                ("boot mode", b.boot_mode),
+            )
+            if value is None
+        ]
+        said = f"Already on: {', '.join(right)}" if right else "Nothing to change"
+        if unknown:
+            said += f" (the BIOS doesn't report {', '.join(unknown)})"
+        return said
 
     def summarize(self, data: dict[str, Any]) -> str:
         changes = data.get("changes") or []

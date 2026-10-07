@@ -737,6 +737,9 @@ def test_configure_bios_from_the_pipeline(page: Page, tmp_path: Path) -> None:
         assert gz.cli("run", "esxi1", "discover", timeout=120).code == 0
         _open(page, gz)
         page.get_by_role("link", name="esxi1").click()
+        next_step = page.locator('[data-role="next-step"]')
+        expect(next_step).to_contain_text("Configure BIOS")  # straight after Discover
+        expect(page.locator('[data-task="bios.configure"]')).to_contain_text("if needed")
         page.locator('[data-task="bios.configure"]').get_by_role("button", name="Run").click()
         dialog = page.locator("dialog")
         expect(dialog.locator('[data-setting="cpu_virtualization"] input')).to_be_checked()  # off in the BIOS
@@ -754,6 +757,26 @@ def test_configure_bios_from_the_pipeline(page: Page, tmp_path: Path) -> None:
         expect(page.locator('[data-task="bios.configure"] [data-role="output"]')).to_contain_text(
             "ProcVirtualization Disabled → Enabled"
         )
+    finally:
+        gz.stop()
+
+
+def test_a_bios_that_is_already_right_shows_as_not_needed(page: Page, tmp_path: Path) -> None:
+    from .conftest import _simulated
+
+    gz = _simulated(tmp_path)
+    gz.start()
+    try:
+        assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+        assert gz.cli("run", "esxi1", "discover", timeout=120).code == 0
+        _open(page, gz)
+        page.get_by_role("link", name="esxi1").click()
+        bios = page.locator('[data-task="bios.configure"]')
+        expect(bios).to_have_attribute("data-state", "not_needed")
+        reason = bios.locator('[data-role="not-needed"]')
+        expect(reason).to_contain_text("Already on: processor virtualization")
+        expect(bios.get_by_role("button", name="Run anyway")).to_be_visible()
+        expect(page.locator('[data-role="next-step"]')).to_contain_text("preflight")
     finally:
         gz.stop()
 

@@ -140,6 +140,7 @@ class Module:
     requires: ClassVar[tuple[str, ...]] = ()  # output kinds, or OS_ACCESS
     os_bound: ClassVar[bool] = False  # the output describes the installed OS: stale after a reinstall
     optional: ClassVar[bool] = False  # not on the recommended path (alternatives, utilities)
+    conditional: ClassVar[bool] = False  # optional, but recommended once ready (see ``satisfied``)
     destructive: ClassVar[bool] = False
     available: ClassVar[bool] = True  # False: designed, not implemented yet (shown as planned)
     uses: ClassVar[tuple[str, ...]] = ()  # optional inputs: read when present, never blocking
@@ -157,6 +158,7 @@ class Module:
             requires=cls.requires,
             os_bound=cls.os_bound,
             optional=cls.optional,
+            conditional=cls.conditional,
             destructive=cls.destructive,
             available=cls.available,
             uses=cls.uses,
@@ -170,6 +172,13 @@ class Module:
     def summarize(self, data: dict[str, Any]) -> str:
         """One line describing this module's output, for the pipeline view."""
         return self.produces or self.id
+
+    def satisfied(self, outputs: dict[str, dict[str, Any]]) -> str | None:
+        """Why there is nothing to do, judged from this host's current outputs; None when there may be.
+
+        A ready task that is satisfied is shown as "not needed" instead of waiting to be run.
+        """
+        return None
 
     def prepare(
         self, deps: Deps, host: Host, params: Any, inputs: Inputs, confirm: str | None

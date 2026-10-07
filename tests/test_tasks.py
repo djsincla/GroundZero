@@ -176,3 +176,40 @@ def test_install_history_says_what_went_into_the_custom_iso() -> None:
         next(t for t in p.stages[1].tasks if t.id == "os.custom").title
         == "Deploy OS · custom ISO from a config set"
     )
+
+
+GOOD_BIOS = {"bios": {"cpu_virtualization": True, "iommu": True, "boot_mode": "Uefi"}}
+WRONG_BIOS = {"bios": {"cpu_virtualization": False, "iommu": True, "boot_mode": "Bios"}}
+
+
+def test_configure_bios_comes_straight_after_discover() -> None:
+    hardware = next(s for s in _pipeline([], {}).stages if s.id == "hardware")
+    assert [t.id for t in hardware.tasks] == ["discover", "bios.configure", "preflight", "vcf.readiness"]
+
+
+def test_a_bios_that_is_already_right_needs_nothing() -> None:
+    jobs = [_job("d1", "discover", JobStatus.SUCCEEDED, 1)]
+    p = _pipeline(jobs, {"inventory": _out("d1", 1, GOOD_BIOS)}, os_access=False)
+    bios = next(t for t in p.stages[0].tasks if t.id == "bios.configure")
+    assert bios.state == "not_needed" and bios.conditional and bios.last_job is None  # nothing was run
+    assert bios.not_needed == "Already on: processor virtualization, IOMMU, UEFI boot mode"
+    assert p.next.task == "preflight"
+
+
+def test_a_bios_that_needs_changing_is_the_next_step() -> None:
+    jobs = [_job("d1", "discover", JobStatus.SUCCEEDED, 1)]
+    p = _pipeline(jobs, {"inventory": _out("d1", 1, WRONG_BIOS)}, os_access=False)
+    assert _state(p, "bios.configure") == "ready"
+    assert p.next.task == "bios.configure"
+    assert p.stages[0].state == "ready"  # the hardware stage isn't finished while the BIOS is wrong
+
+    fixed = [*jobs, _job("b1", "bios.configure", JobStatus.SUCCEEDED, 2)]
+    after = _pipeline(fixed, {"inventory": _out("b1", 2, GOOD_BIOS), "bios": _out("b1", 2, {"changes": []})},
+                      os_access=False)  # fmt: skip
+    assert _state(after, "bios.configure") == "done" and after.next.task == "preflight"
+
+
+def test_without_an_inventory_configure_bios_waits_and_preflight_leads() -> None:
+    p = _pipeline([], {})
+    assert _state(p, "bios.configure") == "blocked"
+    assert p.next.task == "preflight"  # optional until the inventory shows it's needed

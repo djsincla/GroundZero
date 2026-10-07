@@ -101,9 +101,9 @@ export async function viewHost(app, id, tab = "pipeline") {
 }
 
 // ── pipeline: bare metal → OS → readiness → prep → Holodeck; each task's output feeds the next ──
-const STATE_BADGE = { done: "pass", running: "running", failed: "fail", stale: "warn", blocked: "unknown",
+const STATE_BADGE = { done: "pass", not_needed: "pass", running: "running", failed: "fail", stale: "warn", blocked: "unknown",
   ready: "none", planned: "none" };
-const STATE_LABEL = { done: "done", running: "running", failed: "failed", stale: "out of date", blocked: "blocked",
+const STATE_LABEL = { done: "done", not_needed: "not needed", running: "running", failed: "failed", stale: "out of date", blocked: "blocked",
   ready: "ready", planned: "coming" };
 const stateBadge = (state) => badge(STATE_BADGE[state] || "none", STATE_LABEL[state] || state);
 
@@ -123,7 +123,7 @@ function runTask(ctx, task) {
 function taskButton(ctx, task, { primary = false, label = null } = {}) {
   if (!task.available || task.state === "running") return null;
   const blocked = task.state === "blocked";
-  const text = label || { done: "Run again", stale: "Run again", failed: "Retry" }[task.state] || "Run";
+  const text = label || { done: "Run again", not_needed: "Run anyway", stale: "Run again", failed: "Retry" }[task.state] || "Run";
   return h("button", {
     class: [primary ? "primary" : "small", task.destructive && !primary ? "danger-outline" : ""].join(" ").trim(),
     disabled: ctx.busy || blocked, title: blocked ? task.blocked_by.join("; ") : null,
@@ -205,10 +205,13 @@ function taskRow(ctx, task) {
   return h("li", { class: `task ${task.state}`, "data-task": task.id, "data-state": task.state },
     h("div", { class: "row" },
       h("strong", {}, task.title),
-      task.optional ? h("span", { class: "chip" }, "optional") : null,
+      task.conditional ? h("span", { class: "chip" }, "if needed")
+        : task.optional ? h("span", { class: "chip" }, "optional") : null,
       task.destructive ? h("span", { class: "chip danger-chip" }, "changes the server") : null,
       stateBadge(task.state), h("span", { class: "spacer" }), optionsButton(ctx, task), taskButton(ctx, task)),
     h("p", { class: "muted small-text task-desc" }, task.description),
+    task.state === "not_needed" && task.not_needed
+      ? h("p", { class: "task-output", "data-role": "not-needed" }, "→ ", task.not_needed) : null,
     task.state === "failed" && last?.error ? h("p", { class: "error small-text", "data-role": "error" }, last.error) : null,
     task.output ? h("p", { class: "task-output", "data-role": "output" }, "→ ", task.output.summary, " ", sourceChip(task.output.source),
       task.output.fresh ? null : h("span", { class: "warn-text" }, " (from before the OS was reinstalled)"),
