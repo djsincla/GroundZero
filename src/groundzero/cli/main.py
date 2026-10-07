@@ -748,6 +748,86 @@ def bios_delete(name: str) -> None:
     console.print(f"Deleted BIOS profile {escape(profile['name'])}")
 
 
+# ── storage profiles ─────────────────────────────────────────────────────
+storage_app = typer.Typer(
+    help="Storage profiles: RAID volumes, controller mode, drive state, hot spares.", no_args_is_help=True
+)
+app.add_typer(storage_app, name="storage-profile")
+
+
+def _resolve_storage_profile(ref: str) -> dict[str, Any]:
+    for profile in _call("GET", "/storage-profiles"):
+        if ref in (profile["id"], profile["name"]):
+            return dict(profile)
+    _fail(f"no storage profile matches '{ref}' (see `groundzero storage-profile list`)")
+
+
+@storage_app.command("list")
+def storage_list() -> None:
+    table = Table("Name", "Controllers", "Source", "Updated")
+    for p in _call("GET", "/storage-profiles"):
+        rules = "; ".join(
+            f"{c['kind']}: " + (", ".join(f"{v['name']} {v['raid']}" for v in c["volumes"]) or "as is")
+            for c in p["controllers"]
+        )
+        table.add_row(Text(p["name"]), Text(rules), Text(p["source"]), Text(p["updated_at"][:16]))
+    console.print(table)
+
+
+@storage_app.command("show")
+def storage_show(name: str) -> None:
+    console.print_json(data=_resolve_storage_profile(name))
+
+
+@storage_app.command("save")
+def storage_save(file: Annotated[Path, typer.Argument(help='JSON: {"name", "controllers": [...]}')]) -> None:
+    """Create a storage profile from a JSON file, or replace the one of the same name."""
+    body = json.loads(file.read_text())
+    existing = next((p for p in _call("GET", "/storage-profiles") if p["name"] == body.get("name")), None)
+    if existing:
+        profile = _call("PUT", f"/storage-profiles/{existing['id']}", json=body)
+    else:
+        profile = _call("POST", "/storage-profiles", json=body)
+    console.print(f"{'Updated' if existing else 'Created'} storage profile {escape(profile['name'])}")
+
+
+@storage_app.command("capture")
+def storage_capture(host: str, name: Annotated[str, typer.Option(help="Name for the new profile")]) -> None:
+    """A profile describing the server's layout as Read storage last saw it."""
+    h = _resolve_host(host)
+    profile = _call("POST", f"/hosts/{h['id']}/storage-profiles/capture", json={"name": name})
+    console.print(f"Saved {escape(profile['name'])} from {escape(h['name'])}")
+
+
+@storage_app.command("plan")
+def storage_plan(
+    host: str,
+    profile: str,
+    allow_boot_volume: Annotated[bool, typer.Option(help="Allow changes to the boot volume")] = False,
+) -> None:
+    """What applying the profile would change on the server (nothing is read or changed)."""
+    h = _resolve_host(host)
+    p = _resolve_storage_profile(profile)
+    plan = _call(
+        "GET",
+        f"/hosts/{h['id']}/storage-plan",
+        params={"profile_id": p["id"], "allow_boot_volume": allow_boot_volume},
+    )
+    for problem in plan["problems"]:
+        console.print(f"Can't go ahead: {problem}", style="red")
+    for action in plan["actions"]:
+        console.print(action["title"], style="red" if action["destroys_data"] else "")
+    if not plan["actions"] and not plan["problems"]:
+        console.print("Already matches: nothing to change")
+
+
+@storage_app.command("delete")
+def storage_delete(name: str) -> None:
+    profile = _resolve_storage_profile(name)
+    _call("DELETE", f"/storage-profiles/{profile['id']}")
+    console.print(f"Deleted storage profile {escape(profile['name'])}")
+
+
 # ── specs: the jobs picked for a server or a cluster, run as one ─────────
 spec_app = typer.Typer(help="Specs: the jobs you pick for a server or cluster.", no_args_is_help=True)
 app.add_typer(spec_app, name="spec")

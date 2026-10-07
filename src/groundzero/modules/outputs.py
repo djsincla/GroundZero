@@ -17,6 +17,7 @@ from groundzero.preflight.evaluate import PreflightReport
 from groundzero.readiness import ReadinessReport
 from groundzero.redfish.bios import BiosChange
 from groundzero.redfish.storage import StorageLayout
+from groundzero.redfish.storage_config import StorageAction
 from groundzero.vcf_readiness.validate import VcfReadinessReport
 
 
@@ -46,6 +47,15 @@ class BootVolume(BaseModel):
 class StorageReport(StorageLayout):
     """Read storage: the server's controllers, volumes and drives, and its boot volume."""
 
+    boot_volume: BootVolume | None = None
+
+
+class StorageConfigResult(BaseModel):
+    """What Configure storage changed, and the boot volume afterwards."""
+
+    profile_id: str
+    profile_name: str
+    actions: list[StorageAction] = Field(default_factory=list)
     boot_volume: BootVolume | None = None
 
 
@@ -113,4 +123,5 @@ OUTPUTS: dict[str, type[BaseModel]] = {
     "bios": BiosResult,
     "dns": DnsCheck,
     "storage": StorageReport,
+    "storage_config": StorageConfigResult,
 }

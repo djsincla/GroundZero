@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     installer_boot_minutes: float = 20.0
     bios_apply_minutes: float = 30.0  # a BIOS config job runs during POST: the R740xd takes several minutes
     bios_poll_seconds: float = 20.0
+    storage_apply_minutes: float = 40  # controller jobs run during POST; a reboot can take a while
+    storage_poll_seconds: float = 20
     # HTTPS listener BMCs download installer ISOs from (must be reachable from the BMC network).
     iso_repository: Path | None = None  # folder of stock ISOs (default ./images); GROUNDZERO_ISO_REPOSITORY
     media_bind_host: str = "0.0.0.0"

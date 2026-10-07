@@ -11,6 +11,7 @@ import asyncio
 import copy
 import json
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -39,6 +40,8 @@ class SimulatedBmc:
         - "kickstart-error": the installer boots, rejects KS.CFG and reboots into the old ESXi
         - "bios-wrong": the BIOS starts with processor virtualization off and legacy (BIOS) boot mode
         - "bios-not-applied": pending BIOS settings are accepted but never applied (a failed config job)
+        - "perc-drives": the (empty) PERC gets four 960 GB SAS SSDs, and its mode can be changed
+        - "storage-not-applied": storage changes waiting for a reset are accepted but never applied
         """
         self.responses = copy.deepcopy(responses)
         self.esxi = esxi
@@ -57,6 +60,9 @@ class SimulatedBmc:
         self.responses.setdefault(system, {}).setdefault("PowerState", "On")
         self._add_bmc_nic(hostname)
         self.pending_bios: dict[str, Any] = {}  # Bios/Settings: applied on the next reset, like the iDRAC
+        self.pending_storage: list[Callable[[], None]] = []  # storage jobs that run at the next POST
+        if "perc-drives" in faults:
+            self._add_perc_drives()
         if "bios-wrong" in faults and (bios := self._bios_path()):
             self.responses[bios].setdefault("Attributes", {}).update(
                 {"ProcVirtualization": "Disabled", "BootMode": "Bios"}
@@ -115,6 +121,12 @@ class SimulatedBmc:
             return httpx.Response(204)
         if request.method == "POST" and path.endswith("ComputerSystem.Reset"):
             return self._reset(body.get("ResetType", ""))
+        if request.method == "DELETE" and "/Volumes/" in path:
+            return self._delete_volume(path)
+        if request.method == "POST" and path.endswith("/Volumes"):
+            return self._create_volume(path, body)
+        if request.method == "POST" and "/DellRaidService/Actions/" in path:
+            return self._raid_service(path.rsplit(".", 1)[-1], body)
         return _error(405, f"{request.method} {path} not supported by the simulator")
 
     def _get(self, path: str) -> httpx.Response:
@@ -137,6 +149,141 @@ class SimulatedBmc:
         body = self.responses.get(f"{bios_path}/BiosRegistry")
         return parse_registry(body) if body else None
 
+    # ── storage: volumes, controller mode, drive state, spares (Dell PERC behaviour) ──
+    def _add_perc_drives(self) -> None:
+        storage = next((p for p in self.responses if p.endswith("/Storage/RAID.Slot.6-1")), None)
+        if storage is None:
+            return
+        drives = []
+        for i in range(4):
+            drive_id = f"Disk.Bay.{i}:Enclosure.Internal.0-1:RAID.Slot.6-1"
+            path = f"{storage}/Drives/{drive_id}"
+            self.responses[path] = {
+                "@odata.id": path,
+                "Id": drive_id,
+                "Name": f"Solid State Disk 0:1:{i}",
+                "Model": "KPM5XVUG960G",
+                "MediaType": "SSD",
+                "Protocol": "SAS",
+                "CapacityBytes": 960197124096,
+                "HotspareType": "None",
+                "Status": {"Health": "OK", "State": "Enabled"},
+                "Links": {"Volumes": []},
+                "Oem": {"Dell": {"DellPhysicalDisk": {"RaidStatus": "Ready"}}},
+            }
+            drives.append({"@odata.id": path})
+        self.responses[storage]["Drives"] = drives
+        self.responses[storage]["Drives@odata.count"] = len(drives)
+        self.responses[storage]["@Redfish.Settings"] = {
+            "SettingsObject": {"@odata.id": f"{storage}/Settings"}
+        }
+
+    def _queue(self, change: Callable[[], None], apply_time: str | None) -> httpx.Response:
+        """Immediate changes happen now; OnReset ones wait for the next POST, as a staged iDRAC job does."""
+        if apply_time == "Immediate":
+            change()
+        else:
+            self.pending_storage.append(change)
+        return httpx.Response(
+            202, json={}, headers={"Location": "/redfish/v1/TaskService/Tasks/JID_SIMULATED"}
+        )
+
+    def _drive_path(self, drive_id: str) -> str | None:
+        return next((p for p in self.responses if p.endswith(f"/Drives/{drive_id}")), None)
+
+    def _set_drive_state(self, drive_id: str, state: str) -> None:
+        if (path := self._drive_path(drive_id)) is not None:
+            self.responses[path].setdefault("Oem", {}).setdefault("Dell", {}).setdefault(
+                "DellPhysicalDisk", {}
+            )["RaidStatus"] = state
+
+    def _apply_time(self, collection: str, requested: str | None) -> str:
+        supported = (self.responses.get(collection, {}).get("@Redfish.OperationApplyTimeSupport") or {}).get(
+            "SupportedValues", []
+        )
+        if requested:
+            return requested
+        return "Immediate" if "Immediate" in supported else "OnReset"
+
+    def _create_volume(self, collection: str, body: dict[str, Any]) -> httpx.Response:
+        if collection not in self.responses:
+            return _error(404, f"{collection} not found")
+        drive_paths = [d["@odata.id"] for d in (body.get("Links") or {}).get("Drives", [])]
+        missing = [d for d in drive_paths if d not in self.responses]
+        if missing or not drive_paths:
+            return _error(400, f"Unknown drive(s): {', '.join(missing) or 'none given'}")
+        raid = body.get("RAIDType")
+        busy = [d for d in drive_paths if self.responses[d].get("Links", {}).get("Volumes")]
+        if busy:
+            return _error(400, f"Drive(s) already in a volume: {', '.join(busy)}")
+
+        def create() -> None:
+            controller = collection.rsplit("/Volumes", 1)[0].rsplit("/", 1)[-1]
+            index = sum(1 for p in self.responses if p.startswith(collection + "/"))
+            volume_id = f"Disk.Virtual.{index}:{controller}"
+            path = f"{collection}/{volume_id}"
+            sizes = [self.responses[d].get("CapacityBytes", 0) for d in drive_paths]
+            usable = {
+                "RAID0": len(sizes),
+                "RAID1": 1,
+                "RAID5": len(sizes) - 1,
+                "RAID6": len(sizes) - 2,
+                "RAID10": len(sizes) // 2,
+            }.get(str(raid), 1)
+            self.responses[path] = {
+                "@odata.id": path,
+                "Id": volume_id,
+                "Name": body.get("Name") or volume_id,
+                "RAIDType": raid,
+                "VolumeType": "Mirrored" if raid == "RAID1" else "StripedWithParity",
+                "CapacityBytes": min(sizes) * usable,
+                "Links": {"Drives": [{"@odata.id": d} for d in drive_paths]},
+            }
+            self.responses[collection].setdefault("Members", []).append({"@odata.id": path})
+            for d in drive_paths:
+                self.responses[d].setdefault("Links", {})["Volumes"] = [{"@odata.id": path}]
+                self._set_drive_state(self.responses[d]["Id"], "Online")
+
+        return self._queue(create, self._apply_time(collection, body.get("@Redfish.OperationApplyTime")))
+
+    def _delete_volume(self, path: str) -> httpx.Response:
+        volume = self.responses.get(path)
+        if volume is None:
+            return _error(404, f"{path} not found")
+        collection = path.rsplit("/", 1)[0]
+
+        def delete() -> None:
+            for d in volume.get("Links", {}).get("Drives", []):
+                drive = self.responses.get(d["@odata.id"])
+                if drive is not None:
+                    drive.setdefault("Links", {})["Volumes"] = []
+                    self._set_drive_state(drive["Id"], "Ready")
+            members = self.responses[collection].get("Members", [])
+            self.responses[collection]["Members"] = [m for m in members if m.get("@odata.id") != path]
+            self.responses.pop(path, None)
+
+        return self._queue(delete, self._apply_time(collection, None))
+
+    def _raid_service(self, action: str, body: dict[str, Any]) -> httpx.Response:
+        if action in ("ConvertToRAID", "ConvertToNonRAID"):
+            ids = list(body.get("PDArray") or [])
+            unknown = [d for d in ids if self._drive_path(d) is None]
+            if unknown or not ids:
+                return _error(400, f"Unknown drive(s): {', '.join(unknown) or 'none given'}")
+            state = "Ready" if action == "ConvertToRAID" else "NonRAID"
+
+            def convert() -> None:
+                for drive_id in ids:
+                    self._set_drive_state(drive_id, state)
+
+            return self._queue(convert, "OnReset")
+        if action == "AssignSpare":
+            drive = self._drive_path(str(body.get("TargetFQDD", "")))
+            if drive is None:
+                return _error(400, f"Unknown drive {body.get('TargetFQDD')}")
+            return self._queue(lambda: self.responses[drive].update({"HotspareType": "Global"}), "OnReset")
+        return _error(405, f"DellRaidService.{action} not supported by the simulator")
+
     def _patch(self, path: str, body: dict[str, Any]) -> httpx.Response:
         if path.endswith("/Bios/Settings"):
             current = self.responses.get(path.removesuffix("/Settings"), {}).get("Attributes", {})
@@ -150,6 +297,23 @@ class SimulatedBmc:
                     return _error(400, "; ".join(f"{name}: {message}" for name, message, _ in problems))
             self.pending_bios.update(body.get("Attributes", {}))
             return httpx.Response(202, json={})
+        if path.endswith("/Settings") and "/Storage/" in path:
+            storage = path.removesuffix("/Settings")
+            mode = (((body.get("Oem") or {}).get("Dell") or {}).get("DellStorageController") or {}).get(
+                "ControllerMode"
+            )
+            if (
+                storage not in self.responses
+                or "@Redfish.Settings" not in self.responses[storage]
+                or not mode
+            ):
+                return _error(400, "This controller's mode can't be changed")
+
+            def set_mode() -> None:
+                dell = self.responses[storage].setdefault("Oem", {}).setdefault("Dell", {})
+                dell.setdefault("DellController", {})["CurrentControllerMode"] = mode
+
+            return self._queue(set_mode, "OnReset")
         if path.endswith("/Attributes"):
             self.attributes.update({k: str(v) for k, v in body.get("Attributes", {}).items()})
             return httpx.Response(200, json={})
@@ -200,6 +364,11 @@ class SimulatedBmc:
         if reset_type not in ("On", "ForceRestart", "GracefulRestart", "PowerCycle"):
             return _error(400, f"Unsupported ResetType {reset_type}")
         system["PowerState"] = "On"
+        if self.pending_storage:  # the controller's configuration jobs run during POST
+            if "storage-not-applied" not in self.faults:
+                for change in self.pending_storage:
+                    change()
+            self.pending_storage = []
         if self.pending_bios and (bios := self._bios_path()):  # the BIOS config job runs during POST
             if "bios-not-applied" not in self.faults:
                 self.responses[bios].setdefault("Attributes", {}).update(self.pending_bios)

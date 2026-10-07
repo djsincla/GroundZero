@@ -3,6 +3,7 @@ import {
   api, badge, card, empty, errorBox, fmtBytes, fmtTime, h, maybe, mount, openDialog, pageHeader, showJobDrawer, table, toast,
 } from "../core.js";
 import { biosProfilesCard } from "./bios.js";
+import { storageProfilesCard } from "./storage.js";
 import { schemaForm } from "../forms.js";
 
 const SECRET_LABELS = {
@@ -48,7 +49,8 @@ export async function viewConfigSets(app) {
               h("td", {}, p.secrets_set.length ? badge("pass", `${p.secrets_set.length} stored`) : badge("none", "none")),
               h("td", { class: "muted" }, fmtTime(p.updated_at)))))
         : h("p", { class: "muted" }, "No appliance profiles yet.")),
-    await biosProfilesCard());
+    await biosProfilesCard(),
+    await storageProfilesCard());
 }
 
 // Build a config set by reading a running server (read-only). If GroundZero can't log in to its OS yet,

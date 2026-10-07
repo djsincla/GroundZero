@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from groundzero.readiness import ReadinessReport
     from groundzero.redfish.bios_profiles import BiosProfile
     from groundzero.redfish.client import RedfishClient
+    from groundzero.redfish.storage_config import StorageProfile
 
 __all__ = ["OS_ACCESS", "Deps", "Inputs", "Module", "NoParams", "Prepared", "Stage"]
 
@@ -91,6 +92,7 @@ class Deps(Protocol):
     def get_config_set(self, set_id: str) -> ConfigSet: ...
     def get_appliance_profile(self, profile_id: str) -> ApplianceProfile: ...
     def get_bios_profile(self, profile_id: str) -> BiosProfile: ...
+    def get_storage_profile(self, profile_id: str) -> StorageProfile: ...
     def cluster_for_host(self, host_id: str) -> Cluster | None: ...
     def appliance_profile_secrets(self, profile_id: str) -> dict[str, str]: ...
     def save_appliance_profile(
@@ -145,6 +147,7 @@ class Module:
     os_bound: ClassVar[bool] = False  # the output describes the installed OS: stale after a reinstall
     optional: ClassVar[bool] = False  # not on the recommended path (alternatives, utilities)
     conditional: ClassVar[bool] = False  # optional, but recommended once ready (see ``satisfied``)
+    rechecks: ClassVar[bool] = False  # once done, due again when ``satisfied`` stops holding
     destructive: ClassVar[bool] = False
     available: ClassVar[bool] = True  # False: designed, not implemented yet (shown as planned)
     uses: ClassVar[tuple[str, ...]] = ()  # optional inputs: read when present, never blocking
@@ -163,6 +166,7 @@ class Module:
             os_bound=cls.os_bound,
             optional=cls.optional,
             conditional=cls.conditional,
+            rechecks=cls.rechecks or cls.conditional,
             destructive=cls.destructive,
             available=cls.available,
             uses=cls.uses,

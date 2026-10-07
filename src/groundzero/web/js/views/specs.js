@@ -38,8 +38,9 @@ export async function viewSpecs(app) {
 
 // ── editor ──
 async function referenceChoices() {
-  const [images, sets, profiles, biosProfiles] = await Promise.all([
-    api("GET", "/images"), api("GET", "/config-sets"), api("GET", "/appliance-profiles"), api("GET", "/bios-profiles")]);
+  const [images, sets, profiles, biosProfiles, storageProfiles] = await Promise.all([
+    api("GET", "/images"), api("GET", "/config-sets"), api("GET", "/appliance-profiles"), api("GET", "/bios-profiles"),
+    api("GET", "/storage-profiles")]);
   const choice = (items, label) => ({ enum: items.map((x) => x.id), labels: items.map(label) });
   return {
     iso_id: choice(images.filter((i) => i.kind === "iso"), (i) => i.filename),
@@ -47,6 +48,7 @@ async function referenceChoices() {
     config_set_id: choice(sets, (s) => `${s.name} (${s.os_family})`),
     profile_id: choice(profiles, (p) => p.name),
     bios_profile_id: choice(biosProfiles, (p) => `${p.name}${p.model ? ` (${p.model})` : ""}`),
+    storage_profile_id: choice(storageProfiles, (p) => p.name),
   };
 }
 
@@ -56,7 +58,8 @@ function specSchema(task, choices) {
   const props = {};
   for (const [key, node] of Object.entries(schema.properties || {})) {
     if (HIDDEN_PARAMS.has(key)) continue;
-    const pick = task.id === "bios.configure" && key === "profile_id" ? choices.bios_profile_id : choices[key];
+    const pick = key !== "profile_id" ? choices[key]
+      : { "bios.configure": choices.bios_profile_id, "storage.configure": choices.storage_profile_id }[task.id] || choices.profile_id;
     props[key] = pick
       ? { type: "string", title: node.title || key, description: node.description, enum: pick.enum,
           "x-enum-labels": pick.labels, nullable: !(schema.required || []).includes(key) }

@@ -1,6 +1,7 @@
 // Hosts list and the tabbed host page (Pipeline · Readiness · Overview · Storage · Networking · Install · Jobs).
 import { schemaForm } from "../forms.js";
 import { runPanel, runSpecDialog } from "./specs.js";
+import { captureStorageDialog, configureStorageDialog } from "./storage.js";
 import {
   age, api, badge, card, empty, fmtBytes, fmtTime, h, isActive, jobCard, jobLabel, maybe, mount, openDialog, pageHeader,
   showJobDrawer, showOutput, startJob, table, toast,
@@ -122,6 +123,7 @@ function runTask(ctx, task) {
   if (task.id === "appliance.deploy") { applianceDialog(ctx); return; }
   if (task.id === "appliance.adopt") { adoptDialog(ctx); return; }
   if (task.id === "bios.configure") { biosDialog(ctx); return; }
+  if (task.id === "storage.configure") { configureStorageDialog(ctx).catch((e) => toast(e.message, "error")); return; }
   if (task.id === "appliance.capture") { captureApplianceDialog(ctx); return; }
   startJob("POST", `/hosts/${id}/tasks/${task.id}`, {}, { onDone: refresh });
 }
@@ -153,7 +155,7 @@ function lastRun(ctx, last) {
 
 // Tasks whose parameters have their own screens (the install wizard, capture, prep, Holorouter dialogs).
 const CUSTOM_RUN = new Set(["os.custom", "os.reimage", "os.capture", "host.prep", "holodeck.router", "appliance.deploy",
-  "appliance.adopt", "appliance.capture", "bios.configure"]);
+  "appliance.adopt", "appliance.capture", "bios.configure", "storage.configure"]);
 const EDITABLE = new Set(["holorouter", "appliance"]);  // records you may correct by hand
 
 function optionsButton(ctx, task) {
@@ -706,9 +708,12 @@ const gb = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)} TB` : 
 function storageTab(ctx) {
   const { storage } = ctx;
   const task = pipelineTasks(ctx.pipeline)["storage.read"];
+  const configure = pipelineTasks(ctx.pipeline)["storage.configure"];
   const read = h("div", { class: "row" },
     task ? taskButton(ctx, task, { primary: !storage, label: storage ? "Read again" : "Read storage" }) : null,
-    storage ? h("span", { class: "muted small-text" }, "Read-only: nothing on the server changes.") : null);
+    storage ? h("button", { class: "small", onclick: () => captureStorageDialog(ctx) }, "Save as profile…") : null,
+    storage && configure ? taskButton(ctx, configure, { label: "Configure…" }) : null,
+    storage ? h("span", { class: "muted small-text" }, "Reading is read-only: nothing on the server changes.") : null);
   if (!storage) {
     return card({ "data-card": "storage" }, h("h2", {}, "Storage"),
       h("p", { class: "muted" }, "Not read yet. Read storage asks the BMC for the controllers, RAID volumes and drives, and finds the boot volume the OS installs to."),

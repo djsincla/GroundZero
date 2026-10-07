@@ -184,7 +184,7 @@ WRONG_BIOS = {"bios": {"cpu_virtualization": False, "iommu": True, "boot_mode": 
 
 def test_configure_bios_comes_straight_after_discover() -> None:
     hardware = next(s for s in _pipeline([], {}).stages if s.id == "hardware")
-    order = ["discover", "bios.configure", "storage.read", "preflight", "vcf.readiness"]
+    order = ["discover", "bios.configure", "storage.read", "storage.configure", "preflight", "vcf.readiness"]
     assert [t.id for t in hardware.tasks] == order
 
 
@@ -214,3 +214,10 @@ def test_without_an_inventory_configure_bios_waits_and_preflight_leads() -> None
     p = _pipeline([], {})
     assert _state(p, "bios.configure") == "blocked"
     assert p.next.task == "preflight"  # optional until the inventory shows it's needed
+
+
+def test_configure_storage_waits_to_be_asked() -> None:
+    jobs = [_job("s1", "storage.read", JobStatus.SUCCEEDED, 1)]
+    p = _pipeline(jobs, {"storage": _out("s1", 1, {"controllers": []})}, os_access=False)
+    assert _state(p, "storage.configure") == "ready"
+    assert p.next.task != "storage.configure"  # without a profile it can't tell whether anything's needed

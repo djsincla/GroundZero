@@ -782,6 +782,87 @@
         "title": "ConfigSetWrite",
         "type": "object"
       },
+      "ControllerRule": {
+        "properties": {
+          "hot_spares": {
+            "default": 0,
+            "description": "Global hot spares on this controller",
+            "minimum": 0.0,
+            "title": "Hot Spares",
+            "type": "integer"
+          },
+          "kind": {
+            "description": "boot (BOSS, M.2), raid (PERC), passthrough, software",
+            "enum": [
+              "raid",
+              "boot",
+              "passthrough",
+              "software",
+              "other"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "RAID",
+                  "HBA",
+                  "EnhancedHBA"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty: leave as is",
+            "title": "Mode"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only controllers whose model contains this",
+            "title": "Model"
+          },
+          "remove_other_volumes": {
+            "default": false,
+            "description": "Delete volumes on this controller that no rule describes (their data is lost)",
+            "title": "Remove Other Volumes",
+            "type": "boolean"
+          },
+          "unused_drives": {
+            "default": "leave",
+            "description": "What to do with drives no volume or spare uses",
+            "enum": [
+              "leave",
+              "non-raid",
+              "raid"
+            ],
+            "title": "Unused Drives",
+            "type": "string"
+          },
+          "volumes": {
+            "items": {
+              "$ref": "#/components/schemas/VolumeRule"
+            },
+            "title": "Volumes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ControllerRule",
+        "type": "object"
+      },
       "DeploymentOption": {
         "properties": {
           "default": {
@@ -809,6 +890,68 @@
           "id"
         ],
         "title": "DeploymentOption",
+        "type": "object"
+      },
+      "DriveMatch": {
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many drives; empty: every matching free drive",
+            "title": "Count"
+          },
+          "media": {
+            "anyOf": [
+              {
+                "enum": [
+                  "SSD",
+                  "HDD"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media"
+          },
+          "min_gb": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smallest drive (GB)"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "enum": [
+                  "SATA",
+                  "SAS",
+                  "NVMe"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocol"
+          }
+        },
+        "title": "DriveMatch",
         "type": "object"
       },
       "EffectiveSpec": {
@@ -2682,6 +2825,236 @@
         "title": "Stage",
         "type": "string"
       },
+      "StorageAction": {
+        "properties": {
+          "controller": {
+            "description": "The controller's model, for people",
+            "title": "Controller",
+            "type": "string"
+          },
+          "controller_id": {
+            "title": "Controller Id",
+            "type": "string"
+          },
+          "destroys_data": {
+            "default": false,
+            "title": "Destroys Data",
+            "type": "boolean"
+          },
+          "drives": {
+            "description": "Drive ids involved",
+            "items": {
+              "type": "string"
+            },
+            "title": "Drives",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "delete_volume",
+              "set_mode",
+              "convert_to_raid",
+              "convert_to_nonraid",
+              "create_volume",
+              "assign_spare"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "raid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raid"
+          },
+          "title": {
+            "description": "What happens, in words",
+            "title": "Title",
+            "type": "string"
+          },
+          "volume_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Id"
+          }
+        },
+        "required": [
+          "kind",
+          "controller_id",
+          "controller",
+          "title"
+        ],
+        "title": "StorageAction",
+        "type": "object"
+      },
+      "StorageCapture": {
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "StorageCapture",
+        "type": "object"
+      },
+      "StoragePlan": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/StorageAction"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "boot_volume": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The volume the profile marks as boot, once met",
+            "title": "Boot Volume"
+          },
+          "problems": {
+            "description": "Why the profile can't be met as it stands",
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          }
+        },
+        "title": "StoragePlan",
+        "type": "object"
+      },
+      "StorageProfile": {
+        "properties": {
+          "controllers": {
+            "items": {
+              "$ref": "#/components/schemas/ControllerRule"
+            },
+            "minItems": 1,
+            "title": "Controllers",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "default": "manual",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "controllers",
+          "id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "StorageProfile",
+        "type": "object"
+      },
+      "StorageProfileWrite": {
+        "properties": {
+          "controllers": {
+            "items": {
+              "$ref": "#/components/schemas/ControllerRule"
+            },
+            "minItems": 1,
+            "title": "Controllers",
+            "type": "array"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "controllers"
+        ],
+        "title": "StorageProfileWrite",
+        "type": "object"
+      },
       "TaskInfo": {
         "properties": {
           "also_produces": {
@@ -3072,6 +3445,45 @@
           "power_state"
         ],
         "title": "VmSummary",
+        "type": "object"
+      },
+      "VolumeRule": {
+        "properties": {
+          "boot": {
+            "default": false,
+            "description": "The volume the OS installs to",
+            "title": "Boot",
+            "type": "boolean"
+          },
+          "drives": {
+            "$ref": "#/components/schemas/DriveMatch"
+          },
+          "name": {
+            "maxLength": 15,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Name",
+            "type": "string"
+          },
+          "raid": {
+            "enum": [
+              "RAID0",
+              "RAID1",
+              "RAID5",
+              "RAID6",
+              "RAID10",
+              "RAID50",
+              "RAID60"
+            ],
+            "title": "Raid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "raid"
+        ],
+        "title": "VolumeRule",
         "type": "object"
       }
     },
@@ -5543,6 +5955,131 @@
         ]
       }
     },
+    "/api/v1/hosts/{host_id}/storage-plan": {
+      "get": {
+        "description": "What Configure storage would change with this profile: each change (and whether it loses data), and\nwhy it can't go ahead, if it can't. From the last Read storage; nothing is read or changed.",
+        "operationId": "storage_plan_api_v1_hosts__host_id__storage_plan_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "allow_boot_volume",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Allow Boot Volume",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoragePlan"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Storage Plan",
+        "tags": [
+          "storage"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/storage-profiles/capture": {
+      "post": {
+        "description": "A profile describing the server's layout as Read storage last saw it (nothing is read or changed).",
+        "operationId": "capture_storage_profile_api_v1_hosts__host_id__storage_profiles_capture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorageCapture"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Capture Storage Profile",
+        "tags": [
+          "storage"
+        ]
+      }
+    },
     "/api/v1/hosts/{host_id}/tasks/{task_id}": {
       "post": {
         "description": "Start a catalog task (GET /tasks). 409 if its inputs are missing or stale (the message says which\ntask to run first). Destructive tasks need ``confirm``.",
@@ -6399,6 +6936,221 @@
         "summary": "Update Spec",
         "tags": [
           "specs"
+        ]
+      }
+    },
+    "/api/v1/storage-profiles": {
+      "get": {
+        "operationId": "list_storage_profiles_api_v1_storage_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StorageProfile"
+                  },
+                  "title": "Response List Storage Profiles Api V1 Storage Profiles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Storage Profiles",
+        "tags": [
+          "storage"
+        ]
+      },
+      "post": {
+        "operationId": "create_storage_profile_api_v1_storage_profiles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorageProfileWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Storage Profile",
+        "tags": [
+          "storage"
+        ]
+      }
+    },
+    "/api/v1/storage-profiles/{profile_id}": {
+      "delete": {
+        "description": "Refused while a spec's Configure storage step uses it.",
+        "operationId": "delete_storage_profile_api_v1_storage_profiles__profile_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Storage Profile",
+        "tags": [
+          "storage"
+        ]
+      },
+      "get": {
+        "operationId": "get_storage_profile_api_v1_storage_profiles__profile_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Storage Profile",
+        "tags": [
+          "storage"
+        ]
+      },
+      "put": {
+        "operationId": "update_storage_profile_api_v1_storage_profiles__profile_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorageProfileWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Storage Profile",
+        "tags": [
+          "storage"
         ]
       }
     },

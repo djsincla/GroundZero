@@ -319,3 +319,8 @@ td .chip, h2 .chip, strong + .chip { margin-left: 6px; }
 .bios-setting.invalid select, .bios-setting.invalid input { border-color: var(--fail); }
 label.choice { align-items: flex-start; gap: 8px; margin: 6px 0; }
 #bp-add { max-width: 420px; }
+/* storage profiles */
+.callout.fail { background: var(--fail-bg); }
+.plan-item.danger { color: var(--fail); }
+.volume-rules input, .volume-rules select { width: auto; }
+.panel.rule h3 { margin: 0; }

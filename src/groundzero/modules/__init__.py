@@ -10,12 +10,13 @@ from groundzero.modules.hardware import Discover, Preflight, VcfReadiness
 from groundzero.modules.holodeck import DeployHolodeck, Holorouter, StageBinaries
 from groundzero.modules.os import OsCapture, OsCustom, OsRead, OsReimage
 from groundzero.modules.prep import Assess, Prep, VerifyJumbo
-from groundzero.modules.storage import ReadStorage
+from groundzero.modules.storage import ConfigureStorage, ReadStorage
 
 MODULES: tuple[Module, ...] = (
     Discover(),
     ConfigureBios(),  # before preflight, so preflight passes first time
     ReadStorage(),
+    ConfigureStorage(),  # before the OS: its boot volume is where the OS goes
     Preflight(),
     VcfReadiness(),
     OsReimage(),

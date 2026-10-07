@@ -5,6 +5,26 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+### Added
+- **Configure storage:** apply a storage profile covering RAID volumes, controller mode (RAID, HBA,
+  enhanced HBA), drive state (RAID-capable or passed straight through) and global hot spares.
+  - Profiles are rules, not drive ids, so one fits every server of a kind: "on the boot card, one RAID1
+    of two SSDs, the boot volume"; "on the PERC, a RAID5 of three SAS SSDs and one hot spare".
+  - Save a server's layout as a profile from its Storage tab, or write one on the Config sets page.
+  - **The plan comes first.** It lists every change in the order it's applied, marks the ones that lose
+    data, and says plainly why a profile can't be applied (not enough drives, a mode that can't hold
+    volumes, no matching controller).
+  - **The boot volume the OS runs from is never deleted** unless you tick the box that allows it.
+  - The layout is read again before anything is written, and the run stops if it changed since Read
+    storage.
+  - Changes that wait for a reset share one restart. The layout is read back until the profile is met,
+    and the boot volume recorded afterwards is the one the OS install uses.
+  - Specs can pick a profile for their Configure storage step. Once applied, the step goes back to ready
+    if the layout drifts from the profile.
+  - On the command line: `groundzero storage-profile list|show|save|capture|plan|delete`.
+  - Tested against the simulator only (it now models PERC volumes, drive conversion, spares and mode
+    changes). On the lab R740xd the BOSS holds the running ESXi and the PERC has no drives.
+
 ## [0.10.0] - 2026-10-07
 
 BIOS profiles: capture, edit or import saved BIOS settings, and apply them with Configure BIOS.

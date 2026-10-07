@@ -55,6 +55,7 @@ class TaskSpec:
     os_bound: bool = False  # the output describes the installed OS: stale after a reinstall
     optional: bool = False  # not on the recommended path (alternatives, utilities)
     conditional: bool = False  # optional, but recommended once ready (the module knows when it is needed)
+    rechecks: bool = False  # once done, due again when what it judges from moves on
     destructive: bool = False
     available: bool = True  # False: designed, not implemented yet (shown as planned)
     uses: tuple[str, ...] = ()  # optional inputs: read when present, never blocking
@@ -77,6 +78,7 @@ OUTPUT_TITLES = {
     "bios": "BIOS changes",
     "dns": "DNS records",
     "storage": "Storage layout",
+    "storage_config": "Storage changes",
     "staged": "Staged binaries",
     "holodeck": "Holodeck",
     OS_ACCESS: "OS access",
@@ -372,7 +374,7 @@ def evaluate_pipeline(
         reason = satisfied(spec.id, current, params, lookup) if state in ("ready", "done") else None
         if state == "ready" and reason:
             state = "not_needed"
-        elif state == "done" and spec.conditional and reason is None and spec.requires:
+        elif state == "done" and spec.rechecks and reason is None and spec.requires:
             # It ran, but what it judges from has moved on (a BIOS reset, a changed profile): due again.
             state = "ready"
         if state == "done":

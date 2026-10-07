@@ -17,6 +17,7 @@ from groundzero.core.models import ConfigSet, Host, Job, JobError, JobStatus, Jo
 from groundzero.ova.profiles import ApplianceProfile
 from groundzero.redfish.bios_profiles import BiosProfile
 from groundzero.redfish.bios_registry import BiosRegistry
+from groundzero.redfish.storage_config import StorageProfile
 from groundzero.specs import Run, Spec
 
 _SCHEMA = """
@@ -117,6 +118,13 @@ CREATE TABLE IF NOT EXISTS bios_registries (
     fetched_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS bios_profiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    data TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS storage_profiles (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     data TEXT NOT NULL,
@@ -550,6 +558,37 @@ class Store:
         with self._tx() as cur:
             return cur.execute("DELETE FROM bios_profiles WHERE id = ?", (profile_id,)).rowcount > 0
 
+    # ── storage profiles ─────────────────────────────────────────────────
+    def save_storage_profile(self, profile: StorageProfile) -> None:
+        data = profile.model_dump_json(exclude={"id", "name", "created_at", "updated_at"})
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO storage_profiles (id, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET name = excluded.name, data = excluded.data,"
+                " updated_at = excluded.updated_at",
+                (
+                    profile.id,
+                    profile.name,
+                    data,
+                    profile.created_at.isoformat(),
+                    profile.updated_at.isoformat(),
+                ),
+            )
+
+    def list_storage_profiles(self) -> list[StorageProfile]:
+        with self._tx() as cur:
+            rows = cur.execute("SELECT * FROM storage_profiles ORDER BY name").fetchall()
+        return [_row_to_named(StorageProfile, r) for r in rows]
+
+    def get_storage_profile(self, profile_id: str) -> StorageProfile | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM storage_profiles WHERE id = ?", (profile_id,)).fetchone()
+        return _row_to_named(StorageProfile, row) if row else None
+
+    def delete_storage_profile(self, profile_id: str) -> bool:
+        with self._tx() as cur:
+            return cur.execute("DELETE FROM storage_profiles WHERE id = ?", (profile_id,)).rowcount > 0
+
     # ── appliance profiles ───────────────────────────────────────────────
     def save_appliance_profile(
         self,
@@ -883,6 +922,19 @@ def _row_to_profile(row: sqlite3.Row) -> ApplianceProfile:
         source=row["source"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
+    )
+
+
+def _row_to_named(model: type[StorageProfile], row: sqlite3.Row) -> StorageProfile:
+    """A model kept as JSON plus id/name/timestamps columns."""
+    return model.model_validate(
+        {
+            **json.loads(row["data"]),
+            "id": row["id"],
+            "name": row["name"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
     )
 
 

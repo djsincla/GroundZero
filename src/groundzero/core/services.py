@@ -56,7 +56,7 @@ from groundzero.modules import REGISTRY
 from groundzero.modules.base import Inputs
 from groundzero.modules.bios import plan_bios
 from groundzero.modules.os import install_config
-from groundzero.modules.outputs import OUTPUTS
+from groundzero.modules.outputs import OUTPUTS, StorageReport
 from groundzero.modules.prep import current_jumbo
 from groundzero.osconfig import PLUGINS, OsConfigError, plugin_for
 from groundzero.osconfig.esxi import EsxiPlugin
@@ -79,6 +79,14 @@ from groundzero.redfish.bios_registry import BiosRegistry, fetch_registry
 from groundzero.redfish.capture import load_recording
 from groundzero.redfish.client import RedfishClient
 from groundzero.redfish.detect import detect
+from groundzero.redfish.storage_config import (
+    StorageCapture,
+    StoragePlan,
+    StorageProfile,
+    StorageProfileWrite,
+    capture_profile,
+    plan_storage,
+)
 from groundzero.simulator.bmc import SimulatedBmc
 from groundzero.simulator.esxi import SimulatedEsxi
 from groundzero.specs import EffectiveSpec, Spec, SpecStep, SpecWrite, fill, secret_params
@@ -633,6 +641,73 @@ class Services:
             raise ConflictError(f"BIOS profile '{profile.name}' is used by spec {', '.join(users)}")
         self.store.delete_bios_profile(profile_id)
 
+    # ── storage profiles: RAID volumes, controller mode, drive state, spares ──
+    def list_storage_profiles(self) -> list[StorageProfile]:
+        return self.store.list_storage_profiles()
+
+    def get_storage_profile(self, profile_id: str) -> StorageProfile:
+        found = self.store.get_storage_profile(profile_id)
+        if found is None:
+            raise NotFoundError(f"Storage profile {profile_id} not found")
+        return found
+
+    def save_storage_profile(
+        self, req: StorageProfileWrite, profile_id: str | None = None, source: str | None = None
+    ) -> StorageProfile:
+        current = self.get_storage_profile(profile_id) if profile_id else None
+        other = next((p for p in self.store.list_storage_profiles() if p.name == req.name), None)
+        if other is not None and other.id != profile_id:
+            raise ConflictError(f"A storage profile named '{req.name}' already exists")
+        now = utcnow()
+        profile = StorageProfile(
+            **req.model_dump(),
+            id=current.id if current else new_id(),
+            source=source or (current.source if current else "manual"),
+            created_at=current.created_at if current else now,
+            updated_at=now,
+        )
+        self.store.save_storage_profile(profile)
+        return profile
+
+    def capture_storage_profile(self, host_id: str, req: StorageCapture) -> StorageProfile:
+        """A profile that describes the server's layout as Read storage last saw it."""
+        host = self.get_host(host_id)
+        storage = Inputs(self.store, host_id).require(
+            "storage", StorageReport, "Read storage first: the capture describes its layout"
+        )
+        boot = storage.boot_volume.volume_id if storage.boot_volume else None
+        rules = capture_profile(storage, boot)
+        if not rules:
+            raise ConflictError(
+                f"{host.name} has no RAID volumes, spares or settable controllers to describe"
+            )
+        write = StorageProfileWrite(name=req.name, description=req.description, controllers=rules)
+        return self.save_storage_profile(write, source=f"captured from {host.name}")
+
+    def storage_plan(self, host_id: str, profile_id: str, allow_boot_volume: bool = False) -> StoragePlan:
+        """What applying the profile would change, from the layout Read storage last saw (nothing is read)."""
+        self.get_host(host_id)
+        storage = Inputs(self.store, host_id).require(
+            "storage", StorageReport, "Read storage first: the plan starts from its layout"
+        )
+        profile = self.get_storage_profile(profile_id)
+        protected = storage.boot_volume.volume_id if storage.boot_volume else None
+        return plan_storage(storage, profile, protected=protected, allow_boot_volume=allow_boot_volume)
+
+    def delete_storage_profile(self, profile_id: str) -> None:
+        profile = self.get_storage_profile(profile_id)
+
+        def uses(spec: Spec) -> bool:
+            return any(
+                st.task == "storage.configure" and st.params.get("profile_id") == profile_id
+                for st in spec.steps
+            )
+
+        users = [s.name for s in self.store.list_specs() if uses(s)]
+        if users:
+            raise ConflictError(f"Storage profile '{profile.name}' is used by spec {', '.join(users)}")
+        self.store.delete_storage_profile(profile_id)
+
     # ── specs: the jobs picked for a server or a cluster ────────────────
     def list_specs(self) -> list[Spec]:
         return self.store.list_specs()
@@ -706,6 +781,9 @@ class Services:
         if profile_id and task == "bios.configure":
             if self.store.get_bios_profile(profile_id) is None:
                 missing.append(("profile_id", f"BIOS profile {profile_id} not found"))
+        elif profile_id and task == "storage.configure":
+            if self.store.get_storage_profile(profile_id) is None:
+                missing.append(("profile_id", f"Storage profile {profile_id} not found"))
         elif profile_id and self.store.get_appliance_profile(profile_id) is None:
             missing.append(("profile_id", f"Appliance profile {profile_id} not found"))
         return missing
@@ -971,7 +1049,11 @@ class Services:
 
     def _lookup(self, kind: str, ref: str) -> Any:
         """What a task's parameters point at, for judging "not needed" (None if it's gone)."""
-        return self.store.get_bios_profile(ref) if kind == "bios_profile" else None
+        if kind == "bios_profile":
+            return self.store.get_bios_profile(ref)
+        if kind == "storage_profile":
+            return self.store.get_storage_profile(ref)
+        return None
 
     def start_task(self, host_id: str, task_id: str, run: TaskRun) -> Job:
         """Start any catalog task: its inputs must exist and be current, its parameters valid."""

@@ -8,6 +8,7 @@ import { viewHost, viewHosts } from "./js/views/hosts.js";
 import { viewApi, viewInfo, viewJobs } from "./js/views/misc.js";
 import { viewSpec, viewSpecs } from "./js/views/specs.js";
 import { viewBiosProfile } from "./js/views/bios.js";
+import { viewStorageProfile } from "./js/views/storage.js";
 
 const app = document.getElementById("app");
 
@@ -20,6 +21,7 @@ const ROUTES = [
   [/^\/config-sets$/, "config-sets", "Config sets", () => viewConfigSets(app), true],
   [/^\/config-sets\/([\w-]+)$/, "config-sets", "Config set", (m, q) => viewConfigSet(app, m[1], q), false],
   [/^\/bios-profiles\/([\w-]+)$/, "config-sets", "BIOS profile", (m, q) => viewBiosProfile(app, m[1], q), false],
+  [/^\/storage-profiles\/([\w-]+)$/, "config-sets", "Storage profile", (m) => viewStorageProfile(app, m[1]), false],
   [/^\/appliance-profiles\/([\w-]+)$/, "config-sets", "Appliance profile", (m) => viewApplianceProfile(app, m[1]), false],
   [/^\/specs$/, "specs", "Specs", () => viewSpecs(app), true],
   [/^\/specs\/([\w-]+)$/, "specs", "Spec", (m) => viewSpec(app, m[1]), false],

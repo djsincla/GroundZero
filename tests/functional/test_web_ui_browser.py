@@ -977,3 +977,54 @@ def test_capture_edit_and_apply_a_bios_profile(page: Page, tmp_path: Path) -> No
         )
     finally:
         gz.stop()
+
+
+def test_save_storage_as_a_profile_extend_it_and_configure(page: Page, tmp_path: Path) -> None:
+    from .conftest import _simulated
+
+    gz = _simulated(
+        tmp_path, GROUNDZERO_SIMULATE_FAULTS='["perc-drives"]', GROUNDZERO_STORAGE_POLL_SECONDS="0.2"
+    )
+    gz.start()
+    try:
+        assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+        assert gz.cli("run", "esxi1", "storage.read", timeout=120).code == 0
+        _open(page, gz)
+        page.get_by_role("link", name="esxi1").click()
+        _tab(page, "Storage")
+        page.get_by_role("button", name="Save as profile…").click()
+        dialog = page.locator("dialog")
+        dialog.get_by_label("Name").fill("lab")
+        dialog.get_by_role("button", name="Save").click()
+        expect(page.get_by_role("heading", name="lab")).to_be_visible()
+
+        perc = page.locator('[data-rule="raid"]')
+        perc.get_by_role("button", name="Add volume").click()
+        row = perc.locator("tbody tr").last
+        row.get_by_label("Volume name").fill("data")
+        row.get_by_label("RAID level").select_option("RAID5")
+        row.get_by_label("Drives").fill("3")
+        perc.get_by_label("Global hot spares").fill("1")
+        page.get_by_role("button", name="Save").click()
+        expect(page.locator(".toast").last).to_contain_text("Saved lab")
+
+        _main_nav(page, "Hosts")
+        page.get_by_role("link", name="esxi1").click()
+        _tab(page, "Storage")
+        page.get_by_role("button", name="Configure…").click()
+        dialog = page.locator("dialog")
+        expect(dialog.locator('[data-action="create_volume"]')).to_contain_text(
+            "Create data: RAID5 of 3 drives"
+        )
+        expect(dialog.locator('[data-action="assign_spare"]')).to_be_visible()
+        apply = dialog.get_by_role("button", name="Apply")
+        expect(apply).to_be_disabled()
+        dialog.get_by_label('Type "configure storage esxi1" to confirm').fill("configure storage esxi1")
+        apply.click()
+        expect(page.locator('#drawer [data-step="apply"]')).to_have_attribute(
+            "data-status", "succeeded", timeout=30_000
+        )
+        page.reload()
+        expect(page.locator('[data-controller="RAID.Slot.6-1"] [data-volume]')).to_contain_text("RAID5")
+    finally:
+        gz.stop()
