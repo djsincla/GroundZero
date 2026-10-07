@@ -73,6 +73,7 @@ OUTPUT_TITLES = {
     "jumbo": "Jumbo-frame result",
     "holorouter": "Holorouter",
     "appliance": "Appliance",
+    "bios": "BIOS changes",
     "staged": "Staged binaries",
     "holodeck": "Holodeck",
     OS_ACCESS: "OS access",

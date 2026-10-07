@@ -5,6 +5,16 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+### Added
+- **Configure BIOS:** turns on processor virtualization (VT-x/AMD-V), the IOMMU (VT-d/AMD-Vi) and UEFI
+  boot mode where the inventory shows them off.
+  - Only what is wrong is changed, keeping the BIOS's own value style.
+  - It writes pending settings to `Bios/Settings` with apply-on-reset, restarts once, verifies by reading
+    the BIOS back, and re-reads the inventory.
+  - It needs the typed phrase `configure bios <host>` whenever something will change.
+  - Preflight's BIOS checks now point at it.
+- **Simulator:** pending BIOS settings applied on reset, and the faults `bios-wrong` and `bios-not-applied`.
+
 ## [0.4.0] - 2026-10-06
 
 Appliances you already have: capture their settings, adopt them, and correct their records.

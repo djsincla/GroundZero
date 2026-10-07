@@ -5,6 +5,8 @@ Existing domain models are reused; ``HostPrep`` and ``HolorouterDeployment`` wer
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from groundzero.esxi.models import ChangeRecord, EsxiNetworkConfig, EsxiStorage, JumboResult
@@ -12,7 +14,16 @@ from groundzero.install.job import InstallReport
 from groundzero.inventory.models import HostInventory
 from groundzero.preflight.evaluate import PreflightReport
 from groundzero.readiness import ReadinessReport
+from groundzero.redfish.bios import BiosChange
 from groundzero.vcf_readiness.validate import VcfReadinessReport
+
+
+class BiosResult(BaseModel):
+    """What Configure BIOS changed (or found already right)."""
+
+    changes: list[BiosChange] = Field(default_factory=list)
+    unsupported: list[str] = Field(default_factory=list, description="Settings this BIOS does not expose")
+    applied: dict[str, Any] = Field(default_factory=dict, description="The values read back after the reboot")
 
 
 class HostPrep(BaseModel):
@@ -76,4 +87,5 @@ OUTPUTS: dict[str, type[BaseModel]] = {
     "jumbo": JumboResult,
     "holorouter": HolorouterDeployment,
     "appliance": ApplianceDeployment,
+    "bios": BiosResult,
 }

@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     media_attach_seconds: float = 600.0  # max wait for mounted media to attach (lab preference: up to 10 min)
     media_cleanup_watch_seconds: float = 90.0  # after a failed mount, watch for a late attach to eject
     installer_boot_minutes: float = 20.0
+    bios_apply_minutes: float = 30.0  # a BIOS config job runs during POST: the R740xd takes several minutes
+    bios_poll_seconds: float = 20.0
     # HTTPS listener BMCs download installer ISOs from (must be reachable from the BMC network).
     iso_repository: Path | None = None  # folder of stock ISOs (default ./images); GROUNDZERO_ISO_REPOSITORY
     media_bind_host: str = "0.0.0.0"

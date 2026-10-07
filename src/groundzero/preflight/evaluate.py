@@ -217,7 +217,7 @@ def _flag_check(check_id: str, title: str, value: bool | None, what: str) -> Che
     elif value:
         status, fix = CheckStatus.PASS, None
     else:
-        status, fix = CheckStatus.FAIL, f"Enable {what} in BIOS setup."
+        status, fix = CheckStatus.FAIL, f"Run Configure BIOS, or enable {what} in BIOS setup."
     return Check(
         id=check_id,
         category=Category.BIOS,
@@ -236,7 +236,7 @@ def _bios(inv: HostInventory) -> list[Check]:
     elif mode:
         boot_status, boot_fix = (
             CheckStatus.FAIL,
-            "Switch the BIOS boot mode to UEFI before installing ESXi 9.",
+            "Run Configure BIOS, or switch the BIOS boot mode to UEFI, before installing ESXi 9.",
         )
     else:
         boot_status, boot_fix = CheckStatus.UNKNOWN, "Boot mode not reported; verify UEFI manually."

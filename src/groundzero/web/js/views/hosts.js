@@ -115,6 +115,7 @@ function runTask(ctx, task) {
   if (task.id === "holodeck.router") { holorouterDialog(ctx); return; }
   if (task.id === "appliance.deploy") { applianceDialog(ctx); return; }
   if (task.id === "appliance.adopt") { adoptDialog(ctx); return; }
+  if (task.id === "bios.configure") { biosDialog(ctx); return; }
   if (task.id === "appliance.capture") { captureApplianceDialog(ctx); return; }
   startJob("POST", `/hosts/${id}/tasks/${task.id}`, {}, { onDone: refresh });
 }
@@ -146,7 +147,7 @@ function lastRun(ctx, last) {
 
 // Tasks whose parameters have their own screens (the install wizard, capture, prep, Holorouter dialogs).
 const CUSTOM_RUN = new Set(["os.custom", "os.reimage", "os.capture", "host.prep", "holodeck.router", "appliance.deploy",
-  "appliance.adopt", "appliance.capture"]);
+  "appliance.adopt", "appliance.capture", "bios.configure"]);
 const EDITABLE = new Set(["holorouter", "appliance"]);  // records you may correct by hand
 
 function optionsButton(ctx, task) {
@@ -496,6 +497,41 @@ async function applianceDialog(ctx, prefill = {}) {
   });
   if (prefill.replace) replace.check();
   replace.sync();
+}
+
+// Configure BIOS: what to turn on (pre-ticked from the latest inventory), the reboot warning, the phrase.
+async function biosDialog(ctx) {
+  const inv = await maybe(api("GET", `/hosts/${ctx.id}/outputs/inventory`));
+  const b = inv?.bios || {};
+  const rows = [
+    ["cpu_virtualization", "Processor virtualization (VT-x / AMD-V)", b.cpu_virtualization, b.cpu_virtualization === false],
+    ["iommu", "IOMMU (VT-d / AMD-Vi)", b.iommu, b.iommu === false],
+    ["boot_mode", "UEFI boot mode", b.boot_mode, Boolean(b.boot_mode) && !String(b.boot_mode).toUpperCase().includes("UEFI")],
+  ];
+  const boxes = {};
+  const shown = (v) => (v === true ? "on" : v === false ? "off" : v || "not reported");
+  const phrase = `configure bios ${ctx.host.name}`;
+  const input = h("input", { id: "bios-confirm", autocomplete: "off" });
+  const { submit } = openDialog(`Configure BIOS on ${ctx.host.name}`, [
+    h("p", { class: "muted" }, "Writes the settings to the BIOS as pending changes, restarts the server once and waits until the BIOS reports them. Only what is wrong is changed."),
+    h("ul", { class: "plan" }, rows.map(([key, title, now, wrong]) => {
+      const box = h("input", { type: "checkbox", checked: wrong, "aria-label": title });
+      boxes[key] = box;
+      return h("li", { class: "plan-item", "data-setting": key },
+        h("label", { class: "inline" }, box, h("strong", {}, title)), h("span", { class: "muted small-text" }, ` · now ${shown(now)}`));
+    })),
+    h("div", { class: "notice" }, `${ctx.host.name} reboots. Anything running on it, including the Holorouter and other VMs, goes down with it and comes back only if it is set to start automatically.`),
+    h("label", { for: "bios-confirm" }, `Type "${phrase}" to confirm`), input,
+  ], {
+    submitLabel: "Configure and reboot", submitClass: "danger",
+    onSubmit: async () => {
+      const settings = Object.entries(boxes).filter(([, box]) => box.checked).map(([k]) => k);
+      const job = await api("POST", `/hosts/${ctx.id}/tasks/bios.configure`, { params: { settings }, confirm: input.value });
+      showJobDrawer(job, { title: `Configure BIOS on ${ctx.host.name}`, onDone: refresh });
+    },
+  });
+  submit.disabled = true;
+  input.addEventListener("input", () => { submit.disabled = input.value !== phrase; });
 }
 
 // Pick one of the host's VMs (read live) for adopt or capture.

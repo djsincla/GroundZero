@@ -87,6 +87,11 @@ uv run groundzero preflight esxi1                                 # read-only ha
 - **Preflight:** checks CPU support, memory, disks, NICs, boot mode and the BMC against the Holodeck 9
   requirements. It makes no changes.
 
+If preflight finds processor virtualization, the IOMMU or UEFI boot mode turned off, run **Configure BIOS**
+from the Pipeline. It writes the settings to the BIOS as pending changes, restarts the server once and waits
+until the BIOS reports them, which on an R740xd takes several minutes because the BIOS configuration job runs
+during POST. Be aware that the server really does reboot: anything running on it goes down with it.
+
 ## 5. Describe the ESXi you want
 
 A **config set** holds the shared settings: VLAN, uplinks, gateway, DNS, NTP, install-disk rule, CPU

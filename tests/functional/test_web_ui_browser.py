@@ -725,3 +725,34 @@ def test_adopt_capture_and_edit_appliances_from_the_pipeline(
     dialog.get_by_role("button", name="Save").click()
     expect(router.locator('[data-source="manual"]')).to_be_visible()
     expect(router.locator('[data-role="output"]')).to_contain_text("192.0.2.151")
+
+
+def test_configure_bios_from_the_pipeline(page: Page, tmp_path: Path) -> None:
+    from .conftest import _simulated
+
+    gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_FAULTS='["bios-wrong"]', GROUNDZERO_BIOS_POLL_SECONDS="0.2")
+    gz.start()
+    try:
+        assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+        assert gz.cli("run", "esxi1", "discover", timeout=120).code == 0
+        _open(page, gz)
+        page.get_by_role("link", name="esxi1").click()
+        page.locator('[data-task="bios.configure"]').get_by_role("button", name="Run").click()
+        dialog = page.locator("dialog")
+        expect(dialog.locator('[data-setting="cpu_virtualization"] input')).to_be_checked()  # off in the BIOS
+        expect(dialog.locator('[data-setting="boot_mode"]')).to_contain_text("now Bios")
+        expect(dialog).to_contain_text("goes down with it")
+        go = dialog.get_by_role("button", name="Configure and reboot")
+        expect(go).to_be_disabled()
+        dialog.get_by_label('Type "configure bios esxi1" to confirm').fill("configure bios esxi1")
+        go.click()
+        drawer = page.locator("#drawer")
+        expect(drawer.locator('[data-step="verify"]')).to_have_attribute(
+            "data-status", "succeeded", timeout=30_000
+        )
+        page.reload()
+        expect(page.locator('[data-task="bios.configure"] [data-role="output"]')).to_contain_text(
+            "ProcVirtualization Disabled → Enabled"
+        )
+    finally:
+        gz.stop()

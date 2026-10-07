@@ -35,6 +35,8 @@ class SimulatedBmc:
         - "slow-insert": InsertMedia takes effect but its response times out
         - "late-attach": InsertMedia fails (RAC0720) but the image attaches a moment later
         - "kickstart-error": the installer boots, rejects KS.CFG and reboots into the old ESXi
+        - "bios-wrong": the BIOS starts with processor virtualization off and legacy (BIOS) boot mode
+        - "bios-not-applied": pending BIOS settings are accepted but never applied (a failed config job)
         """
         self.responses = copy.deepcopy(responses)
         self.esxi = esxi
@@ -51,6 +53,14 @@ class SimulatedBmc:
         self._tasks: set[asyncio.Task[None]] = set()
         system = self._system_path()
         self.responses.setdefault(system, {}).setdefault("PowerState", "On")
+        self.pending_bios: dict[str, Any] = {}  # Bios/Settings: applied on the next reset, like the iDRAC
+        if "bios-wrong" in faults and (bios := self._bios_path()):
+            self.responses[bios].setdefault("Attributes", {}).update(
+                {"ProcVirtualization": "Disabled", "BootMode": "Bios"}
+            )
+
+    def _bios_path(self) -> str | None:
+        return next((p for p in self.responses if p.endswith("/Bios") and "/Systems/" in p), None)
 
     def _system_path(self) -> str:
         return next(p for p in self.responses if p.rstrip("/").count("/") == 4 and "/Systems/" in p)
@@ -87,6 +97,8 @@ class SimulatedBmc:
         return _error(405, f"{request.method} {path} not supported by the simulator")
 
     def _get(self, path: str) -> httpx.Response:
+        if path.endswith("/Bios/Settings"):
+            return httpx.Response(200, json={"Attributes": dict(self.pending_bios)})
         if path.endswith("/Attributes") and "/Managers/" in path:
             return httpx.Response(200, json={"Attributes": dict(self.attributes)})
         data = self.responses.get(path)
@@ -101,6 +113,13 @@ class SimulatedBmc:
         return httpx.Response(200, json=data)
 
     def _patch(self, path: str, body: dict[str, Any]) -> httpx.Response:
+        if path.endswith("/Bios/Settings"):
+            current = self.responses.get(path.removesuffix("/Settings"), {}).get("Attributes", {})
+            unknown = sorted(k for k in body.get("Attributes", {}) if k not in current)
+            if unknown:
+                return _error(400, f"Unknown BIOS attribute(s): {', '.join(unknown)}")
+            self.pending_bios.update(body.get("Attributes", {}))
+            return httpx.Response(202, json={})
         if path.endswith("/Attributes"):
             self.attributes.update({k: str(v) for k, v in body.get("Attributes", {}).items()})
             return httpx.Response(200, json={})
@@ -151,6 +170,10 @@ class SimulatedBmc:
         if reset_type not in ("On", "ForceRestart", "GracefulRestart", "PowerCycle"):
             return _error(400, f"Unsupported ResetType {reset_type}")
         system["PowerState"] = "On"
+        if self.pending_bios and (bios := self._bios_path()):  # the BIOS config job runs during POST
+            if "bios-not-applied" not in self.faults:
+                self.responses[bios].setdefault("Attributes", {}).update(self.pending_bios)
+            self.pending_bios = {}
         # Like the real iDRAC: an RFS that has not finished attaching is an empty drive at POST.
         attached = self.attributes.get("RFS.1.MediaAttachState") == "Attached"
         boot_cd = self._consume_one_time_cd_boot() and attached and "ignore-boot-once" not in self.faults
