@@ -80,8 +80,10 @@ server.
 | **M1** | API, job model, Redfish client, inventory, Holodeck 9 preflight | ✅ done |
 | **M2** | Unattended ESXi 9.x install via virtual media, with CPU override, VMFS preservation and post-install validation | ✅ done: ESXi 9.1.1 on a Dell R740xd |
 | **M2.5** | Config sets with capture from a running host, ISO repository, deploy preview, web UI, certificate pinning | ✅ done (UI refresh in progress) |
-| M3 | Holodeck host prep (MTU 9000, trunk port groups) and the Holodeck 9 deploy job | ⏳ next |
-| M4 | NSX bare-metal Edge plugin, more OEM profiles, API explorer rework | 📋 planned |
+| **M3** | Holodeck readiness, host prep (MTU 9000, port groups, NTP, datastore), jumbo-frame verification, Holorouter | ✅ done |
+| **M3.5** | Modular pipeline (typed inputs and outputs), any OVA deployed from its own inputs, appliance profiles, replace | ✅ done (v0.3.0) |
+| M4 | Capture and adopt existing VMs, Configure BIOS, cluster mode with DNS checks, the Holodeck deploy job | ⏳ next |
+| M5 | Windows guest customisation, NSX bare-metal Edge plugin, more OEM profiles | 📋 planned |
 
 ## Quick start
 

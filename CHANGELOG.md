@@ -5,7 +5,9 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
-Planned as 0.3.0: the modular pipeline and appliance (OVA) deployment.
+## [0.3.0] - 2026-10-06
+
+The modular pipeline, and deploying any appliance (OVA).
 
 ### Added
 - **Modules:** every pipeline task is a module that declares its inputs, outputs and parameters. Outputs
@@ -109,6 +111,7 @@ R740xd.
   - Functional, browser and live test suites.
   - A single-container bundle.
 
-[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/djsincla/GroundZero/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/djsincla/GroundZero/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/djsincla/GroundZero/releases/tag/v0.1.0
