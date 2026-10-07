@@ -31,6 +31,8 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 - Recorded test fixtures no longer redact BIOS settings whose names sound sensitive (`SerialComm`,
   `SubNumaCluster`): values the BIOS registry lists as choices are kept.
 - Job diagnostics now redact BIOS password attributes such as `SetupPassword`.
+- A BMC that doesn't answer a direct request (for example reading its BIOS registry) is a 502 `bmc_error`
+  naming what failed, not a bare 500.
 
 ## [0.9.0] - 2026-10-07
 

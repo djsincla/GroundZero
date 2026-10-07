@@ -177,3 +177,27 @@ def test_a_capture_keeps_registry_choices_that_sound_sensitive() -> None:
         "SystemServiceTag": "REDACTED",
         "SubNumaCluster": "Disabled",
     }
+
+
+def test_an_unreachable_bmc_is_a_clear_502(tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from groundzero.api.app import create_app
+    from groundzero.core.config import Settings
+    from groundzero.redfish.client import RedfishClient
+    from groundzero.redfish.errors import RedfishTransportError
+
+    class Unreachable(RedfishClient):
+        async def __aenter__(self) -> RedfishClient:
+            raise RedfishTransportError("POST /redfish/v1/SessionService/Sessions failed: ConnectTimeout")
+
+    settings = Settings(home=tmp_path / "home", api_token="t", iso_repository=tmp_path / "isos")
+    app = create_app(settings, client_factory=lambda host, pw: Unreachable("bmc.test", "root", pw))
+    with TestClient(app) as api:
+        api.headers["Authorization"] = "Bearer t"
+        host = api.post(
+            "/api/v1/hosts", json={"bmc_address": "bmc.test", "username": "root", "password": "x"}
+        ).json()
+        response = api.get(f"/api/v1/hosts/{host['id']}/bios-registry")
+    assert response.status_code == 502 and response.json()["type"] == "urn:groundzero:problem:bmc_error"
+    assert "ConnectTimeout" in response.json()["detail"]

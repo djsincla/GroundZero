@@ -16,6 +16,7 @@ from groundzero.core.tls import CertificateChangedError
 from groundzero.osconfig import OsConfigError
 from groundzero.ova.descriptor import DescriptorError
 from groundzero.preflight.evaluate import UnknownProfileError
+from groundzero.redfish.errors import RedfishError
 
 PROBLEM_JSON = "application/problem+json"
 
@@ -60,6 +61,7 @@ _DOMAIN_ERRORS: tuple[tuple[type[Exception], int, str], ...] = (
     (OsConfigError, 422, "os_config_invalid"),
     (DescriptorError, 422, "ova_invalid"),
     (CertificateChangedError, 409, "certificate_changed"),
+    (RedfishError, 502, "bmc_error"),  # a request that talks to the BMC directly and it didn't answer
 )
 
 
