@@ -5,6 +5,10 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-07
+
+Specs: pick the jobs each server or cluster runs, and run them as one.
+
 ### Added
 - **Specs:** pick the jobs a server or a cluster runs, each with its saved settings (`/specs`).
   - Steps are kept in pipeline order and checked when you save: the task exists, its settings are valid,
@@ -205,7 +209,8 @@ R740xd.
   - Functional, browser and live test suites.
   - A single-container bundle.
 
-[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/djsincla/GroundZero/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/djsincla/GroundZero/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/djsincla/GroundZero/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/djsincla/GroundZero/compare/v0.5.0...v0.6.0
