@@ -69,10 +69,14 @@ export async function viewHost(app, id, tab = "pipeline") {
     api("GET", `/hosts/${id}/certificates`),
   ]);
   const pipeline = await api("GET", `/hosts/${id}/pipeline`);
+  // Appliances recorded on this host (deployed, adopted or set by hand): one "appliance:<vm>" output each.
+  const outputs = tab === "pipeline" ? await api("GET", `/hosts/${id}/outputs`) : [];
+  const appliances = await Promise.all(outputs.filter((o) => o.kind.startsWith("appliance:")).map(async (o) =>
+    ({ ...o, data: await api("GET", `/hosts/${id}/outputs/${encodeURIComponent(o.kind)}`) })));
   const readiness = tab === "readiness" ? await maybe(api("GET", `/hosts/${id}/outputs/readiness`)) : null;
   const active = jobs.find(isActive);
   const busy = Boolean(active);
-  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness,
+  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness, appliances,
     lastInstallJob: jobs.find((j) => j.task === "os.custom" || j.task === "os.reimage") };
 
   const tabs = h("nav", { class: "tabs", "aria-label": "Host sections" }, TABS.map(([key, label]) =>
@@ -110,6 +114,8 @@ function runTask(ctx, task) {
   if (task.id === "os.capture") { captureDialog(host); return; }
   if (task.id === "holodeck.router") { holorouterDialog(ctx); return; }
   if (task.id === "appliance.deploy") { applianceDialog(ctx); return; }
+  if (task.id === "appliance.adopt") { adoptDialog(ctx); return; }
+  if (task.id === "appliance.capture") { captureApplianceDialog(ctx); return; }
   startJob("POST", `/hosts/${id}/tasks/${task.id}`, {}, { onDone: refresh });
 }
 
@@ -139,7 +145,9 @@ function lastRun(ctx, last) {
 }
 
 // Tasks whose parameters have their own screens (the install wizard, capture, prep, Holorouter dialogs).
-const CUSTOM_RUN = new Set(["os.custom", "os.reimage", "os.capture", "host.prep", "holodeck.router", "appliance.deploy"]);
+const CUSTOM_RUN = new Set(["os.custom", "os.reimage", "os.capture", "host.prep", "holodeck.router", "appliance.deploy",
+  "appliance.adopt", "appliance.capture"]);
+const EDITABLE = new Set(["holorouter", "appliance"]);  // records you may correct by hand
 
 function optionsButton(ctx, task) {
   const props = Object.keys(task.params_schema?.properties || {});
@@ -201,11 +209,13 @@ function taskRow(ctx, task) {
       stateBadge(task.state), h("span", { class: "spacer" }), optionsButton(ctx, task), taskButton(ctx, task)),
     h("p", { class: "muted small-text task-desc" }, task.description),
     task.state === "failed" && last?.error ? h("p", { class: "error small-text", "data-role": "error" }, last.error) : null,
-    task.output ? h("p", { class: "task-output", "data-role": "output" }, "→ ", task.output.summary,
+    task.output ? h("p", { class: "task-output", "data-role": "output" }, "→ ", task.output.summary, " ", sourceChip(task.output.source),
       task.output.fresh ? null : h("span", { class: "warn-text" }, " (from before the OS was reinstalled)"),
       task.id === "host.assess" ? [" · ", h("a", { href: `#/hosts/${ctx.id}/readiness` }, "View report")]
         : [" · ", h("a", { href: `#/hosts/${ctx.id}/pipeline`, "data-view-output": task.produces,
-            onclick: (e) => { e.preventDefault(); showOutput(ctx.id, task.output.kind, `${task.title}: output`); } }, "View output")]) : null,
+            onclick: (e) => { e.preventDefault(); showOutput(ctx.id, task.output.kind, `${task.title}: output`); } }, "View output")],
+      EDITABLE.has(task.output.kind) ? [" · ", h("a", { href: `#/hosts/${ctx.id}/pipeline`, "data-edit-output": task.output.kind,
+        onclick: (e) => { e.preventDefault(); editOutputDialog(ctx, task.output.kind, `${task.title}: record`); } }, "Edit")] : null) : null,
     flowRow(ctx, task),
     task.state === "blocked" && task.blocked_by.length
       ? h("p", { class: "small-text blocked-by" }, "Needs: ", task.blocked_by.join("; ")) : null,
@@ -228,8 +238,31 @@ function pipelineTab(ctx) {
         h("li", { class: `stage ${stage.state}`, "data-stage": stage.id },
           h("div", { class: "stage-head" }, h("span", { class: "stage-dot", "aria-hidden": "true" }),
             h("h3", {}, stage.title), stateBadge(stage.state)),
-          h("ul", { class: "stage-tasks" }, stage.tasks.map((t) => taskRow(ctx, t))))))),
+          h("ul", { class: "stage-tasks" }, stage.tasks.map((t) => taskRow(ctx, t))),
+          stage.id === "appliances" ? applianceList(ctx) : null)))),
   ];
+}
+
+const SOURCE_LABEL = { adopted: "adopted", manual: "set manually" };
+const sourceChip = (source) => (SOURCE_LABEL[source] ? h("span", { class: "chip", "data-source": source }, SOURCE_LABEL[source]) : null);
+
+// The appliances recorded on this host, each with what you can do to it.
+function applianceList(ctx) {
+  if (!ctx.appliances?.length) return null;
+  return h("div", { class: "appliance-list", "data-role": "appliances" },
+    h("p", { class: "eyebrow" }, "On this host"),
+    h("ul", { class: "stage-tasks" }, ctx.appliances.map((a) => {
+      const d = a.data;
+      return h("li", { class: "task", "data-appliance": d.vm_name },
+        h("div", { class: "row" },
+          h("strong", {}, d.vm_name), sourceChip(a.source), h("span", { class: "spacer" }),
+          h("button", { class: "small", disabled: ctx.busy, onclick: () => applianceDialog(ctx, { vmName: d.vm_name, image: d.image,
+            profileId: d.profile_id, replace: true }) }, "Replace…"),
+          h("button", { class: "small", disabled: ctx.busy, onclick: () => captureApplianceDialog(ctx, d.vm_name) }, "Capture profile…"),
+          h("button", { class: "small", onclick: () => editOutputDialog(ctx, a.kind, `${d.vm_name}: record`) }, "Edit record…")),
+        h("p", { class: "muted small-text" }, [d.product, d.version].filter(Boolean).join(" ") || d.image || "unknown appliance",
+          d.ip ? ` · ${d.ip}` : "", d.datastore ? ` · ${d.datastore}` : "", " · ", age(a.produced_at)));
+    })));
 }
 
 // ── readiness: checks, the datastore proposal and the planned fixes (applied by "Prepare host") ──
@@ -301,6 +334,7 @@ function replaceControl(vmName) {
       "Replace an existing VM of this name (it is deleted and deployed fresh; appliances apply their settings on first boot only)"), wrap),
     checked: () => box.checked,
     confirm: () => (box.checked ? input.value : null),
+    check: () => { box.checked = true; },
     sync,
   };
 }
@@ -359,7 +393,7 @@ async function holorouterDialog(ctx) {
 }
 
 // Deploy any OVA: image → profile → VM name, datastore, networks and value overrides (form from the OVA).
-async function applianceDialog(ctx) {
+async function applianceDialog(ctx, prefill = {}) {
   const { id, host } = ctx;
   const [images, profiles, network, storage] = await Promise.all([
     api("GET", "/images"), api("GET", "/appliance-profiles"),
@@ -388,13 +422,16 @@ async function applianceDialog(ctx) {
   let netInputs = {};
   const replace = replaceControl(() => vm.value.trim());
   vm.addEventListener("input", replace.sync);
+  if (prefill.vmName) vm.value = prefill.vmName;
+  const preImage = prefill.image && ovas.find((i) => i.filename === prefill.image);
+  if (preImage) imageSelect.value = preImage.id;
 
   async function load() {
     const image = ovas.find((i) => i.id === imageSelect.value);
     const mine = profiles.filter((p) => p.product === image.product);
     profileSelect.replaceChildren(h("option", { value: "" }, mine.length ? "No profile: values below only" : "No profiles for this OVA"),
       mine.map((p) => h("option", { value: p.id }, p.name)));
-    if (mine.length) profileSelect.value = mine[0].id;
+    if (mine.length) profileSelect.value = mine.some((p) => p.id === prefill.profileId) ? prefill.profileId : mine[0].id;
     if (!vm.value) vm.value = (image.product || "appliance").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     await render();
   }
@@ -423,7 +460,7 @@ async function applianceDialog(ctx) {
   profileSelect.addEventListener("change", render);
   await load();
 
-  openDialog(`Deploy an appliance on ${host.name}`, [
+  openDialog(prefill.replace ? `Replace ${prefill.vmName} on ${host.name}` : `Deploy an appliance on ${host.name}`, [
     h("div", { class: "grid two" },
       h("div", { class: "field" }, h("label", { for: "ad-image" }, "OVA"), imageSelect),
       h("div", { class: "field" }, h("label", { for: "ad-profile" }, "Profile"), profileSelect),
@@ -457,7 +494,83 @@ async function applianceDialog(ctx) {
       }
     },
   });
+  if (prefill.replace) replace.check();
   replace.sync();
+}
+
+// Pick one of the host's VMs (read live) for adopt or capture.
+async function vmSelect(ctx, preferred) {
+  let vms = [];
+  try { vms = await api("GET", `/hosts/${ctx.id}/vms`); } catch (e) { toast(e.message, "error"); return null; }
+  return h("select", { id: "vm-pick" }, vms.map((v) => h("option", { value: v.name, selected: v.name === preferred },
+    `${v.name} (${v.power_state === "poweredOn" ? v.guest_ip || "on" : "off"})`)));
+}
+
+async function adoptDialog(ctx) {
+  const select = await vmSelect(ctx);
+  if (!select) return;
+  const role = h("select", { id: "adopt-role" }, h("option", { value: "appliance" }, "An appliance"),
+    h("option", { value: "holorouter" }, "The Holorouter (Holodeck steps will use it)"));
+  const profile = h("input", { id: "adopt-profile", placeholder: "optional", autocomplete: "off" });
+  openDialog(`Adopt a VM on ${ctx.host.name}`, [
+    h("p", { class: "muted" }, "Records a VM that is already on the host, so later steps use it as if GroundZero had deployed it. Read-only: nothing on the host changes."),
+    h("label", { for: "vm-pick" }, "VM"), select,
+    h("label", { for: "adopt-role" }, "Record it as"), role,
+    h("label", { for: "adopt-profile" }, "Also capture its settings as a profile named"), profile,
+  ], {
+    submitLabel: "Adopt",
+    onSubmit: async () => {
+      const params = { vm_name: select.value, role: role.value, profile_name: profile.value.trim() || null };
+      const job = await api("POST", `/hosts/${ctx.id}/tasks/appliance.adopt`, { params });
+      showJobDrawer(job, { title: `Adopt ${params.vm_name}`, onDone: refresh });
+    },
+  });
+}
+
+async function captureApplianceDialog(ctx, vmName) {
+  const select = await vmSelect(ctx, vmName);
+  if (!select) return;
+  const name = h("input", { id: "cap-profile", required: true, autocomplete: "off", value: `${vmName || select.value}-profile` });
+  select.addEventListener("change", () => { name.value = `${select.value}-profile`; });
+  openDialog(`Capture an appliance profile on ${ctx.host.name}`, [
+    h("p", { class: "muted" }, "Reads the VM's OVF settings and networks (read-only) and saves them as a profile for the next deployment. Passwords are not copied: set them on the profile."),
+    h("label", { for: "vm-pick" }, "VM"), select,
+    h("label", { for: "cap-profile" }, "Profile name"), name,
+  ], {
+    submitLabel: "Capture",
+    onSubmit: async () => {
+      const job = await api("POST", `/hosts/${ctx.id}/tasks/appliance.capture`, { params: { vm_name: select.value, name: name.value.trim() } });
+      showJobDrawer(job, { title: `Capture ${select.value}`, onDone: (j) => { if (j.status === "succeeded") toast("Profile saved: see Config sets", "success"); refresh(); } });
+    },
+  });
+}
+
+// Correct a recorded output by hand: the form comes from the output's schema; nothing on the server changes.
+async function editOutputDialog(ctx, kind, title) {
+  const [kinds, current] = await Promise.all([api("GET", "/output-kinds"), api("GET", `/hosts/${ctx.id}/outputs/${encodeURIComponent(kind)}`)]);
+  const full = kinds[kind.split(":")[0]]?.schema;
+  if (!full) { toast(`${kind} cannot be edited`, "error"); return; }
+  // Free-form maps (e.g. networks) have no form fields: they are kept as recorded.
+  const flat = Object.fromEntries(Object.entries(full.properties).filter(([, n]) => !(n.type === "object" && !n.properties)));
+  const schema = { ...full, properties: flat };
+  const form = schemaForm(schema, current, { idPrefix: "out", where: "output" });
+  openDialog(title, [
+    h("p", { class: "notice" }, "This changes GroundZero's record only. The VM itself is not reconfigured: appliances apply their settings on first boot, so to change those, replace it."),
+    form.el,
+  ], {
+    submitLabel: "Save", wide: true,
+    onSubmit: async () => {
+      form.clearErrors();
+      try {
+        await api("PUT", `/hosts/${ctx.id}/outputs/${encodeURIComponent(kind)}`, { ...current, ...form.value() });
+      } catch (e) {
+        if (e.problem?.errors && form.setErrors(e.problem.errors)) throw new Error("Fix the highlighted values.");
+        throw e;
+      }
+      toast("Record saved", "success");
+      refresh();
+    },
+  });
 }
 
 // Confirm exactly what will change on the server; erasing a disk needs its typed phrase.

@@ -29,10 +29,11 @@ from groundzero.core.models import (
     OsAccessSet,
 )
 from groundzero.core.store import Store, utcnow
-from groundzero.core.tasks import Pipeline, TaskInfo, TaskRun, catalog, evaluate_pipeline, info
+from groundzero.core.tasks import OUTPUT_TITLES, Pipeline, TaskInfo, TaskRun, catalog, evaluate_pipeline, info
 from groundzero.core.tls import PinnedCertificate, check_pin, fetch_certificate, fingerprint, pinned_context
 from groundzero.esxi.models import EsxiNetworkConfig, EsxiStorage
 from groundzero.esxi.ops import EsxiOps, LiveEsxiOps, OsTarget
+from groundzero.esxi.vms import VmSummary
 from groundzero.install.job import InstallRequest
 from groundzero.install.kickstart import render_kickstart
 from groundzero.inventory.collect import collect_inventory as read_inventory
@@ -482,6 +483,30 @@ class Services:
     def list_tasks(self) -> list[TaskInfo]:
         return [info(m.spec(), m.params_schema()) for m in REGISTRY.values()]
 
+    def set_output(self, host_id: str, kind: str, data: dict[str, Any]) -> dict[str, Any]:
+        """Record an output by hand (e.g. a VM you deployed yourself, or a corrected IP). Checked against the
+        kind's model; later tasks read it like any other output. It changes nothing on the server."""
+        self.get_host(host_id)
+        model = OUTPUTS.get(kind.split(":", 1)[0])
+        if model is None:
+            raise NotFoundError(f"Unknown output kind '{kind}'; see GET /output-kinds")
+        clean = self._validate(model, data, "output")
+        self.save_output(host_id, kind, "manual", clean, source="manual")
+        return clean
+
+    def output_kinds(self) -> dict[str, dict[str, Any]]:
+        """Every output kind: what it is and the JSON Schema of its contents."""
+        return {
+            kind: {"title": OUTPUT_TITLES.get(kind, kind), "schema": model.model_json_schema()}
+            for kind, model in OUTPUTS.items()
+        }
+
+    async def list_vms(self, host_id: str) -> list[VmSummary]:
+        """The VMs on the host's installed ESXi (read-only)."""
+        access, password = self.os_access(host_id)
+        target = await asyncio.to_thread(self.os_target, host_id, access)
+        return await self.esxi.list_vms(target, password)
+
     def list_outputs(self, host_id: str) -> list[dict[str, Any]]:
         """The latest output of each kind this host has, newest first."""
         self.get_host(host_id)
@@ -500,6 +525,7 @@ class Services:
                         "job_id": meta.job_id,
                         "produced_at": meta.created_at,
                         "fresh": meta.epoch >= epoch,
+                        "source": meta.source,
                     }
                 )
         return sorted(found, key=lambda o: o["produced_at"], reverse=True)
@@ -531,13 +557,15 @@ class Services:
         return self.runner.submit(task=module.id, host_id=host_id, params=prepared.params, func=prepared.run)
 
     # ── shared plumbing for modules (the Deps protocol in groundzero.modules.base) ──
-    def save_output(self, host_id: str, kind: str, job_id: str, output: BaseModel | dict[str, Any]) -> None:
+    def save_output(
+        self, host_id: str, kind: str, job_id: str, output: BaseModel | dict[str, Any], *, source: str = "job"
+    ) -> None:
         """Store a module's output, checked against the output registry so the next module can read it."""
         data = output.model_dump(mode="json") if isinstance(output, BaseModel) else output
         model = OUTPUTS.get(kind.split(":", 1)[0])  # "appliance:<vm>" is an appliance output
         if model is not None:
             model.model_validate(data)  # an output that doesn't match its type is a bug, not bad input
-        self.store.save_result(host_id=host_id, kind=kind, job_id=job_id, data=data)
+        self.store.save_result(host_id=host_id, kind=kind, job_id=job_id, data=data, source=source)
 
     def reassess(
         self, host_id: str, network: EsxiNetworkConfig, storage: EsxiStorage, job_id: str

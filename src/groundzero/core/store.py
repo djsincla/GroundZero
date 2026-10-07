@@ -108,6 +108,7 @@ _MIGRATIONS = (
     ("results", "epoch", "INTEGER NOT NULL DEFAULT 0"),  # the host's os_epoch when the result was made
     ("config_sets", "secret_names", "TEXT"),  # names of the sealed secrets (values stay encrypted)
     ("jobs", "task", "TEXT"),  # the pipeline task id; older rows are backfilled from kind on read
+    ("results", "source", "TEXT NOT NULL DEFAULT 'job'"),  # job, adopted or manual
 )
 
 # Jobs created before the task column: their kind (and, for installs, params) says which task they ran.
@@ -133,11 +134,14 @@ def legacy_task_id(kind: str, params: dict[str, Any]) -> str:
 class OutputMeta:
     """A stored task output plus where and when it came from."""
 
-    def __init__(self, data: dict[str, Any], job_id: str, created_at: datetime, epoch: int) -> None:
+    def __init__(
+        self, data: dict[str, Any], job_id: str, created_at: datetime, epoch: int, source: str = "job"
+    ) -> None:
         self.data = data
         self.job_id = job_id
         self.created_at = created_at
         self.epoch = epoch
+        self.source = source  # "job", "adopted" (an existing VM recorded) or "manual" (set by hand)
 
 
 def utcnow() -> datetime:
@@ -517,13 +521,15 @@ class Store:
             ).rowcount
 
     # ── results (task outputs) ───────────────────────────────────────────
-    def save_result(self, *, host_id: str, kind: str, job_id: str, data: dict[str, Any]) -> None:
+    def save_result(
+        self, *, host_id: str, kind: str, job_id: str, data: dict[str, Any], source: str = "job"
+    ) -> None:
         """Store a task output, stamped with the host's current OS epoch."""
         with self._tx() as cur:
             row = cur.execute("SELECT os_epoch FROM hosts WHERE id = ?", (host_id,)).fetchone()
             cur.execute(
-                "INSERT INTO results (host_id, kind, job_id, data, created_at, epoch)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO results (host_id, kind, job_id, data, created_at, epoch, source)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     host_id,
                     kind,
@@ -531,6 +537,7 @@ class Store:
                     json.dumps(data),
                     utcnow().isoformat(),
                     row["os_epoch"] if row else 0,
+                    source,
                 ),
             )
 
@@ -543,7 +550,11 @@ class Store:
         if not row:
             return None
         return OutputMeta(
-            json.loads(row["data"]), row["job_id"], datetime.fromisoformat(row["created_at"]), row["epoch"]
+            json.loads(row["data"]),
+            row["job_id"],
+            datetime.fromisoformat(row["created_at"]),
+            row["epoch"],
+            row["source"] or "job",
         )
 
     def output_kinds(self, host_id: str) -> list[str]:

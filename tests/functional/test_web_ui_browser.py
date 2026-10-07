@@ -668,3 +668,60 @@ def test_deploy_any_appliance_from_the_pipeline(page: Page, simulated_r740xd: Gr
     expect(page.locator('[data-task="appliance.deploy"] [data-role="output"]')).to_contain_text(
         "sddc-manager at 192.0.2.20"
     )
+
+
+def test_adopt_capture_and_edit_appliances_from_the_pipeline(
+    page: Page, simulated_r740xd: GroundZero
+) -> None:
+    gz = simulated_r740xd
+    _ova(gz, "holorouter-9.1.1.ovf", "holorouter-9.1.1.0456.ova")
+    _host_with_os(gz)
+    with gz.api() as api:  # a VM "deployed by hand": on the host, unknown to GroundZero's pipeline
+        host = api.get("/api/v1/hosts").json()[0]["id"]
+        image = next(i for i in api.post("/api/v1/images/rescan").json() if i["kind"] == "ova")
+        nets = dict.fromkeys(
+            ("VM Management Network", "Trunk Portgroup for Site A", "Trunk Portgroup for Site B"),
+            "VM Network",
+        )
+        params = {
+            "image_id": image["id"],
+            "vm_name": "my-router",
+            "datastore": "localHolodeck",
+            "networks": nets,
+            "values": {"ip": "192.0.2.150"},
+            "secrets": {"password": "Holo-pass1!"},
+        }
+        job = api.post(f"/api/v1/hosts/{host}/tasks/appliance.deploy", json={"params": params}).json()
+        for _ in range(100):
+            if api.get(f"/api/v1/jobs/{job['id']}").json()["status"] not in ("queued", "running"):
+                break
+            time.sleep(0.2)
+    _open(page, gz)
+    page.get_by_role("link", name="esxi1").click()
+
+    page.locator('[data-task="appliance.adopt"]').get_by_role("button", name="Run").click()
+    dialog = page.locator("dialog")
+    dialog.get_by_label("VM", exact=True).select_option("my-router")
+    dialog.get_by_label("Record it as").select_option("holorouter")
+    dialog.get_by_role("button", name="Adopt").click()
+    expect(page.locator("#drawer [data-step='record']")).to_have_attribute(
+        "data-status", "succeeded", timeout=20_000
+    )
+    page.reload()
+    router = page.locator('[data-task="holodeck.router"]')
+    expect(router.locator('[data-source="adopted"]')).to_be_visible()  # recorded, not deployed by GroundZero
+    row = page.locator('[data-appliance="my-router"]')
+    expect(row).to_contain_text("192.0.2.150")
+
+    row.get_by_role("button", name="Capture profile…").click()
+    expect(page.locator("dialog").get_by_label("Profile name")).to_have_value("my-router-profile")
+    page.locator("dialog").get_by_role("button", name="Capture").click()
+    expect(page.locator(".toast").last).to_contain_text("Profile saved", timeout=20_000)
+
+    router.get_by_role("link", name="Edit").click()
+    dialog = page.locator("dialog")
+    expect(dialog).to_contain_text("not reconfigured")
+    dialog.get_by_label("IP address").fill("192.0.2.151")
+    dialog.get_by_role("button", name="Save").click()
+    expect(router.locator('[data-source="manual"]')).to_be_visible()
+    expect(router.locator('[data-role="output"]')).to_contain_text("192.0.2.151")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from groundzero.modules.appliances import ApplianceCapture, ApplianceDeploy
+from groundzero.modules.appliances import ApplianceAdopt, ApplianceCapture, ApplianceDeploy
 from groundzero.modules.base import Module
 from groundzero.modules.hardware import Discover, Preflight, VcfReadiness
 from groundzero.modules.holodeck import DeployHolodeck, Holorouter, StageBinaries
@@ -22,6 +22,7 @@ MODULES: tuple[Module, ...] = (
     VerifyJumbo(),
     ApplianceDeploy(),
     ApplianceCapture(),
+    ApplianceAdopt(),
     Holorouter(),
     StageBinaries(),
     DeployHolodeck(),

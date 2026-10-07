@@ -150,6 +150,10 @@ class OutputInfo(BaseModel):
     produced_at: datetime
     fresh: bool = Field(description="False when the OS was reinstalled after this output was produced")
     summary: str
+    source: Literal["job", "adopted", "manual"] = Field(
+        default="job",
+        description="job: produced by a run; adopted: an existing VM recorded; manual: set by hand",
+    )
 
 
 class InputRef(BaseModel):
@@ -275,6 +279,7 @@ def evaluate_pipeline(
                     produced_at=meta.created_at,
                     fresh=fresh(spec, meta),
                     summary=summarize(spec.id, spec.produces or "", meta.data),
+                    source=meta.source if meta.source in ("adopted", "manual") else "job",
                 )
 
         job = last_job.get(spec.id)

@@ -150,6 +150,16 @@ deployed fresh, so anything you set up inside it by hand goes with it.
 The same applies to any other OVA through **Deploy appliance** in the Appliances stage: pick the OVA and
 a profile, map its networks to port groups, and override values for that one deployment.
 
+## Appliances you already have
+
+If you deployed something by hand before GroundZero came along, run **Adopt existing VM** in the Appliances
+stage. It reads the VM (read-only) and records it, so later steps use it as if GroundZero had deployed it;
+pick *the Holorouter* as the role and the Holodeck steps will use yours.
+
+**Capture appliance profile** goes the other way: it reads a running appliance's OVF settings out of its
+`.vmx` and saves them as a profile for the next deployment. Passwords are not copied out of a VM, so set
+them on the profile before you deploy from it.
+
 ## Troubleshooting
 
 | Symptom | What to check |

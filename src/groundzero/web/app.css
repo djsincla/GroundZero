@@ -283,3 +283,6 @@ ul.plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 
 .sidebar-foot .version { display: block; text-align: center; font-size: 11px; color: var(--muted); text-decoration: none; margin-top: 6px; }
 .sidebar-foot .version:hover { color: var(--text); }
+
+.appliance-list { margin-top: 10px; }
+.appliance-list .eyebrow { margin: 0 0 6px; }

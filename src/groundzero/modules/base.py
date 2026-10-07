@@ -76,7 +76,7 @@ class Deps(Protocol):
         self, host: Host, ctx: JobContext
     ) -> tuple[HostInventory, dict[str, Any]]: ...
     def save_output(
-        self, host_id: str, kind: str, job_id: str, output: BaseModel | dict[str, Any]
+        self, host_id: str, kind: str, job_id: str, output: BaseModel | dict[str, Any], *, source: str = "job"
     ) -> None: ...
     def reassess(
         self, host_id: str, network: EsxiNetworkConfig, storage: EsxiStorage, job_id: str

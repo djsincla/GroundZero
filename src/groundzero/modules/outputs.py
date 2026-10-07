@@ -5,7 +5,7 @@ Existing domain models are reused; ``HostPrep`` and ``HolorouterDeployment`` wer
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from groundzero.esxi.models import ChangeRecord, EsxiNetworkConfig, EsxiStorage, JumboResult
 from groundzero.install.job import InstallReport
@@ -33,17 +33,17 @@ class HolorouterDeployment(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    vm_name: str
-    ip: str
-    hostname: str
-    version: str | None = None
-    image: str
-    profile_id: str | None = None
-    config_set_id: str | None = None  # deployments before appliance profiles
-    datastore: str | None = None
+    vm_name: str = Field(title="VM name")
+    ip: str = Field(title="IP address", description="Where later Holodeck steps reach it (SSH)")
+    hostname: str = Field(title="Hostname")
+    version: str | None = Field(default=None, title="Version")
+    image: str = Field(title="OVA file")
+    profile_id: str | None = Field(default=None, title="Appliance profile")
+    config_set_id: str | None = Field(default=None, title="Config set")  # deployments before profiles
+    datastore: str | None = Field(default=None, title="Datastore")
     networks: dict[str, str] = {}
-    created: bool = True
-    webtop_url: str | None = None
+    created: bool = Field(default=True, title="Deployed by GroundZero")
+    webtop_url: str | None = Field(default=None, title="Webtop URL")
 
 
 class ApplianceDeployment(BaseModel):
@@ -51,17 +51,17 @@ class ApplianceDeployment(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    vm_name: str
-    product: str | None = None
-    version: str | None = None
-    image: str
-    profile_id: str | None = None
-    ip: str | None = None
-    datastore: str | None = None
+    vm_name: str = Field(title="VM name")
+    product: str | None = Field(default=None, title="Product")
+    version: str | None = Field(default=None, title="Version")
+    image: str = Field(title="OVA file")
+    profile_id: str | None = Field(default=None, title="Appliance profile")
+    ip: str | None = Field(default=None, title="IP address")
+    datastore: str | None = Field(default=None, title="Datastore")
     networks: dict[str, str] = {}
-    created: bool = True
-    replaced: bool = False
-    powered_on: bool = True
+    created: bool = Field(default=True, title="Deployed by GroundZero")
+    replaced: bool = Field(default=False, title="Replaced an existing VM")
+    powered_on: bool = Field(default=True, title="Powered on")
 
 
 OUTPUTS: dict[str, type[BaseModel]] = {

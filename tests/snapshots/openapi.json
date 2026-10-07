@@ -1162,6 +1162,17 @@
             "title": "Produced At",
             "type": "string"
           },
+          "source": {
+            "default": "job",
+            "description": "job: produced by a run; adopted: an existing VM recorded; manual: set by hand",
+            "enum": [
+              "job",
+              "adopted",
+              "manual"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
           "summary": {
             "title": "Summary",
             "type": "string"
@@ -1195,6 +1206,12 @@
           "produced_at": {
             "format": "date-time",
             "title": "Produced At",
+            "type": "string"
+          },
+          "source": {
+            "default": "job",
+            "description": "job, adopted (an existing VM recorded) or manual",
+            "title": "Source",
             "type": "string"
           }
         },
@@ -1885,6 +1902,35 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VmSummary": {
+        "properties": {
+          "guest_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Ip"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "power_state": {
+            "title": "Power State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "power_state"
+        ],
+        "title": "VmSummary",
         "type": "object"
       }
     },
@@ -3000,6 +3046,75 @@
         "tags": [
           "hosts"
         ]
+      },
+      "put": {
+        "description": "Record or correct an output by hand (its source becomes \"manual\"). The body must match the kind's\nschema (GET /output-kinds); later tasks read it as their input. Nothing on the server changes: editing\nthe Holorouter's record does not reconfigure the Holorouter.",
+        "operationId": "set_output_api_v1_hosts__host_id__outputs__kind__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Output Api V1 Hosts  Host Id  Outputs  Kind  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Output",
+        "tags": [
+          "hosts"
+        ]
       }
     },
     "/api/v1/hosts/{host_id}/pipeline": {
@@ -3112,6 +3227,58 @@
           }
         ],
         "summary": "Start Task",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/vms": {
+      "get": {
+        "description": "The VMs on the host's installed ESXi, read live (read-only): candidates to adopt or capture.",
+        "operationId": "list_vms_api_v1_hosts__host_id__vms_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VmSummary"
+                  },
+                  "title": "Response List Vms Api V1 Hosts  Host Id  Vms Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Vms",
         "tags": [
           "hosts"
         ]
@@ -3511,6 +3678,38 @@
         "summary": "List Os Families",
         "tags": [
           "catalog"
+        ]
+      }
+    },
+    "/api/v1/output-kinds": {
+      "get": {
+        "description": "Every output kind a task can produce (and you can set by hand): its title and JSON Schema.",
+        "operationId": "output_kinds_api_v1_output_kinds_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Output Kinds Api V1 Output Kinds Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Output Kinds",
+        "tags": [
+          "meta"
         ]
       }
     },

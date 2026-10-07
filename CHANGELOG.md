@@ -5,6 +5,19 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+### Added
+- **Reading VMs:** a host's VMs and their layout (NICs and port groups, datastore, size, guest IPs) and the
+  OVF settings each was deployed with, read from its `.vmx`, since the vSphere API returns them empty
+  (`GET /hosts/{id}/vms`).
+- **Capture appliance profile:** save a running appliance's settings and network mapping as a profile,
+  matched to its OVA by the property names it uses. Passwords are never copied.
+- **Adopt existing VM:** record a VM that is already on the host, as an appliance or as the Holorouter,
+  so later steps use it.
+- **Outputs record their source** (job, adopted, manual). `PUT /hosts/{id}/outputs/{kind}` corrects a
+  record by hand, checked against its schema (`GET /output-kinds`).
+- **UI:** an Appliances list on the pipeline with Replace, Capture profile and Edit record, plus Adopt and
+  Capture dialogs that list the host's VMs.
+
 ## [0.3.0] - 2026-10-06
 
 The modular pipeline, and deploying any appliance (OVA).

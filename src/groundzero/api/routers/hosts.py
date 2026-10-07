@@ -13,6 +13,7 @@ from groundzero.core.models import Host, HostCreate, Job, OsAccess, OsAccessSet
 from groundzero.core.services import InstallPreview
 from groundzero.core.tasks import Pipeline, TaskRun
 from groundzero.core.tls import PinnedCertificate
+from groundzero.esxi.vms import VmSummary
 from groundzero.install.job import InstallRequest
 
 router = APIRouter(prefix="/hosts", tags=["hosts"])
@@ -107,6 +108,7 @@ class OutputSummary(BaseModel):
     job_id: str
     produced_at: datetime
     fresh: bool = Field(description="False when the OS was reinstalled after this output was produced")
+    source: str = Field(default="job", description="job, adopted (an existing VM recorded) or manual")
 
 
 @router.get("/{host_id}/outputs", response_model=list[OutputSummary])
@@ -120,3 +122,17 @@ def get_output(host_id: str, kind: str, services: ServicesDep) -> dict[str, Any]
     """The latest output of one kind (e.g. inventory, preflight, os_network, install, readiness,
     vcf_readiness, host_prep, jumbo, holorouter). Each kind has a fixed shape; see GET /tasks."""
     return services.latest_output(host_id, kind)
+
+
+@router.put("/{host_id}/outputs/{kind}", response_model=dict[str, Any])
+def set_output(host_id: str, kind: str, body: dict[str, Any], services: ServicesDep) -> dict[str, Any]:
+    """Record or correct an output by hand (its source becomes "manual"). The body must match the kind's
+    schema (GET /output-kinds); later tasks read it as their input. Nothing on the server changes: editing
+    the Holorouter's record does not reconfigure the Holorouter."""
+    return services.set_output(host_id, kind, body)
+
+
+@router.get("/{host_id}/vms", response_model=list[VmSummary])
+async def list_vms(host_id: str, services: ServicesDep) -> list[VmSummary]:
+    """The VMs on the host's installed ESXi, read live (read-only): candidates to adopt or capture."""
+    return await services.list_vms(host_id)

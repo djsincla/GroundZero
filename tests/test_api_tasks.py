@@ -516,3 +516,73 @@ def test_capture_a_profile_from_a_deployed_appliance(tmp_path: Path, idrac9: dic
         missing = {"params": {"vm_name": "nope", "name": "x"}}
         job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/appliance.capture", json=missing).json()["id"])
         assert job["status"] == "failed" and "No VM named nope" in job["error"]["message"]
+
+
+def test_adopt_a_hand_deployed_holorouter_and_correct_its_record(
+    tmp_path: Path, idrac9: dict[str, Any]
+) -> None:
+    """A VM deployed outside GroundZero feeds the later Holodeck steps once it is adopted."""
+    esxi = SimulatedEsxi(ESXI1)
+    _fake_ova(tmp_path / "isos")
+    with _app(tmp_path, idrac9, esxi) as api:
+        host = _host(api)
+        api.put(f"/api/v1/hosts/{host}/os", json={"address": "192.0.2.101", "password": "esxi-pw"})
+        image = next(i for i in api.post("/api/v1/images/rescan").json() if i["kind"] == "ova")
+        nets = dict.fromkeys(
+            ("VM Management Network", "Trunk Portgroup for Site A", "Trunk Portgroup for Site B"),
+            "VM Network",
+        )
+        by_hand = {
+            "image_id": image["id"],
+            "vm_name": "my-router",
+            "datastore": "localHolodeck",
+            "networks": nets,
+            "values": {"ip": "192.0.2.150", "hostname": "router"},
+            "secrets": {"password": "Holo-pass1!"},
+        }
+        assert (
+            _wait(
+                api,
+                api.post(f"/api/v1/hosts/{host}/tasks/appliance.deploy", json={"params": by_hand}).json()[
+                    "id"
+                ],
+            )["status"]
+            == "succeeded"
+        )
+        assert "my-router" in {v["name"] for v in api.get(f"/api/v1/hosts/{host}/vms").json()}
+
+        adopt = {
+            "params": {"vm_name": "my-router", "role": "holorouter", "profile_name": "my-router-profile"}
+        }
+        job = _wait(api, api.post(f"/api/v1/hosts/{host}/tasks/appliance.adopt", json=adopt).json()["id"])
+        assert job["status"] == "succeeded", job
+        assert [s["key"] for s in job["steps"]] == ["read", "ssh", "record"]
+        assert (
+            job["result"]["holorouter"]["ip"] == "192.0.2.150"
+            and job["result"]["holorouter"]["hostname"] == "router"
+        )
+        profile = api.get(f"/api/v1/appliance-profiles/{job['result']['profile_id']}").json()
+        assert profile["product"] == "HoloRouter" and profile["values"]["network.ip"] == "192.0.2.150"
+
+        p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
+        router = _task(p, "holodeck.router")
+        assert router["state"] == "done" and router["output"]["source"] == "adopted"
+        stage = next(i for i in _task(p, "holodeck.stage")["inputs"] if i["kind"] == "holorouter")
+        assert stage["status"] == "ok"  # the next Holodeck step sees it like a GroundZero deployment
+
+        # Correct the record by hand: checked against the output's model, marked manual
+        fixed = {**job["result"]["holorouter"], "ip": "192.0.2.151"}
+        assert api.put(f"/api/v1/hosts/{host}/outputs/holorouter", json=fixed).status_code == 200
+        assert api.get(f"/api/v1/hosts/{host}/outputs/holorouter").json()["ip"] == "192.0.2.151"
+        p = api.get(f"/api/v1/hosts/{host}/pipeline").json()
+        assert _task(p, "holodeck.router")["output"]["source"] == "manual"
+        bad = api.put(f"/api/v1/hosts/{host}/outputs/holorouter", json={"ip": "192.0.2.151"})
+        assert bad.status_code == 422 and ("output", "vm_name") in {
+            tuple(e["loc"]) for e in bad.json()["errors"]
+        }
+        assert api.put(f"/api/v1/hosts/{host}/outputs/nope", json={}).status_code == 404
+        kinds = api.get("/api/v1/output-kinds").json()
+        assert (
+            kinds["holorouter"]["title"] == "Holorouter"
+            and "vm_name" in kinds["holorouter"]["schema"]["properties"]
+        )

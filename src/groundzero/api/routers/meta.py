@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
@@ -31,3 +31,9 @@ def healthz(request: Request) -> Health:
 def list_tasks(services: ServicesDep) -> list[TaskInfo]:
     """The task catalog: what each task needs (``requires``) and makes (``produces``), in pipeline order."""
     return services.list_tasks()
+
+
+@router.get("/output-kinds", response_model=dict[str, dict[str, Any]])
+def output_kinds(services: ServicesDep) -> dict[str, dict[str, Any]]:
+    """Every output kind a task can produce (and you can set by hand): its title and JSON Schema."""
+    return services.output_kinds()
