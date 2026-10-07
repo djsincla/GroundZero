@@ -5,6 +5,10 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-06
+
+Configure BIOS moves up behind Discover, and steps aside when the BIOS is already right.
+
 ### Changed
 - **Configure BIOS** now comes straight after Discover hardware, before Preflight, so Preflight passes the
   first time.
@@ -167,7 +171,8 @@ R740xd.
   - Functional, browser and live test suites.
   - A single-container bundle.
 
-[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/djsincla/GroundZero/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/djsincla/GroundZero/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/djsincla/GroundZero/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/djsincla/GroundZero/compare/v0.3.0...v0.4.0
