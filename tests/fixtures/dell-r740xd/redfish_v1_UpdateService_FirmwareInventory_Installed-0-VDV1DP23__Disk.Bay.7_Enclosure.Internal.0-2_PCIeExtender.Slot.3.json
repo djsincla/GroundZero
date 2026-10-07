@@ -1,0 +1,61 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#SoftwareInventory.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Installed-0-VDV1DP23__Disk.Bay.7:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+  "@odata.type": "#SoftwareInventory.v1_9_0.SoftwareInventory",
+  "Description": "Represents Firmware Inventory",
+  "Id": "Installed-0-VDV1DP23__Disk.Bay.7:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+  "Name": "PCIe SSD in Slot 7 in Bay 2",
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellOem.v1_3_0.DellOemResources",
+      "DellSoftwareInventory": {
+        "@odata.context": "/redfish/v1/$metadata#DellSoftwareInventory.DellSoftwareInventory",
+        "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Installed-0-VDV1DP23__Disk.Bay.7:Enclosure.Internal.0-2:PCIeExtender.Slot.3/Oem/Dell/DellSoftwareInventory/DCIM:INSTALLED_0x23_304_C_Disk.Bay.7:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+        "@odata.type": "#DellSoftwareInventory.v1_2_0.DellSoftwareInventory",
+        "BuildNumber": null,
+        "Classifications": [
+          "Firmware"
+        ],
+        "Classifications@odata.count": 1,
+        "ComponentID": "0",
+        "ComponentType": "FRMW",
+        "Description": "The DellSoftwareInventory resource is a representation of an available device firmware in the managed system.",
+        "DeviceID": "0A54",
+        "ElementName": "PCIe SSD in Slot 7 in Bay 2",
+        "HashValue": null,
+        "Id": "DCIM:INSTALLED_0x23_304_C_Disk.Bay.7:Enclosure.Internal.0-2:PCIeExtender.Slot.3",
+        "IdentityInfoType": [
+          "OrgID:ComponentType:VendorID:DeviceID:SubVendorID:SubDeviceID"
+        ],
+        "IdentityInfoType@odata.count": 1,
+        "IdentityInfoValue": [
+          "DCIM:firmware:8086:0A54:1028:2003"
+        ],
+        "IdentityInfoValue@odata.count": 1,
+        "InstallationDate": "2025-09-23T23:07:31Z",
+        "IsEntity": true,
+        "MajorVersion": null,
+        "MinorVersion": null,
+        "Name": "DellSoftwareInventory",
+        "PLDMCapabilitiesDuringUpdate": "0x00000000",
+        "PLDMFDPCapabilitiesDuringUpdate": "0x00000000",
+        "RevisionNumber": null,
+        "RevisionString": null,
+        "SidebandUpdateCapable": false,
+        "Status": "Installed",
+        "SubDeviceID": "2003",
+        "SubVendorID": "1028",
+        "VendorID": "8086",
+        "impactsTPMmeasurements": true
+      }
+    }
+  },
+  "ReleaseDate": "00:00:00Z",
+  "SoftwareId": "0",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Updateable": true,
+  "Version": "VDV1DP23"
+}

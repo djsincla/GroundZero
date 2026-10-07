@@ -15,7 +15,7 @@ from starlette.types import Scope
 from groundzero import __version__
 from groundzero.api.deps import require_token
 from groundzero.api.errors import install_error_handlers
-from groundzero.api.routers import bios, catalog, clusters, hosts, jobs, meta, specs, storage
+from groundzero.api.routers import bios, catalog, clusters, hosts, jobs, meta, reports, specs, storage
 from groundzero.core.config import Settings
 from groundzero.core.credentials import CredentialCipher
 from groundzero.core.jobs import JobRunner
@@ -150,6 +150,7 @@ def create_app(
         specs.router,
         bios.router,
         storage.router,
+        reports.router,
     ):
         app.include_router(router, prefix=API_PREFIX, dependencies=secured)
     return app

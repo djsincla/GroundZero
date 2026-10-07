@@ -415,6 +415,267 @@
         "title": "BiosProfileWrite",
         "type": "object"
       },
+      "BiosSettings": {
+        "properties": {
+          "attributes": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Attributes",
+            "type": "object"
+          },
+          "boot_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Boot Mode"
+          },
+          "cpu_virtualization": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Virtualization"
+          },
+          "iommu": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iommu"
+          },
+          "registry_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The attribute registry the BIOS names",
+            "title": "Registry Id"
+          }
+        },
+        "title": "BiosSettings",
+        "type": "object"
+      },
+      "BmcCapabilities": {
+        "properties": {
+          "boot_override": {
+            "$ref": "#/components/schemas/BootOverrideCapability"
+          },
+          "reset": {
+            "$ref": "#/components/schemas/ResetCapability"
+          },
+          "virtual_media": {
+            "items": {
+              "$ref": "#/components/schemas/VirtualMediaSlot"
+            },
+            "title": "Virtual Media",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reset",
+          "boot_override"
+        ],
+        "title": "BmcCapabilities",
+        "type": "object"
+      },
+      "BmcInfo": {
+        "properties": {
+          "firmware_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firmware Version"
+          },
+          "fqdn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fqdn"
+          },
+          "hostname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The BMC's own DNS name, e.g. idrac-esx01",
+            "title": "Hostname"
+          },
+          "license": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LicenseInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "redfish_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redfish Version"
+          },
+          "vendor": {
+            "title": "Vendor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vendor"
+        ],
+        "title": "BmcInfo",
+        "type": "object"
+      },
+      "BootOption": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "uefi_device_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uefi Device Path"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "BootOption",
+        "type": "object"
+      },
+      "BootOverrideCapability": {
+        "properties": {
+          "allowed_modes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Modes",
+            "type": "array"
+          },
+          "allowed_targets": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Targets",
+            "type": "array"
+          },
+          "current_enabled": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Enabled"
+          },
+          "current_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Mode"
+          },
+          "current_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Target"
+          },
+          "options": {
+            "description": "UEFI boot options from the last POST",
+            "items": {
+              "$ref": "#/components/schemas/BootOption"
+            },
+            "title": "Options",
+            "type": "array"
+          }
+        },
+        "title": "BootOverrideCapability",
+        "type": "object"
+      },
       "Cluster": {
         "properties": {
           "config_set_id": {
@@ -555,6 +816,52 @@
         "title": "ClusterMember",
         "type": "object"
       },
+      "ClusterReport": {
+        "properties": {
+          "cluster_id": {
+            "title": "Cluster Id",
+            "type": "string"
+          },
+          "comparison": {
+            "items": {
+              "$ref": "#/components/schemas/Comparison"
+            },
+            "title": "Comparison",
+            "type": "array"
+          },
+          "differences": {
+            "description": "How many compared items aren't the same on every member",
+            "title": "Differences",
+            "type": "integer"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/HostReport"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generated_at",
+          "cluster_id",
+          "name",
+          "members",
+          "comparison",
+          "differences"
+        ],
+        "title": "ClusterReport",
+        "type": "object"
+      },
       "ClusterRunPreview": {
         "properties": {
           "cluster_id": {
@@ -661,6 +968,41 @@
           "dns_domain"
         ],
         "title": "ClusterWrite",
+        "type": "object"
+      },
+      "Comparison": {
+        "properties": {
+          "differs": {
+            "title": "Differs",
+            "type": "boolean"
+          },
+          "item": {
+            "description": "What's compared, e.g. BIOS or 'Firmware: PERC H730P Adapter'",
+            "title": "Item",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "Server name \u2192 value",
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "item",
+          "values",
+          "differs"
+        ],
+        "title": "Comparison",
         "type": "object"
       },
       "ConfigSet": {
@@ -782,6 +1124,99 @@
         "title": "ConfigSetWrite",
         "type": "object"
       },
+      "Configuration": {
+        "properties": {
+          "boot_volume": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Boot Volume"
+          },
+          "hostname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hostname"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run"
+          },
+          "management_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Management Ip"
+          },
+          "os": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The installed OS, as last read",
+            "title": "Os"
+          },
+          "readiness": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readiness"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The spec the server follows, and where from",
+            "title": "Spec"
+          },
+          "tasks": {
+            "description": "Every pipeline task, its state and result",
+            "items": {
+              "$ref": "#/components/schemas/TaskLine"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "title": "Configuration",
+        "type": "object"
+      },
       "ControllerRule": {
         "properties": {
           "hot_spares": {
@@ -892,6 +1327,99 @@
         "title": "DeploymentOption",
         "type": "object"
       },
+      "Drive": {
+        "properties": {
+          "capacity_bytes": {
+            "default": 0,
+            "title": "Capacity Bytes",
+            "type": "integer"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Controller"
+          },
+          "firmware_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The drive's firmware revision",
+            "title": "Firmware Version"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_boot_device": {
+            "default": false,
+            "description": "Dedicated boot device such as a Dell BOSS card",
+            "title": "Is Boot Device",
+            "type": "boolean"
+          },
+          "media_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SSD or HDD",
+            "title": "Media Type"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "NVMe, SAS, SATA, ...",
+            "title": "Protocol"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "Drive",
+        "type": "object"
+      },
       "DriveMatch": {
         "properties": {
           "count": {
@@ -985,6 +1513,57 @@
           "source"
         ],
         "title": "EffectiveSpec",
+        "type": "object"
+      },
+      "FirmwareItem": {
+        "properties": {
+          "health": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updateable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updateable"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "FirmwareItem",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -1130,6 +1709,172 @@
           "password"
         ],
         "title": "HostCreate",
+        "type": "object"
+      },
+      "HostInventory": {
+        "properties": {
+          "bios": {
+            "$ref": "#/components/schemas/BiosSettings"
+          },
+          "bmc": {
+            "$ref": "#/components/schemas/BmcInfo"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/BmcCapabilities"
+          },
+          "collected_at": {
+            "format": "date-time",
+            "title": "Collected At",
+            "type": "string"
+          },
+          "drives": {
+            "items": {
+              "$ref": "#/components/schemas/Drive"
+            },
+            "title": "Drives",
+            "type": "array"
+          },
+          "firmware": {
+            "description": "Every installed firmware the BMC lists",
+            "items": {
+              "$ref": "#/components/schemas/FirmwareItem"
+            },
+            "title": "Firmware",
+            "type": "array"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/MemoryInfo"
+          },
+          "network_adapters": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkAdapter"
+            },
+            "title": "Network Adapters",
+            "type": "array"
+          },
+          "network_ports": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkPort"
+            },
+            "title": "Network Ports",
+            "type": "array"
+          },
+          "pcie_devices": {
+            "items": {
+              "$ref": "#/components/schemas/PcieDevice"
+            },
+            "title": "Pcie Devices",
+            "type": "array"
+          },
+          "power_supplies": {
+            "items": {
+              "$ref": "#/components/schemas/PowerSupply"
+            },
+            "title": "Power Supplies",
+            "type": "array"
+          },
+          "processors": {
+            "items": {
+              "$ref": "#/components/schemas/Processor"
+            },
+            "title": "Processors",
+            "type": "array"
+          },
+          "system": {
+            "$ref": "#/components/schemas/SystemInfo"
+          }
+        },
+        "required": [
+          "collected_at",
+          "system",
+          "processors",
+          "memory",
+          "drives",
+          "network_ports",
+          "bios",
+          "bmc",
+          "capabilities"
+        ],
+        "title": "HostInventory",
+        "type": "object"
+      },
+      "HostReport": {
+        "properties": {
+          "bmc_address": {
+            "title": "Bmc Address",
+            "type": "string"
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/Configuration"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "host_id": {
+            "title": "Host Id",
+            "type": "string"
+          },
+          "inventory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HostInventory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: Discover hardware hasn't run"
+          },
+          "inventory_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the hardware was last read",
+            "title": "Inventory At"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "service_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Tag"
+          }
+        },
+        "required": [
+          "generated_at",
+          "host_id",
+          "name",
+          "bmc_address",
+          "configuration"
+        ],
+        "title": "HostReport",
         "type": "object"
       },
       "Image": {
@@ -1722,6 +2467,36 @@
         "title": "JobStepStatus",
         "type": "string"
       },
+      "LicenseInfo": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "supports_virtual_media": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Virtual Media"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "tier",
+          "supports_virtual_media"
+        ],
+        "title": "LicenseInfo",
+        "type": "object"
+      },
       "MemberAdd": {
         "properties": {
           "host_id": {
@@ -1733,6 +2508,257 @@
           "host_id"
         ],
         "title": "MemberAdd",
+        "type": "object"
+      },
+      "MemoryInfo": {
+        "properties": {
+          "dimm_count": {
+            "default": 0,
+            "title": "Dimm Count",
+            "type": "integer"
+          },
+          "modules": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryModule"
+            },
+            "title": "Modules",
+            "type": "array"
+          },
+          "total_gib": {
+            "title": "Total Gib",
+            "type": "number"
+          }
+        },
+        "required": [
+          "total_gib"
+        ],
+        "title": "MemoryInfo",
+        "type": "object"
+      },
+      "MemoryModule": {
+        "properties": {
+          "capacity_mib": {
+            "default": 0,
+            "title": "Capacity Mib",
+            "type": "integer"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "part_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Part Number"
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot"
+          },
+          "speed_mhz": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Mhz"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "e.g. DDR4",
+            "title": "Type"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "MemoryModule",
+        "type": "object"
+      },
+      "NetworkAdapter": {
+        "properties": {
+          "firmware_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firmware Version"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "part_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Part Number"
+          },
+          "ports": {
+            "default": 0,
+            "title": "Ports",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "NetworkAdapter",
+        "type": "object"
+      },
+      "NetworkPort": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "link_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Status"
+          },
+          "mac_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mac Address"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "speed_mbps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Mbps"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "NetworkPort",
         "type": "object"
       },
       "NextStep": {
@@ -2203,6 +3229,97 @@
         "title": "OvfProperty",
         "type": "object"
       },
+      "PcieDevice": {
+        "properties": {
+          "device_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "e.g. MassStorageController, NetworkController",
+            "title": "Device Class"
+          },
+          "firmware_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firmware Version"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "PcieDevice",
+        "type": "object"
+      },
       "PinnedCertificate": {
         "properties": {
           "address": {
@@ -2350,6 +3467,74 @@
         "title": "PipelineStage",
         "type": "object"
       },
+      "PowerSupply": {
+        "properties": {
+          "capacity_watts": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity Watts"
+          },
+          "firmware_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firmware Version"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PowerSupply",
+        "type": "object"
+      },
       "PreviewStep": {
         "properties": {
           "action": {
@@ -2398,6 +3583,62 @@
           "action"
         ],
         "title": "PreviewStep",
+        "type": "object"
+      },
+      "Processor": {
+        "properties": {
+          "cores": {
+            "default": 0,
+            "title": "Cores",
+            "type": "integer"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "max_speed_mhz": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Speed Mhz"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "socket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Socket"
+          },
+          "threads": {
+            "default": 0,
+            "title": "Threads",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "title": "Processor",
         "type": "object"
       },
       "RegistryInfo": {
@@ -2469,6 +3710,33 @@
           "fetched_at"
         ],
         "title": "RegistrySummary",
+        "type": "object"
+      },
+      "ResetCapability": {
+        "properties": {
+          "allowed_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed Types",
+            "type": "array"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "ResetCapability",
         "type": "object"
       },
       "Run": {
@@ -3055,6 +4323,91 @@
         "title": "StorageProfileWrite",
         "type": "object"
       },
+      "SystemInfo": {
+        "properties": {
+          "asset_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Tag"
+          },
+          "bios_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bios Version"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health"
+          },
+          "manufacturer": {
+            "title": "Manufacturer",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "power_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power State"
+          },
+          "serial_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serial Number"
+          },
+          "service_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dell service tag (the system SKU)",
+            "title": "Service Tag"
+          }
+        },
+        "required": [
+          "manufacturer",
+          "model"
+        ],
+        "title": "SystemInfo",
+        "type": "object"
+      },
       "TaskInfo": {
         "properties": {
           "also_produces": {
@@ -3143,6 +4496,52 @@
           "available"
         ],
         "title": "TaskInfo",
+        "type": "object"
+      },
+      "TaskLine": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "task": {
+            "title": "Task",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task",
+          "title",
+          "state"
+        ],
+        "title": "TaskLine",
         "type": "object"
       },
       "TaskLink": {
@@ -3416,6 +4815,88 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VirtualMediaSlot": {
+        "properties": {
+          "eject_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eject Target"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "insert_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insert Target"
+          },
+          "inserted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inserted"
+          },
+          "media_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Media Types",
+            "type": "array"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "transfer_protocols": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Transfer Protocols",
+            "type": "array"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "VirtualMediaSlot",
         "type": "object"
       },
       "VmSummary": {
@@ -4379,6 +5860,136 @@
         "summary": "Remove Member",
         "tags": [
           "clusters"
+        ]
+      }
+    },
+    "/api/v1/clusters/{cluster_id}/report": {
+      "get": {
+        "description": "Every member's report, and what should match across them (model, BIOS, firmware, memory, ...) with\nthe items that differ flagged.",
+        "operationId": "cluster_report_api_v1_clusters__cluster_id__report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cluster Report",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/clusters/{cluster_id}/report-components.csv": {
+      "get": {
+        "description": "Every member's components in one sheet (the server reports' rows, one after another).",
+        "operationId": "cluster_components_csv_api_v1_clusters__cluster_id__report_components_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cluster Components Csv",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/clusters/{cluster_id}/report.csv": {
+      "get": {
+        "description": "The comparison as CSV: one row per item, one column per member, and whether it differs.",
+        "operationId": "cluster_report_csv_api_v1_clusters__cluster_id__report_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cluster Report Csv",
+        "tags": [
+          "reports"
         ]
       }
     },
@@ -5667,6 +7278,95 @@
         "summary": "Get Pipeline",
         "tags": [
           "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/report": {
+      "get": {
+        "description": "The server's full hardware inventory (firmware, CPUs, memory modules, drives, adapters, PCIe devices,\npower supplies) and its configuration state (spec, last run, OS, boot volume, every task's result).",
+        "operationId": "host_report_api_v1_hosts__host_id__report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Host Report",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/report.csv": {
+      "get": {
+        "description": "The same as one row per component: server, section, component, model, version, detail, health.",
+        "operationId": "host_report_csv_api_v1_hosts__host_id__report_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Host Report Csv",
+        "tags": [
+          "reports"
         ]
       }
     },

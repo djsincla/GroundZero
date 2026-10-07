@@ -1,0 +1,61 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#SoftwareInventory.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Current-103999-4.35__RAID.Backplane.Firmware.2",
+  "@odata.type": "#SoftwareInventory.v1_9_0.SoftwareInventory",
+  "Description": "Represents Firmware Inventory",
+  "Id": "Current-103999-4.35__RAID.Backplane.Firmware.2",
+  "Name": "Backplane 2",
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellOem.v1_3_0.DellOemResources",
+      "DellSoftwareInventory": {
+        "@odata.context": "/redfish/v1/$metadata#DellSoftwareInventory.DellSoftwareInventory",
+        "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Current-103999-4.35__RAID.Backplane.Firmware.2/Oem/Dell/DellSoftwareInventory/DCIM:CURRENT_0x23_314_C_RAID.Backplane.Firmware.2",
+        "@odata.type": "#DellSoftwareInventory.v1_2_0.DellSoftwareInventory",
+        "BuildNumber": 0,
+        "Classifications": [
+          "Firmware"
+        ],
+        "Classifications@odata.count": 1,
+        "ComponentID": "103999",
+        "ComponentType": "FRMW",
+        "Description": "The DellSoftwareInventory resource is a representation of an available device firmware in the managed system.",
+        "DeviceID": null,
+        "ElementName": "Backplane 2",
+        "HashValue": "800f26c7ef5b55e3e4686bacb01000e0a857cb3cd76b62787344cc1794d403dc",
+        "Id": "DCIM:CURRENT_0x23_314_C_RAID.Backplane.Firmware.2",
+        "IdentityInfoType": [
+          "OrgID:ComponentType:ComponentID"
+        ],
+        "IdentityInfoType@odata.count": 1,
+        "IdentityInfoValue": [
+          "DCIM:firmware:103999"
+        ],
+        "IdentityInfoValue@odata.count": 1,
+        "InstallationDate": "NA",
+        "IsEntity": true,
+        "MajorVersion": 4,
+        "MinorVersion": 35,
+        "Name": "DellSoftwareInventory",
+        "PLDMCapabilitiesDuringUpdate": "0x00000000",
+        "PLDMFDPCapabilitiesDuringUpdate": "0x00000000",
+        "RevisionNumber": 0,
+        "RevisionString": null,
+        "SidebandUpdateCapable": false,
+        "Status": "AvailableForInstallation",
+        "SubDeviceID": null,
+        "SubVendorID": null,
+        "VendorID": null,
+        "impactsTPMmeasurements": false
+      }
+    }
+  },
+  "ReleaseDate": "2019-08-07T00:00:00Z",
+  "SoftwareId": "103999",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Updateable": true,
+  "Version": "4.35"
+}

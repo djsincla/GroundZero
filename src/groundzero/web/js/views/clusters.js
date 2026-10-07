@@ -128,7 +128,8 @@ export async function viewCluster(app, id) {
   } });
 
   mount(app,
-    pageHeader(cluster.name, `${cluster.ip_first} – ${cluster.ip_last} · ${cluster.dns_domain} · updated ${fmtTime(cluster.updated_at)}`),
+    pageHeader(cluster.name, `${cluster.ip_first} – ${cluster.ip_last} · ${cluster.dns_domain} · updated ${fmtTime(cluster.updated_at)}`,
+      cluster.members.length ? h("a", { class: "button", href: `#/clusters/${id}/report` }, "Report") : null),
     card({ "data-panel": "members" },
       h("div", { class: "row" }, h("h2", {}, "Members"), h("span", { class: "spacer" }),
         cluster.members.some((m) => memberSpecs[m.host_id])

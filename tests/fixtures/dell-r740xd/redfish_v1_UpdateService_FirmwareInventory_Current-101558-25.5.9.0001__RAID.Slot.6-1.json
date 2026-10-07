@@ -1,0 +1,61 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#SoftwareInventory.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Current-101558-25.5.9.0001__RAID.Slot.6-1",
+  "@odata.type": "#SoftwareInventory.v1_9_0.SoftwareInventory",
+  "Description": "Represents Firmware Inventory",
+  "Id": "Current-101558-25.5.9.0001__RAID.Slot.6-1",
+  "Name": "PERC H730P Adapter",
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellOem.v1_3_0.DellOemResources",
+      "DellSoftwareInventory": {
+        "@odata.context": "/redfish/v1/$metadata#DellSoftwareInventory.DellSoftwareInventory",
+        "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Current-101558-25.5.9.0001__RAID.Slot.6-1/Oem/Dell/DellSoftwareInventory/DCIM:CURRENT_0x23_301_C_RAID.Slot.6-1",
+        "@odata.type": "#DellSoftwareInventory.v1_2_0.DellSoftwareInventory",
+        "BuildNumber": 1,
+        "Classifications": [
+          "Firmware"
+        ],
+        "Classifications@odata.count": 1,
+        "ComponentID": "101558",
+        "ComponentType": "FRMW",
+        "Description": "The DellSoftwareInventory resource is a representation of an available device firmware in the managed system.",
+        "DeviceID": "005D",
+        "ElementName": "PERC H730P Adapter",
+        "HashValue": "0a7e5806cde9bf74e539cc870913f82b55e0e406ad288b490e67c2877d102374",
+        "Id": "DCIM:CURRENT_0x23_301_C_RAID.Slot.6-1",
+        "IdentityInfoType": [
+          "OrgID:ComponentType:VendorID:DeviceID:SubVendorID:SubDeviceID"
+        ],
+        "IdentityInfoType@odata.count": 1,
+        "IdentityInfoValue": [
+          "DCIM:firmware:1000:005D:1028:1F42"
+        ],
+        "IdentityInfoValue@odata.count": 1,
+        "InstallationDate": "NA",
+        "IsEntity": true,
+        "MajorVersion": 25,
+        "MinorVersion": 5,
+        "Name": "DellSoftwareInventory",
+        "PLDMCapabilitiesDuringUpdate": "0x00000000",
+        "PLDMFDPCapabilitiesDuringUpdate": "0x00000000",
+        "RevisionNumber": 9,
+        "RevisionString": null,
+        "SidebandUpdateCapable": false,
+        "Status": "AvailableForInstallation",
+        "SubDeviceID": "1F42",
+        "SubVendorID": "1028",
+        "VendorID": "1000",
+        "impactsTPMmeasurements": true
+      }
+    }
+  },
+  "ReleaseDate": "2021-05-21T00:00:00Z",
+  "SoftwareId": "101558",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Updateable": true,
+  "Version": "25.5.9.0001"
+}

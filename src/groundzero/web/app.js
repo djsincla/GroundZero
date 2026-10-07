@@ -9,12 +9,14 @@ import { viewApi, viewInfo, viewJobs } from "./js/views/misc.js";
 import { viewSpec, viewSpecs } from "./js/views/specs.js";
 import { viewBiosProfile } from "./js/views/bios.js";
 import { viewStorageProfile } from "./js/views/storage.js";
+import { viewClusterReport, viewHostReport } from "./js/views/reports.js";
 
 const app = document.getElementById("app");
 
 // ── routes: [pattern, section, title, view, live] (live views re-render when a job finishes) ──
 const ROUTES = [
   [/^\/(?:hosts)?$/, "hosts", "Hosts", () => viewHosts(app), true],
+  [/^\/hosts\/([\w-]+)\/report$/, "hosts", "Report", (m) => viewHostReport(app, m[1]), false],
   [/^\/hosts\/([\w-]+)\/deploy$/, "hosts", "Deploy", (m, q) => viewDeploy(app, m[1], q), false],
   [/^\/hosts\/([\w-]+)(?:\/(\w+))?$/, "hosts", "Host", (m) => viewHost(app, m[1], m[2]), true],
   [/^\/jobs$/, "jobs", "Jobs", (m, q) => viewJobs(app, q), true],
@@ -26,6 +28,7 @@ const ROUTES = [
   [/^\/specs$/, "specs", "Specs", () => viewSpecs(app), true],
   [/^\/specs\/([\w-]+)$/, "specs", "Spec", (m) => viewSpec(app, m[1]), false],
   [/^\/clusters$/, "clusters", "Clusters", () => viewClusters(app), true],
+  [/^\/clusters\/([\w-]+)\/report$/, "clusters", "Cluster report", (m) => viewClusterReport(app, m[1]), false],
   [/^\/clusters\/([\w-]+)$/, "clusters", "Cluster", (m) => viewCluster(app, m[1]), true],
   [/^\/(?:images|isos)$/, "images", "Images", () => viewImages(app), false],
   [/^\/api$/, "api", "API", () => viewApi(app), false],

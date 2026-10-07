@@ -1,0 +1,61 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#SoftwareInventory.SoftwareInventory",
+  "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Installed-27479-08.07.26__NIC.Integrated.1-4-1",
+  "@odata.type": "#SoftwareInventory.v1_9_0.SoftwareInventory",
+  "Description": "Represents Firmware Inventory",
+  "Id": "Installed-27479-08.07.26__NIC.Integrated.1-4-1",
+  "Name": "QLogic 577xx/578xx 1 Gb Ethernet BCM57800 - 00:00:5E:00:53:03",
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellOem.v1_3_0.DellOemResources",
+      "DellSoftwareInventory": {
+        "@odata.context": "/redfish/v1/$metadata#DellSoftwareInventory.DellSoftwareInventory",
+        "@odata.id": "/redfish/v1/UpdateService/FirmwareInventory/Installed-27479-08.07.26__NIC.Integrated.1-4-1/Oem/Dell/DellSoftwareInventory/DCIM:INSTALLED_0x23_701__NIC.Integrated.1-4-1",
+        "@odata.type": "#DellSoftwareInventory.v1_2_0.DellSoftwareInventory",
+        "BuildNumber": 0,
+        "Classifications": [
+          "Firmware"
+        ],
+        "Classifications@odata.count": 1,
+        "ComponentID": "27479",
+        "ComponentType": "FRMW",
+        "Description": "The DellSoftwareInventory resource is a representation of an available device firmware in the managed system.",
+        "DeviceID": "168A",
+        "ElementName": "QLogic 577xx/578xx 1 Gb Ethernet BCM57800 - 00:00:5E:00:53:03",
+        "HashValue": null,
+        "Id": "DCIM:INSTALLED_0x23_701__NIC.Integrated.1-4-1",
+        "IdentityInfoType": [
+          "OrgID:ComponentType:VendorID:DeviceID:SubVendorID:SubDeviceID"
+        ],
+        "IdentityInfoType@odata.count": 1,
+        "IdentityInfoValue": [
+          "DCIM:firmware:14E4:168A:1028:1F68"
+        ],
+        "IdentityInfoValue@odata.count": 1,
+        "InstallationDate": "2025-09-23T21:19:36Z",
+        "IsEntity": true,
+        "MajorVersion": 8,
+        "MinorVersion": 7,
+        "Name": "DellSoftwareInventory",
+        "PLDMCapabilitiesDuringUpdate": "0x00000000",
+        "PLDMFDPCapabilitiesDuringUpdate": "0x00000000",
+        "RevisionNumber": 26,
+        "RevisionString": null,
+        "SidebandUpdateCapable": false,
+        "Status": "Installed",
+        "SubDeviceID": "1F68",
+        "SubVendorID": "1028",
+        "VendorID": "14E4",
+        "impactsTPMmeasurements": true
+      }
+    }
+  },
+  "ReleaseDate": "00:00:00Z",
+  "SoftwareId": "27479",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Updateable": true,
+  "Version": "08.07.26"
+}

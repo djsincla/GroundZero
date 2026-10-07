@@ -174,6 +174,18 @@ export function stepsList(steps) {
       s.message ? h("div", { class: "step-msg small-text" }, s.message) : null)));
 }
 
+// Download an API resource as a file (the bearer token rides in the header, so a plain link won't do).
+export async function download(path, filename) {
+  const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token()}` } });
+  if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+  const url = URL.createObjectURL(await res.blob());
+  const a = h("a", { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export async function downloadDiagnostics(jobId) {
   const res = await fetch(`${API}/jobs/${jobId}/diagnostics`, { headers: { Authorization: `Bearer ${token()}` } });
   if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));

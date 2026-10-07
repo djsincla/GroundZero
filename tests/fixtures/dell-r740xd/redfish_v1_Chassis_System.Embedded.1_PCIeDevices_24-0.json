@@ -1,0 +1,64 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#PCIeDevice.PCIeDevice",
+  "@odata.etag": "\"1791072693\"",
+  "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0",
+  "@odata.type": "#PCIeDevice.v1_11_0.PCIeDevice",
+  "AssetTag": null,
+  "Description": "PERC H730P Adapter",
+  "DeviceType": "SingleFunction",
+  "FirmwareVersion": "25.5.9.0001",
+  "Id": "24-0",
+  "Links": {
+    "Chassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+      }
+    ],
+    "Chassis@odata.count": 1,
+    "Oem": {
+      "Dell": {
+        "@odata.type": "#DellOem.v1_3_0.DellOemLinks",
+        "CPUAffinity": [],
+        "CPUAffinity@odata.count": 0
+      }
+    },
+    "PCIeFunctions": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0/PCIeFunctions/24-0-0"
+      }
+    ],
+    "PCIeFunctions@Redfish.Deprecated": "Please migrate to PCIeFunctions property in the root resource.",
+    "PCIeFunctions@odata.count": 1
+  },
+  "Manufacturer": "Broadcom / LSI",
+  "Model": "Dell Storage Cntlr. H730P - Adp.",
+  "Name": "PERC H730P Adapter",
+  "PCIeFunctions": {
+    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/24-0/PCIeFunctions"
+  },
+  "PCIeInterface": {
+    "LanesInUse": 8,
+    "MaxLanes": 8,
+    "MaxPCIeType": "Gen3",
+    "PCIeType": "Gen3"
+  },
+  "PartNumber": "REDACTED",
+  "SKU": null,
+  "SerialNumber": "REDACTED",
+  "Slot": {
+    "Lanes": 8,
+    "Location": {
+      "PartLocation": {
+        "LocationOrdinalValue": 6,
+        "LocationType": "Slot"
+      }
+    },
+    "PCIeType": "Gen3",
+    "SlotType": "FullLength"
+  },
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  }
+}

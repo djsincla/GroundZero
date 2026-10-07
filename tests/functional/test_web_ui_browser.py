@@ -1028,3 +1028,60 @@ def test_save_storage_as_a_profile_extend_it_and_configure(page: Page, tmp_path:
         expect(page.locator('[data-controller="RAID.Slot.6-1"] [data-volume]')).to_contain_text("RAID5")
     finally:
         gz.stop()
+
+
+def test_full_inventory_on_overview_and_the_reports(page: Page, tmp_path: Path) -> None:
+    from .conftest import _simulated
+
+    gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_BMC_HOSTNAME="idrac-esx01")
+    gz.start()
+    try:
+        assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+        assert gz.cli("run", "esxi1", "discover", timeout=120).code == 0
+        _open(page, gz)
+        page.get_by_role("link", name="esxi1").click()
+        _tab(page, "Overview")
+        hardware = page.locator('[data-role="hardware"]')
+        expect(hardware.locator('[data-section="firmware"]')).to_contain_text(
+            "Integrated Dell Remote Access Controller"
+        )
+        expect(hardware.locator('[data-section="memory"] tbody tr')).to_have_count(8)
+        expect(hardware.locator('[data-section="psu"]')).to_contain_text("2000 W")
+        expect(hardware.locator('[data-section="pcie"] tr[data-class="storage"]').first).to_be_visible()
+        expect(hardware.locator('[data-section="adapters"]')).to_contain_text("57800")
+
+        page.get_by_role("link", name="Report").click()
+        expect(page.get_by_role("heading", name="esxi1: report")).to_be_visible()
+        expect(page.locator('[data-report-task="discover"]')).to_contain_text("done")
+        with page.expect_download() as got:
+            page.get_by_role("button", name="Download CSV").click()
+        text = Path(got.value.path()).read_text()
+        assert got.value.suggested_filename == "esxi1-report.csv" and text.startswith(
+            "server,section,component"
+        )
+        assert "firmware,BIOS,,2.24.0" in text
+
+        with gz.api() as api:
+            settings = {"netmask": "255.255.255.0", "gateway": "192.0.2.1", "nameservers": ["192.0.2.53"]}
+            cs = api.post(
+                "/api/v1/config-sets", json={"name": "lab", "os_family": "esxi", "settings": settings}
+            ).json()
+            cluster = api.post(
+                "/api/v1/clusters",
+                json={
+                    "name": "lab-a",
+                    "config_set_id": cs["id"],
+                    "ip_first": "192.0.2.101",
+                    "ip_last": "192.0.2.103",
+                    "dns_domain": "lab.example",
+                },
+            ).json()
+            host = api.get("/api/v1/hosts").json()[0]["id"]
+            api.post(f"/api/v1/clusters/{cluster['id']}/members", json={"host_id": host})
+        page.goto(f"{gz.url}/#/clusters/{cluster['id']}")
+        page.get_by_role("link", name="Report").click()
+        expect(page.get_by_role("heading", name="lab-a: cluster report")).to_be_visible()
+        expect(page.locator('[data-section="differences"]')).to_contain_text("No differences")
+        expect(page.locator('[data-section="same"] [data-item="BIOS"]')).to_contain_text("2.24.0")
+    finally:
+        gz.stop()

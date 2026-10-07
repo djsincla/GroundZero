@@ -6,6 +6,19 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 ## [Unreleased]
 
 ### Added
+- **Full hardware inventory:** Discover hardware now also reads the following, and the Overview tab shows
+  all of it:
+  - every installed firmware version (BIOS, BMC, controllers, NICs, drives, power supplies, backplanes)
+  - each memory module
+  - the network adapters with their firmware
+  - PCIe devices: storage controllers and HBAs, NICs, accelerators
+  - power supplies
+  - each drive's firmware, and the service tag
+- **Reports:** a server's hardware and configuration on one printable page, and a cluster report that
+  puts the members side by side and flags what differs (BIOS, BMC and every firmware version, model,
+  memory, drives, adapters, power supplies, OS).
+  - Download a report as CSV (one row per component, or one row per compared item for a cluster) or JSON.
+  - Built from what GroundZero already recorded: nothing is read from the servers.
 - **Configure storage:** apply a storage profile covering RAID volumes, controller mode (RAID, HBA,
   enhanced HBA), drive state (RAID-capable or passed straight through) and global hot spares.
   - Profiles are rules, not drive ids, so one fits every server of a kind: "on the boot card, one RAID1

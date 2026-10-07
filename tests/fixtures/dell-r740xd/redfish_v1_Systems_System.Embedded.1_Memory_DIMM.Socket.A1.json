@@ -1,0 +1,93 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Memory.Memory",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A1",
+  "@odata.type": "#Memory.v1_17_0.Memory",
+  "AllowedSpeedsMHz": [
+    2666
+  ],
+  "AllowedSpeedsMHz@odata.count": 1,
+  "Assembly": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A1/Assembly"
+  },
+  "BaseModuleType": "LRDIMM",
+  "BusWidthBits": 72,
+  "CacheSizeMiB": 0,
+  "CapacityMiB": 65536,
+  "DataWidthBits": 64,
+  "Description": "DIMM A1",
+  "DeviceLocator": "DIMM A1",
+  "Enabled": true,
+  "ErrorCorrection": "MultiBitECC",
+  "FirmwareRevision": null,
+  "Id": "DIMM.Socket.A1",
+  "Links": {
+    "Chassis": {
+      "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+    },
+    "Oem": {
+      "Dell": {
+        "@odata.type": "#DellOem.v1_3_0.DellOemLinks",
+        "CPUAffinity": [
+          {
+            "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.1"
+          }
+        ],
+        "CPUAffinity@odata.count": 1
+      }
+    },
+    "Processors": [
+      {
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Processors/CPU.Socket.1"
+      }
+    ],
+    "Processors@odata.count": 1
+  },
+  "LogicalSizeMiB": 0,
+  "Manufacturer": "Hynix Semiconductor",
+  "MaxTDPMilliWatts": [],
+  "MaxTDPMilliWatts@odata.count": 0,
+  "MemoryDeviceType": "DDR4",
+  "MemorySubsystemControllerManufacturerID": null,
+  "MemorySubsystemControllerProductID": null,
+  "MemoryType": "DRAM",
+  "Metrics": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A1/MemoryMetrics"
+  },
+  "ModuleManufacturerID": null,
+  "ModuleProductID": null,
+  "Name": "DIMM A1",
+  "NonVolatileSizeMiB": 0,
+  "Oem": {
+    "Dell": {
+      "@odata.type": "#DellOem.v1_3_0.DellOemResources",
+      "DellMemory": {
+        "@odata.context": "/redfish/v1/$metadata#DellMemory.DellMemory",
+        "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Memory/DIMM.Socket.A1/Oem/Dell/DellMemory/DIMM.Socket.A1",
+        "@odata.type": "#DellMemory.v1_1_0.DellMemory",
+        "BankLabel": "A",
+        "Id": "DIMM.Socket.A1",
+        "LastSystemInventoryTime": "2026-10-04T00:10:59+00:00",
+        "LastUpdateTime": "2025-09-24T00:07:06+00:00",
+        "ManufactureDate": "Mon Sep 24 07:00:00 2018 UTC",
+        "MemoryTechnology": "DRAM",
+        "Model": "DDR4 DIMM",
+        "Name": "DellMemory",
+        "RemainingRatedWriteEndurancePercent": null,
+        "SystemEraseCapability": "NotSupported"
+      }
+    }
+  },
+  "OperatingMemoryModes": [
+    "Volatile"
+  ],
+  "OperatingMemoryModes@odata.count": 1,
+  "OperatingSpeedMhz": 2666,
+  "PartNumber": "REDACTED",
+  "RankCount": 4,
+  "SerialNumber": "REDACTED",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "VolatileSizeMiB": 65536
+}

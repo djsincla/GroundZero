@@ -12,9 +12,14 @@ from groundzero.inventory.models import (
     BiosSettings,
     BmcInfo,
     Drive,
+    FirmwareItem,
     HostInventory,
     MemoryInfo,
+    MemoryModule,
+    NetworkAdapter,
     NetworkPort,
+    PcieDevice,
+    PowerSupply,
     Processor,
     SystemInfo,
 )
@@ -79,6 +84,7 @@ def parse_drive(raw: dict[str, Any], controller: str | None) -> Drive:
         media_type=raw.get("MediaType"),
         protocol=raw.get("Protocol"),
         capacity_bytes=int(raw.get("CapacityBytes") or 0),
+        firmware_version=raw.get("Revision"),
         controller=controller,
         is_boot_device=any(m in controller_upper for m in _BOOT_CONTROLLER_MARKERS),
     )
@@ -127,6 +133,113 @@ def parse_bios(raw: dict[str, Any], profile: VendorProfile, system: dict[str, An
     )
 
 
+def _health(raw: dict[str, Any]) -> str | None:
+    status = raw.get("Status") or {}
+    return status.get("HealthRollup") or status.get("Health")
+
+
+def parse_dimm(raw: dict[str, Any]) -> MemoryModule:
+    return MemoryModule(
+        id=raw.get("Id", raw.get("@odata.id", "").rsplit("/", 1)[-1]),
+        slot=raw.get("DeviceLocator") or (raw.get("MemoryLocation") or {}).get("Slot"),
+        capacity_mib=int(raw.get("CapacityMiB") or 0),
+        type=raw.get("MemoryDeviceType"),
+        speed_mhz=raw.get("OperatingSpeedMhz"),
+        manufacturer=(raw.get("Manufacturer") or "").strip() or None,
+        part_number=(raw.get("PartNumber") or "").strip() or None,
+        health=_health(raw),
+    )
+
+
+def parse_adapter(raw: dict[str, Any]) -> NetworkAdapter:
+    controller = (raw.get("Controllers") or [{}])[0]
+    ports = (controller.get("ControllerCapabilities") or {}).get("NetworkPortCount")
+    if ports is None:
+        links = controller.get("Links") or {}
+        ports = len(links.get("Ports") or links.get("NetworkPorts") or [])
+    return NetworkAdapter(
+        id=raw.get("Id", ""),
+        name=raw.get("Model") or raw.get("Name"),
+        manufacturer=raw.get("Manufacturer"),
+        model=raw.get("Model"),
+        part_number=raw.get("PartNumber") or None,
+        firmware_version=controller.get("FirmwarePackageVersion") or None,
+        ports=int(ports or 0),
+        health=_health(raw),
+    )
+
+
+_PCIE_CLASSES = (
+    (
+        "storage",
+        ("RAID", "SATA", "SAS", "NVME", "SSD", "BOSS", "PERC", "HBA", "STORAGE", "FIBRE", "EXPRESS FLASH"),
+    ),
+    ("network", ("ETHERNET", "NETWORK", "NIC", "CONNECTX", "QLOGIC", "MELLANOX")),
+    ("accelerator", ("GPU", "NVIDIA", "TESLA", "ACCELERATOR", "FPGA")),
+    ("display", ("GRAPHICS", "VGA", "MATROX")),
+)
+
+
+def pcie_class(name: str) -> str:
+    """storage, network, accelerator, display or chipset, from the device's name (Dell reports no class)."""
+    upper = name.upper()
+    return next((kind for kind, words in _PCIE_CLASSES if any(w in upper for w in words)), "chipset")
+
+
+def parse_pcie(raw: dict[str, Any]) -> PcieDevice:
+    slot = ((raw.get("Slot") or {}).get("Location") or {}).get("PartLocation") or {}
+    return PcieDevice(
+        id=raw.get("Id", ""),
+        name=raw.get("Name"),
+        manufacturer=raw.get("Manufacturer"),
+        model=raw.get("Model") or raw.get("Name"),
+        device_class=pcie_class(raw.get("Name") or raw.get("Model") or ""),
+        firmware_version=raw.get("FirmwareVersion") or None,
+        slot=slot.get("ServiceLabel") or None,
+        health=_health(raw),
+    )
+
+
+def parse_psu(raw: dict[str, Any]) -> PowerSupply:
+    return PowerSupply(
+        name=raw.get("Name") or raw.get("MemberId") or "Power supply",
+        model=raw.get("Model"),
+        manufacturer=raw.get("Manufacturer"),
+        capacity_watts=raw.get("PowerCapacityWatts"),
+        firmware_version=raw.get("FirmwareVersion") or None,
+        health=_health(raw),
+    )
+
+
+async def _firmware(client: RedfishClient) -> list[FirmwareItem]:
+    """Every firmware the BMC lists as installed (Dell also lists previous and available versions)."""
+    service = await _optional_json(client, "/redfish/v1/UpdateService")
+    items = await _optional_members(client, _link(service, "FirmwareInventory"))
+    installed = [i for i in items if str(i.get("Id", "")).startswith("Installed")]
+    return [
+        FirmwareItem(
+            id=i.get("Id", ""),
+            name=i.get("Name") or i.get("Id", ""),
+            version=i.get("Version"),
+            updateable=i.get("Updateable"),
+            health=_health(i),
+        )
+        for i in (installed or items)
+    ]
+
+
+async def _pcie_devices(
+    client: RedfishClient, system: dict[str, Any], chassis: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """PCIe devices: a list of links on the system (older schema) or a collection on the chassis."""
+    listed = system.get("PCIeDevices")
+    if isinstance(listed, list) and listed:
+        paths = [d["@odata.id"] for d in listed if "@odata.id" in d]
+        results = await asyncio.gather(*(client.get_json(p) for p in paths), return_exceptions=True)
+        return [r for r in results if isinstance(r, dict)]
+    return await _optional_members(client, _link(chassis, "PCIeDevices") or _link(system, "PCIeDevices"))
+
+
 async def collect_inventory(
     client: RedfishClient, progress: ProgressFn | None = None
 ) -> tuple[BmcIdentity, HostInventory]:
@@ -147,9 +260,13 @@ async def collect_inventory(
         if str(p.get("ProcessorType", "CPU")).upper() == "CPU" and not _absent(p)
     ]
     dimms = await _optional_json(client, _link(system, "Memory"))
+    modules = [
+        parse_dimm(m) for m in await _optional_members(client, _link(system, "Memory")) if not _absent(m)
+    ]
     memory = MemoryInfo(
         total_gib=float(system.get("MemorySummary", {}).get("TotalSystemMemoryGiB") or 0),
         dimm_count=int(dimms.get("Members@odata.count") or len(dimms.get("Members", []))),
+        modules=modules,
     )
 
     report(0.4, "Reading storage")
@@ -166,6 +283,14 @@ async def collect_inventory(
     bmc_nics = await _optional_members(client, _link(manager or {}, "EthernetInterfaces")) if manager else []
     bmc_nic = next((n for n in bmc_nics if n.get("HostName")), {})
 
+    report(0.78, "Reading firmware, adapters, PCIe devices and power supplies")
+    chassis = await _optional_json(client, identity.chassis_path)
+    firmware = await _firmware(client)
+    adapters = [parse_adapter(a) for a in await _optional_members(client, _link(chassis, "NetworkAdapters"))]
+    pcie = [parse_pcie(d) for d in await _pcie_devices(client, system, chassis) if not _absent(d)]
+    power = await _optional_json(client, _link(chassis, "Power"))
+    supplies = [parse_psu(p) for p in power.get("PowerSupplies") or [] if not _absent(p)]
+
     report(0.85, "Reading BMC capabilities and license")
     capabilities = await discover_capabilities(client, system, manager)
     license_info = await profile.license(client, identity)
@@ -176,6 +301,8 @@ async def collect_inventory(
             manufacturer=identity.manufacturer,
             model=identity.model,
             serial_number=system.get("SerialNumber"),
+            service_tag=system.get("SKU") or None,
+            asset_tag=system.get("AssetTag") or None,
             bios_version=system.get("BiosVersion"),
             power_state=system.get("PowerState"),
             health=system.get("Status", {}).get("HealthRollup") or system.get("Status", {}).get("Health"),
@@ -194,6 +321,10 @@ async def collect_inventory(
             license=license_info,
         ),
         capabilities=capabilities,
+        firmware=firmware,
+        network_adapters=adapters,
+        pcie_devices=pcie,
+        power_supplies=supplies,
     )
     report(0.95, "Inventory collected")
     return identity, inventory

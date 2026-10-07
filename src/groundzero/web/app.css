@@ -324,3 +324,14 @@ label.choice { align-items: flex-start; gap: 8px; margin: 6px 0; }
 .plan-item.danger { color: var(--fail); }
 .volume-rules input, .volume-rules select { width: auto; }
 .panel.rule h3 { margin: 0; }
+/* reports */
+tr.differs td { background: var(--warn-bg); }
+tr.differs td:first-child { font-weight: 600; }
+@media print {
+  .sidebar, .topbar, .no-print, .tabs, #drawer, .toasts { display: none !important; }
+  body, .main, main { background: #fff !important; color: #000; }
+  .panel { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+  .report .panel { margin-bottom: 12px; }
+  a { color: inherit; }
+}
+.section-title { font-size: 15px; margin: 24px 0 10px; }

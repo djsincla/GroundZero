@@ -1,0 +1,64 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#PCIeDevice.PCIeDevice",
+  "@odata.etag": "\"1791072689\"",
+  "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/98-0",
+  "@odata.type": "#PCIeDevice.v1_11_0.PCIeDevice",
+  "AssetTag": null,
+  "Description": "Express Flash NVMe 1.0 TB 2.5\" U.2 (P4510)",
+  "DeviceType": "SingleFunction",
+  "FirmwareVersion": "VDV1DP23",
+  "Id": "98-0",
+  "Links": {
+    "Chassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+      }
+    ],
+    "Chassis@odata.count": 1,
+    "Oem": {
+      "Dell": {
+        "@odata.type": "#DellOem.v1_3_0.DellOemLinks",
+        "CPUAffinity": [],
+        "CPUAffinity@odata.count": 0
+      }
+    },
+    "PCIeFunctions": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/98-0/PCIeFunctions/98-0-0"
+      }
+    ],
+    "PCIeFunctions@Redfish.Deprecated": "Please migrate to PCIeFunctions property in the root resource.",
+    "PCIeFunctions@odata.count": 1
+  },
+  "Manufacturer": "Intel Corporation",
+  "Model": "Dell Express Flash P4510 1TB",
+  "Name": "Express Flash NVMe 1.0 TB 2.5\" U.2 (P4510)",
+  "PCIeFunctions": {
+    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/98-0/PCIeFunctions"
+  },
+  "PCIeInterface": {
+    "LanesInUse": 4,
+    "MaxLanes": 4,
+    "MaxPCIeType": "Gen3",
+    "PCIeType": "Gen3"
+  },
+  "PartNumber": "REDACTED",
+  "SKU": null,
+  "SerialNumber": "REDACTED",
+  "Slot": {
+    "Lanes": 4,
+    "Location": {
+      "PartLocation": {
+        "LocationOrdinalValue": 3,
+        "LocationType": "Slot"
+      }
+    },
+    "PCIeType": "Gen3",
+    "SlotType": "U2"
+  },
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  }
+}

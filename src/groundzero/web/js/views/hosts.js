@@ -2,6 +2,7 @@
 import { schemaForm } from "../forms.js";
 import { runPanel, runSpecDialog } from "./specs.js";
 import { captureStorageDialog, configureStorageDialog } from "./storage.js";
+import { hardwareSections } from "./reports.js";
 import {
   age, api, badge, card, empty, fmtBytes, fmtTime, h, isActive, jobCard, jobLabel, maybe, mount, openDialog, pageHeader,
   showJobDrawer, showOutput, startJob, table, toast,
@@ -77,11 +78,12 @@ export async function viewHost(app, id, tab = "pipeline") {
     ({ ...o, data: await api("GET", `/hosts/${id}/outputs/${encodeURIComponent(o.kind)}`) })));
   const readiness = tab === "readiness" ? await maybe(api("GET", `/hosts/${id}/outputs/readiness`)) : null;
   const storage = tab === "storage" ? await maybe(api("GET", `/hosts/${id}/outputs/storage`)) : null;
+  const inventory = tab === "overview" ? await maybe(api("GET", `/hosts/${id}/outputs/inventory`)) : null;
   const [specs, runs] = tab === "pipeline"
     ? await Promise.all([api("GET", "/specs"), api("GET", `/hosts/${id}/runs?limit=1`)]) : [[], []];
   const active = jobs.find(isActive);
   const busy = Boolean(active);
-  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness, appliances, storage, specs,
+  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness, appliances, storage, specs, inventory,
     lastRun: runs[0] || null,
     lastInstallJob: jobs.find((j) => j.task === "os.custom" || j.task === "os.reimage") };
 
@@ -759,14 +761,15 @@ function storageTab(ctx) {
 function overviewTab(ctx) {
   const { host, id, pre, osAccess, net, install, busy, certs } = ctx;
   const runPreflight = () => startJob("POST", `/hosts/${id}/tasks/preflight`, {}, { onDone: refresh });
-  return h("div", { class: "cards" },
+  return [h("div", { class: "cards" },
     card({ "data-card": "hardware" },
       h("h2", {}, "Hardware"),
       h("dl", { class: "kv" },
         h("dt", {}, "Model"), h("dd", {}, hardware(host) || "unknown until inventory or preflight runs"),
         h("dt", {}, "BMC"), h("dd", { class: "mono" }, host.bmc_address),
         h("dt", {}, "BMC user"), h("dd", {}, host.username),
-        h("dt", {}, "Added"), h("dd", {}, fmtTime(host.created_at)))),
+        h("dt", {}, "Added"), h("dd", {}, fmtTime(host.created_at))),
+      h("div", { class: "row" }, h("a", { class: "button", href: `#/hosts/${id}/report` }, "Report"))),
     card({ "data-card": "preflight" },
       h("h2", {}, "Holodeck preflight"),
       pre
@@ -786,7 +789,9 @@ function overviewTab(ctx) {
     card({ "data-card": "danger", class: "panel danger-zone" },
       h("h2", {}, "Remove host"),
       h("p", { class: "muted" }, "Forgets the host, its credentials and its history in GroundZero. Nothing on the server changes."),
-      h("button", { class: "danger-outline", disabled: busy, onclick: () => removeHostDialog(host) }, "Remove host…")));
+      h("button", { class: "danger-outline", disabled: busy, onclick: () => removeHostDialog(host) }, "Remove host…"))),
+    h("h2", { class: "section-title" }, "Hardware inventory"),
+    h("div", { class: "stack", "data-role": "hardware" }, ...hardwareSections(ctx.inventory))];
 }
 
 function certificatesCard(id, certs) {

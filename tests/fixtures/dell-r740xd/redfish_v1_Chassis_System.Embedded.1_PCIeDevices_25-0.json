@@ -1,0 +1,57 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#PCIeDevice.PCIeDevice",
+  "@odata.etag": "\"1791072692\"",
+  "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0",
+  "@odata.type": "#PCIeDevice.v1_11_0.PCIeDevice",
+  "AssetTag": null,
+  "Description": "BCM57800 1-Gigabit Ethernet",
+  "DeviceType": "MultiFunction",
+  "FirmwareVersion": "08.07.26",
+  "Id": "25-0",
+  "Links": {
+    "Chassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+      }
+    ],
+    "Chassis@odata.count": 1,
+    "Oem": {
+      "Dell": {
+        "@odata.type": "#DellOem.v1_3_0.DellOemLinks",
+        "CPUAffinity": [],
+        "CPUAffinity@odata.count": 0
+      }
+    },
+    "PCIeFunctions": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions/25-0-3"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions/25-0-1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions/25-0-2"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions/25-0-0"
+      }
+    ],
+    "PCIeFunctions@Redfish.Deprecated": "Please migrate to PCIeFunctions property in the root resource.",
+    "PCIeFunctions@odata.count": 4
+  },
+  "Manufacturer": "Broadcom Inc. and subsidiaries",
+  "Model": "BRCM 10G/GbE 2+2P 57800-t rNDC",
+  "Name": "BCM57800 1-Gigabit Ethernet",
+  "PCIeFunctions": {
+    "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/PCIeDevices/25-0/PCIeFunctions"
+  },
+  "PartNumber": "REDACTED",
+  "SKU": null,
+  "SerialNumber": "REDACTED",
+  "Slot": {},
+  "Status": {
+    "Health": "OK",
+    "HealthRollup": "OK",
+    "State": "Enabled"
+  }
+}
