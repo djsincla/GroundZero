@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -305,3 +306,74 @@ def test_an_ovas_inputs_are_read_from_its_descriptor(tmp_path: Path, api: TestCl
     iso = next(i for i in api.get("/api/v1/images").json() if i["kind"] == "iso")
     assert api.get(f"/api/v1/images/{iso['id']}/descriptor").status_code == 409
     assert api.get("/api/v1/images/nope/descriptor").status_code == 404
+
+
+def _ova_from_fixture(api: TestClient, fixture: str, filename: str) -> dict[str, Any]:
+    import tarfile
+
+    repo = Path(api.app.state.services.settings.iso_dir)  # type: ignore[attr-defined]
+    with tarfile.open(repo / filename, "w") as tar:
+        tar.add(
+            Path(__file__).parent / "fixtures" / "ova" / fixture, arcname=filename.replace(".ova", ".ovf")
+        )
+    return next(i for i in api.post("/api/v1/images/rescan").json() if i["filename"] == filename)
+
+
+def test_appliance_profiles_are_checked_against_the_ova(api: TestClient) -> None:
+    router = _ova_from_fixture(api, "holorouter-9.1.1.ovf", "holorouter-9.1.1.0456.ova")
+    sddc = _ova_from_fixture(api, "sddc-manager-9.1.1.ovf", "VCF-SDDC-Manager-Appliance-9.1.1.0.25713928.ova")
+    body = {
+        "name": "lab-router",
+        "image_id": router["id"],
+        "values": {
+            "ip": "192.0.2.150",
+            "network.mask": "24",
+            "ssh_enabled": "true",
+            "hostname": "holorouter",
+        },
+        "secrets": {"password": "Example-pass1!"},
+        "networks": {
+            "VM Management Network": "Holodeck-External",
+            "Trunk Portgroup for Site A": "Holodeck-Trunk",
+        },
+    }
+    created = api.post("/api/v1/appliance-profiles", json=body)
+    assert created.status_code == 201, created.text
+    p = created.json()
+    assert p["product"] == "HoloRouter" and p["secrets_set"] == ["network.password"]
+    assert p["values"] == {"network.ip": "192.0.2.150", "network.mask": "24", "extra.ssh_enabled": True,
+                           "network.hostname": "holorouter"}  # fmt: skip
+    assert "Example-pass1!" not in json.dumps(api.get(f"/api/v1/appliance-profiles/{p['id']}").json())
+
+    # Passwords not sent on update are kept; values are replaced
+    update = {**body, "secrets": None, "values": {"ip": "192.0.2.151"}}
+    updated = api.put(f"/api/v1/appliance-profiles/{p['id']}", json=update).json()
+    assert updated["secrets_set"] == ["network.password"] and updated["values"] == {
+        "network.ip": "192.0.2.151"
+    }
+    services = api.app.state.services  # type: ignore[attr-defined]
+    assert services.appliance_profile_secrets(p["id"]) == {"network.password": "Example-pass1!"}
+
+    bad = api.post("/api/v1/appliance-profiles", json={
+        "name": "bad", "image_id": sddc["id"],
+        "values": {"bogus": "1", "ROOT_PASSWORD": "in-the-clear",
+                   "vami.ip_address_version.SDDC-Manager": "IPv5"},
+        "secrets": {"ROOT_PASSWORD": "short"},
+        "networks": {"Nope": "VM Network"},
+    })  # fmt: skip
+    assert bad.status_code == 422
+    problems = {tuple(e["loc"]): e["type"] for e in bad.json()["errors"]}
+    assert problems == {
+        ("values", "bogus"): "unknown_property",
+        ("values", "ROOT_PASSWORD"): "secret",  # a password must never be sent as a plain value
+        ("values", "vami.ip_address_version.SDDC-Manager"): "enum",
+        ("secrets", "ROOT_PASSWORD"): "too_short",  # MinLen(15) from the descriptor
+        ("networks", "Nope"): "network",
+    }
+    other_product = api.put(
+        f"/api/v1/appliance-profiles/{p['id']}", json={**body, "image_id": sddc["id"], "values": {}}
+    )
+    assert other_product.status_code == 422 and "HoloRouter" in other_product.json()["detail"]
+    assert api.post("/api/v1/appliance-profiles", json=body).status_code == 409  # duplicate name
+    assert api.delete(f"/api/v1/appliance-profiles/{p['id']}").status_code == 204
+    assert api.get(f"/api/v1/appliance-profiles/{p['id']}").status_code == 404

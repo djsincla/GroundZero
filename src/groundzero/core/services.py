@@ -47,6 +47,7 @@ from groundzero.modules.prep import current_jumbo
 from groundzero.osconfig import PLUGINS, OsConfigError, plugin_for
 from groundzero.osconfig.esxi import EsxiPlugin
 from groundzero.ova.descriptor import OvfDescriptor, descriptor_schema, read_ova_descriptor
+from groundzero.ova.profiles import ApplianceProfile, ApplianceProfileWrite, check_values
 from groundzero.preflight.evaluate import PreflightReport, load_profile
 from groundzero.readiness import ReadinessReport, assess
 from groundzero.redfish.capture import load_recording
@@ -76,13 +77,20 @@ class SettingsValidationError(ValueError):
 
     error_type = "validation_error"
 
-    def __init__(self, where: str, exc: ValidationError) -> None:
-        self.errors: list[dict[str, object]] = [
-            {"loc": [where, *e["loc"]], "msg": e["msg"], "type": e["type"]} for e in exc.errors()
-        ]
+    def __init__(self, where: str, exc: ValidationError | list[dict[str, object]]) -> None:
+        """From a Pydantic error, or from field errors whose ``loc`` already starts with ``where``."""
+        if isinstance(exc, ValidationError):
+            self.errors: list[dict[str, object]] = [
+                {"loc": [where, *e["loc"]], "msg": e["msg"], "type": e["type"]} for e in exc.errors()
+            ]
+        else:
+            self.errors = exc
         super().__init__(
             f"Invalid {where}: "
-            + "; ".join(f"{'.'.join(str(x) for x in e['loc'])}: {e['msg']}" for e in exc.errors())
+            + "; ".join(
+                f"{'.'.join(str(x) for x in e['loc'][1:])}: {e['msg']}"  # type: ignore[index]
+                for e in self.errors
+            )
         )
 
 
@@ -340,6 +348,63 @@ class Services:
         data = self._validate(model, values, "host_values")
         self.store.set_host_values(host_id, family, data)
         return data
+
+    # ── appliance profiles (saved values for an OVA) ─────────────────────
+    def list_appliance_profiles(self) -> list[ApplianceProfile]:
+        return self.store.list_appliance_profiles()
+
+    def get_appliance_profile(self, profile_id: str) -> ApplianceProfile:
+        found = self.store.get_appliance_profile(profile_id)
+        if found is None:
+            raise NotFoundError(f"Appliance profile {profile_id} not found")
+        return found[0]
+
+    def appliance_profile_secrets(self, profile_id: str) -> dict[str, str]:
+        """Decrypted passwords of a profile (internal use only; never returned by the API)."""
+        found = self.store.get_appliance_profile(profile_id)
+        if found is None:
+            raise NotFoundError(f"Appliance profile {profile_id} not found")
+        return self._unseal(found[1]) if found[1] else {}
+
+    def save_appliance_profile(
+        self, req: ApplianceProfileWrite, *, profile_id: str | None = None, source: str = "manual"
+    ) -> ApplianceProfile:
+        """Create (no id) or replace a profile, checked against the descriptor of ``req.image_id``."""
+        current = self.get_appliance_profile(profile_id) if profile_id else None
+        other = self.store.find_appliance_profile_by_name(req.name)
+        if other is not None and other.id != profile_id:
+            raise ConflictError(f"An appliance profile named '{req.name}' already exists")
+        resolved = self.isos.resolve(req.image_id)
+        if resolved is None or resolved[0].kind != "ova":
+            raise NotFoundError(f"OVA {req.image_id} is not in the image repository")
+        desc = read_ova_descriptor(resolved[1])
+        product = desc.product or resolved[0].filename
+        if current is not None and current.product != product:
+            raise OsConfigError(f"This profile is for {current.product}; {resolved[0].filename} is {product}")
+        values, secrets, errors = check_values(desc, req.values, req.secret_values(), req.networks)
+        if errors:
+            raise SettingsValidationError("profile", errors)
+        sealed: bytes | None = None
+        names: list[str] | None = None
+        if secrets or current is None:  # merge: passwords not sent are kept
+            merged = {**(self.appliance_profile_secrets(current.id) if current else {}), **secrets}
+            sealed = self._seal_all(merged) if merged else None
+            names = sorted(merged)
+        return self.store.save_appliance_profile(
+            profile_id=profile_id,
+            name=req.name,
+            product=product,
+            image_id=req.image_id,
+            values=values,
+            networks=req.networks,
+            source=current.source if current else source,
+            secrets=sealed,
+            secret_names=names,
+        )
+
+    def delete_appliance_profile(self, profile_id: str) -> None:
+        if not self.store.delete_appliance_profile(profile_id):
+            raise NotFoundError(f"Appliance profile {profile_id} not found")
 
     # ── ISO repository ───────────────────────────────────────────────────
     def list_images(self) -> list[Image]:

@@ -1,6 +1,6 @@
 // Config sets (list, create, edit, duplicate, delete) and the ISO repository.
 import {
-  api, badge, card, empty, fmtBytes, fmtTime, h, maybe, mount, openDialog, pageHeader, showJobDrawer, table, toast,
+  api, badge, card, empty, errorBox, fmtBytes, fmtTime, h, maybe, mount, openDialog, pageHeader, showJobDrawer, table, toast,
 } from "../core.js";
 import { schemaForm } from "../forms.js";
 
@@ -15,7 +15,8 @@ const SECRET_HELP = {
 
 // ── config sets ──
 export async function viewConfigSets(app) {
-  const [sets, families] = await Promise.all([api("GET", "/config-sets"), api("GET", "/os-families")]);
+  const [sets, families, profiles] = await Promise.all([api("GET", "/config-sets"), api("GET", "/os-families"),
+    api("GET", "/appliance-profiles")]);
   const title = Object.fromEntries(families.map((f) => [f.family, f.title]));
   mount(app, 
     pageHeader("Config sets", "Reusable OS settings. Choose one per server at deploy time; hostname and IP stay per server.",
@@ -32,7 +33,20 @@ export async function viewConfigSets(app) {
             h("td", { class: "muted" }, fmtTime(s.updated_at)))))
       : empty("No config sets yet. Build one from a running server, or create one from scratch.",
           h("button", { onclick: captureFromServerDialog }, "From a running server…"),
-          h("a", { class: "button primary", href: "#/config-sets/new" }, "New config set"))));
+          h("a", { class: "button primary", href: "#/config-sets/new" }, "New config set"))),
+    card({ "data-panel": "appliance-profiles" },
+      h("div", { class: "row" }, h("h2", {}, "Appliance profiles"), h("span", { class: "spacer" }),
+        h("a", { class: "button", href: "#/appliance-profiles/new" }, "New appliance profile")),
+      h("p", { class: "muted small-text" }, "Saved values for an OVA: its properties, which port group each of its networks uses, and its passwords. The form comes from the OVA itself."),
+      profiles.length
+        ? table(["Name", "Appliance", "Source", "Passwords", "Updated"], profiles.map((p) =>
+            h("tr", { "data-profile": p.name },
+              h("td", {}, h("a", { href: `#/appliance-profiles/${p.id}` }, p.name)),
+              h("td", {}, p.product),
+              h("td", { class: "muted" }, p.source),
+              h("td", {}, p.secrets_set.length ? badge("pass", `${p.secrets_set.length} stored`) : badge("none", "none")),
+              h("td", { class: "muted" }, fmtTime(p.updated_at)))))
+        : h("p", { class: "muted" }, "No appliance profiles yet.")));
 }
 
 // Build a config set by reading a running server (read-only). If GroundZero can't log in to its OS yet,
@@ -228,4 +242,90 @@ async function inputsDialog(image) {
     hidden.length ? h("details", {}, h("summary", {}, `${hidden.length} more the appliance sets itself (sent with their defaults)`),
       h("ul", { class: "plain small-text mono" }, hidden.map((p) => h("li", {}, p.qualified_key, p.default ? ` = ${p.default}` : "")))) : null,
   ], { submitLabel: "Close", wide: true, onSubmit: async () => {} });
+}
+
+// ── appliance profile editor: the form is generated from the chosen OVA's descriptor ──
+export async function viewApplianceProfile(app, id) {
+  const isNew = id === "new";
+  const [images, existing] = await Promise.all([api("GET", "/images"), isNew ? null : api("GET", `/appliance-profiles/${id}`)]);
+  const ovas = images.filter((i) => i.kind === "ova");
+  if (!ovas.length) {
+    mount(app, pageHeader("Appliance profile"), card({}, empty("No OVAs in the image repository. Add one, then rescan.",
+      h("a", { class: "button", href: "#/images" }, "Open image repository"))));
+    return;
+  }
+  const name = h("input", { id: "ap-name", required: true, value: existing?.name || "" });
+  const preferred = existing && (ovas.find((i) => i.id === existing.image_id) || ovas.find((i) => i.product === existing.product));
+  const imageSelect = h("select", { id: "ap-image" }, ovas.map((i) =>
+    h("option", { value: i.id, selected: preferred ? i.id === preferred.id : false }, `${i.product || i.filename} ${i.version || ""} (${i.filename})`)));
+  const formSlot = h("div");
+  const networksSlot = h("div");
+  const status = h("div");
+  let form = null;
+  let secretKeys = [];
+  let netInputs = {};
+
+  async function load() {
+    formSlot.replaceChildren(h("p", { class: "muted" }, "Reading the OVA…"));
+    let info;
+    try { info = await api("GET", `/images/${imageSelect.value}/descriptor`); } catch (e) { formSlot.replaceChildren(errorBox(e)); return; }
+    secretKeys = info.schema["x-secret-fields"] || [];
+    form = schemaForm(info.schema, existing?.values || {}, { idPrefix: "ap" });
+    for (const key of secretKeys) {  // stored passwords: blank keeps them
+      const input = form.el.querySelector(`[data-field="${CSS.escape(key)}"] input`);
+      if (input && existing?.secrets_set.includes(key)) input.placeholder = "stored: leave blank to keep";
+    }
+    formSlot.replaceChildren(h("h3", {}, "Properties"), form.el);
+    netInputs = {};
+    networksSlot.replaceChildren(h("h3", {}, "Networks"),
+      h("p", { class: "help" }, "The port group on the host for each network the OVA declares."),
+      ...info.descriptor.networks.map((n) => {
+        const input = h("input", { id: `ap-net-${n.name.replace(/\W/g, "-")}`, value: existing?.networks?.[n.name] || "",
+          placeholder: "port group, e.g. VM Network", "data-network": n.name });
+        netInputs[n.name] = input;
+        return h("div", { class: "field" }, h("label", { for: input.id }, n.name), input);
+      }));
+  }
+  imageSelect.addEventListener("change", load);
+
+  async function save() {
+    if (!form) return;
+    form.clearErrors();
+    status.replaceChildren();
+    const all = form.value();
+    const values = {};
+    const secrets = {};
+    for (const [k, v] of Object.entries(all)) {
+      if (secretKeys.includes(k)) { if (v) secrets[k] = v; } else if (v !== null && v !== undefined && v !== "") values[k] = v;
+    }
+    const networks = Object.fromEntries(Object.entries(netInputs).map(([k, i]) => [k, i.value.trim()]).filter(([, v]) => v));
+    const body = { name: name.value.trim(), image_id: imageSelect.value, values, networks,
+      secrets: Object.keys(secrets).length ? secrets : null };
+    try {
+      const saved = await api(isNew ? "POST" : "PUT", isNew ? "/appliance-profiles" : `/appliance-profiles/${id}`, body);
+      toast(`Saved ${saved.name}`, "success");
+      location.hash = "#/config-sets";
+    } catch (e) {
+      const errors = (e.problem?.errors || []).map((x) => ({ ...x, loc: x.loc.slice(1) }));
+      const placed = errors.length && form.setErrors(errors);
+      status.replaceChildren(h("p", { class: "error", role: "alert" }, placed || errors.length ? "Fix the highlighted values." : e.message));
+    }
+  }
+  const remove = () => openDialog(`Delete ${existing.name}?`, [h("p", {}, "Appliances already deployed with it are not affected.")], {
+    submitLabel: "Delete", submitClass: "danger",
+    onSubmit: async () => { await api("DELETE", `/appliance-profiles/${id}`); toast(`Deleted ${existing.name}`, "success"); location.hash = "#/config-sets"; },
+  });
+
+  mount(app,
+    pageHeader(isNew ? "New appliance profile" : existing.name,
+      existing ? `${existing.product} · ${existing.source} · updated ${fmtTime(existing.updated_at)}` : "Saved values for an OVA",
+      existing ? h("button", { class: "danger-outline", onclick: remove }, "Delete…") : null),
+    card({ class: "panel form-card" },
+      h("div", { class: "grid two" },
+        h("div", { class: "field" }, h("label", { for: "ap-name" }, "Name", h("span", { class: "req" }, " *")), name),
+        h("div", { class: "field" }, h("label", { for: "ap-image" }, "OVA"), imageSelect)),
+      formSlot, networksSlot, status,
+      h("div", { class: "actions" }, h("a", { class: "button", href: "#/config-sets" }, "Back"),
+        h("button", { class: "primary", onclick: save }, isNew ? "Create" : "Save"))));
+  await load();
 }

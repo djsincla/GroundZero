@@ -1,6 +1,135 @@
 {
   "components": {
     "schemas": {
+      "ApplianceProfile": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The OVA it was made with (may since be removed)",
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "networks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Networks",
+            "type": "object"
+          },
+          "product": {
+            "description": "The OVA product this profile is for, e.g. HoloRouter",
+            "title": "Product",
+            "type": "string"
+          },
+          "secrets_set": {
+            "description": "Password properties stored (never values)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Secrets Set",
+            "type": "array"
+          },
+          "source": {
+            "description": "\"manual\" or \"captured from <vm>\"",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": true,
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "product",
+          "values",
+          "networks",
+          "source",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ApplianceProfile",
+        "type": "object"
+      },
+      "ApplianceProfileWrite": {
+        "description": "Create or replace a profile. ``values`` and ``secrets`` use OVF property keys (bare or qualified).",
+        "properties": {
+          "image_id": {
+            "description": "An OVA in the image repository; the profile is for its product",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "networks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "OVF network name \u2192 port group on the host",
+            "title": "Networks",
+            "type": "object"
+          },
+          "secrets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "format": "password",
+                  "type": "string",
+                  "writeOnly": true
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Password properties. Write-only; on update, omitted ones are kept.",
+            "title": "Secrets"
+          },
+          "values": {
+            "additionalProperties": true,
+            "description": "Property values (not passwords)",
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "image_id"
+        ],
+        "title": "ApplianceProfileWrite",
+        "type": "object"
+      },
       "ConfigSet": {
         "properties": {
           "created_at": {
@@ -1773,6 +1902,223 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/appliance-profiles": {
+      "get": {
+        "description": "Saved values for OVAs (properties, network mapping, passwords), one or more per product.",
+        "operationId": "list_appliance_profiles_api_v1_appliance_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApplianceProfile"
+                  },
+                  "title": "Response List Appliance Profiles Api V1 Appliance Profiles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Appliance Profiles",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Values are checked against the OVA's descriptor (``image_id``): unknown keys, types, choices and\nlength limits are 422 with field errors. Passwords go in ``secrets`` and are never returned.",
+        "operationId": "create_appliance_profile_api_v1_appliance_profiles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplianceProfileWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplianceProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Appliance Profile",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/appliance-profiles/{profile_id}": {
+      "delete": {
+        "operationId": "delete_appliance_profile_api_v1_appliance_profiles__profile_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Appliance Profile",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "get": {
+        "operationId": "get_appliance_profile_api_v1_appliance_profiles__profile_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplianceProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Appliance Profile",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "put": {
+        "description": "Replace a profile. Omitted passwords are kept; the OVA must be the same product.",
+        "operationId": "update_appliance_profile_api_v1_appliance_profiles__profile_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplianceProfileWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplianceProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Appliance Profile",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/v1/config-sets": {
       "get": {
         "operationId": "list_config_sets_api_v1_config_sets_get",

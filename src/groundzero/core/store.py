@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from groundzero.core.models import ConfigSet, Host, Job, JobError, JobStatus, JobStep, OsAccess
+from groundzero.ova.profiles import ApplianceProfile
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS hosts (
@@ -78,6 +79,18 @@ CREATE TABLE IF NOT EXISTS job_diagnostics (
     job_id TEXT PRIMARY KEY,
     data TEXT NOT NULL,
     created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS appliance_profiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    product TEXT NOT NULL,
+    image_id TEXT,
+    data TEXT NOT NULL,
+    secrets BLOB,
+    secret_names TEXT NOT NULL DEFAULT '[]',
+    source TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS host_values (
     host_id TEXT NOT NULL,
@@ -321,6 +334,67 @@ class Store:
     def delete_config_set(self, set_id: str) -> bool:
         with self._tx() as cur:
             return cur.execute("DELETE FROM config_sets WHERE id = ?", (set_id,)).rowcount > 0
+
+    # ── appliance profiles ───────────────────────────────────────────────
+    def save_appliance_profile(
+        self,
+        *,
+        profile_id: str | None,
+        name: str,
+        product: str,
+        image_id: str | None,
+        values: dict[str, Any],
+        networks: dict[str, str],
+        source: str,
+        secrets: bytes | None,
+        secret_names: list[str] | None,
+    ) -> ApplianceProfile:
+        """Insert (no id) or replace one. ``secret_names`` None keeps the stored secrets."""
+        now = utcnow().isoformat()
+        data = json.dumps({"values": values, "networks": networks})
+        with self._tx() as cur:
+            if profile_id is None:
+                profile_id = new_id()
+                names = json.dumps(sorted(secret_names or []))
+                cur.execute(
+                    "INSERT INTO appliance_profiles (id, name, product, image_id, data, secrets,"
+                    " secret_names, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (profile_id, name, product, image_id, data, secrets, names, source, now, now),
+                )
+            elif secret_names is None:
+                cur.execute(
+                    "UPDATE appliance_profiles SET name = ?, image_id = ?, data = ?, updated_at = ?"
+                    " WHERE id = ?",
+                    (name, image_id, data, now, profile_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE appliance_profiles SET name = ?, image_id = ?, data = ?, secrets = ?,"
+                    " secret_names = ?, updated_at = ? WHERE id = ?",
+                    (name, image_id, data, secrets, json.dumps(sorted(secret_names)), now, profile_id),
+                )
+        found = self.get_appliance_profile(profile_id)
+        assert found is not None
+        return found[0]
+
+    def get_appliance_profile(self, profile_id: str) -> tuple[ApplianceProfile, bytes | None] | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM appliance_profiles WHERE id = ?", (profile_id,)).fetchone()
+        return (_row_to_profile(row), row["secrets"]) if row else None
+
+    def find_appliance_profile_by_name(self, name: str) -> ApplianceProfile | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM appliance_profiles WHERE name = ?", (name,)).fetchone()
+        return _row_to_profile(row) if row else None
+
+    def list_appliance_profiles(self) -> list[ApplianceProfile]:
+        with self._tx() as cur:
+            rows = cur.execute("SELECT * FROM appliance_profiles ORDER BY name").fetchall()
+        return [_row_to_profile(r) for r in rows]
+
+    def delete_appliance_profile(self, profile_id: str) -> bool:
+        with self._tx() as cur:
+            return cur.execute("DELETE FROM appliance_profiles WHERE id = ?", (profile_id,)).rowcount > 0
 
     def set_host_values(self, host_id: str, os_family: str, data: dict[str, Any]) -> None:
         with self._tx() as cur:
@@ -567,3 +641,19 @@ def _secret_names(row: sqlite3.Row) -> list[str]:
         names: list[str] = json.loads(row["secret_names"])
         return names
     return ["root_password"] if row["secrets"] is not None else []  # rows from before named secrets
+
+
+def _row_to_profile(row: sqlite3.Row) -> ApplianceProfile:
+    data = json.loads(row["data"])
+    return ApplianceProfile(
+        id=row["id"],
+        name=row["name"],
+        product=row["product"],
+        image_id=row["image_id"],
+        values=data.get("values", {}),
+        networks=data.get("networks", {}),
+        secrets_set=json.loads(row["secret_names"] or "[]"),
+        source=row["source"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        updated_at=datetime.fromisoformat(row["updated_at"]),
+    )

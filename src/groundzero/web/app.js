@@ -1,7 +1,7 @@
 // GroundZero web UI: a thin client of the REST API (/api/v1). No build step, no dependencies.
 // The shell (sidebar, top bar, drawer, toasts) never unloads; only <main> is re-rendered per route.
 import { api, errorBox, h, isActive, loadTasks, setUnauthorizedHandler, showJobDrawer, signOut, token } from "./js/core.js";
-import { viewConfigSet, viewConfigSets, viewImages } from "./js/views/catalog.js";
+import { viewApplianceProfile, viewConfigSet, viewConfigSets, viewImages } from "./js/views/catalog.js";
 import { viewDeploy } from "./js/views/deploy.js";
 import { viewHost, viewHosts } from "./js/views/hosts.js";
 import { viewApi, viewInfo, viewJobs } from "./js/views/misc.js";
@@ -16,6 +16,7 @@ const ROUTES = [
   [/^\/jobs$/, "jobs", "Jobs", (m, q) => viewJobs(app, q), true],
   [/^\/config-sets$/, "config-sets", "Config sets", () => viewConfigSets(app), true],
   [/^\/config-sets\/([\w-]+)$/, "config-sets", "Config set", (m, q) => viewConfigSet(app, m[1], q), false],
+  [/^\/appliance-profiles\/([\w-]+)$/, "config-sets", "Appliance profile", (m) => viewApplianceProfile(app, m[1]), false],
   [/^\/(?:images|isos)$/, "images", "Images", () => viewImages(app), false],
   [/^\/api$/, "api", "API", () => viewApi(app), false],
   [/^\/info$/, "info", "Info", () => viewInfo(app), false],

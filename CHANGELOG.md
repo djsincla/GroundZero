@@ -17,6 +17,8 @@ Planned as 0.3.0: the modular pipeline and appliance (OVA) deployment.
 - **Background server:** `groundzero serve --detach` and `groundzero stop`.
 - **Any OVA's inputs:** read from its OVF descriptor and shown as a form (`GET /images/{id}/descriptor`,
   `groundzero images show`). Every declared property reaches the guest, with its default when unset.
+- **Appliance profiles:** saved values for an OVA (properties, network mapping, encrypted passwords),
+  checked against the OVA's descriptor (`/appliance-profiles`, and an editor generated from the OVA).
 
 ### Changed (API)
 - Work starts one way, `POST /hosts/{id}/tasks/{task}` (pipeline-gated). Results are read one way,

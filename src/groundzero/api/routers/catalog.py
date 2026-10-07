@@ -8,6 +8,7 @@ from groundzero.api.deps import ServicesDep
 from groundzero.core.models import ConfigSet, ConfigSetWrite
 from groundzero.core.services import ImageDescriptor, OsFamily
 from groundzero.isos import Image
+from groundzero.ova.profiles import ApplianceProfile, ApplianceProfileWrite
 
 router = APIRouter(tags=["catalog"])
 
@@ -62,3 +63,38 @@ async def image_descriptor(image_id: str, services: ServicesDep) -> ImageDescrip
     """An OVA's descriptor: product, networks, size, and every input (OVF property) it takes, plus a
     JSON Schema of the inputs a person sets."""
     return await services.image_descriptor(image_id)
+
+
+@router.get("/appliance-profiles", response_model=list[ApplianceProfile])
+def list_appliance_profiles(services: ServicesDep) -> list[ApplianceProfile]:
+    """Saved values for OVAs (properties, network mapping, passwords), one or more per product."""
+    return services.list_appliance_profiles()
+
+
+@router.post("/appliance-profiles", status_code=status.HTTP_201_CREATED, response_model=ApplianceProfile)
+def create_appliance_profile(
+    body: ApplianceProfileWrite, services: ServicesDep, response: Response
+) -> ApplianceProfile:
+    """Values are checked against the OVA's descriptor (``image_id``): unknown keys, types, choices and
+    length limits are 422 with field errors. Passwords go in ``secrets`` and are never returned."""
+    profile = services.save_appliance_profile(body)
+    response.headers["Location"] = f"/api/v1/appliance-profiles/{profile.id}"
+    return profile
+
+
+@router.get("/appliance-profiles/{profile_id}", response_model=ApplianceProfile)
+def get_appliance_profile(profile_id: str, services: ServicesDep) -> ApplianceProfile:
+    return services.get_appliance_profile(profile_id)
+
+
+@router.put("/appliance-profiles/{profile_id}", response_model=ApplianceProfile)
+def update_appliance_profile(
+    profile_id: str, body: ApplianceProfileWrite, services: ServicesDep
+) -> ApplianceProfile:
+    """Replace a profile. Omitted passwords are kept; the OVA must be the same product."""
+    return services.save_appliance_profile(body, profile_id=profile_id)
+
+
+@router.delete("/appliance-profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_appliance_profile(profile_id: str, services: ServicesDep) -> None:
+    services.delete_appliance_profile(profile_id)

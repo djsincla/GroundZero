@@ -609,3 +609,31 @@ def test_pipeline_shows_data_flow_and_runs_tasks_with_options(
     # "Feeds" jumps to the task that reads this output
     page.locator('[data-task="preflight"] [data-feeds="host.assess"]').click()
     expect(assess).to_have_class(re.compile("flash"))
+
+
+def test_appliance_profile_form_comes_from_the_ova(page: Page, simulated_r740xd: GroundZero) -> None:
+    gz = simulated_r740xd
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "ova" / "holorouter-9.1.1.ovf"
+    (gz.home / "isos").mkdir(exist_ok=True)
+    with tarfile.open(gz.home / "isos" / "holorouter-9.1.1.0456.ova", "w") as tar:
+        tar.add(fixture, arcname="holorouter-9.1.1.0456.ovf")
+    with gz.api() as api:
+        api.post("/api/v1/images/rescan")
+    _open(page, gz, "/config-sets")
+    page.get_by_role("link", name="New appliance profile").click()
+    page.locator("#ap-name").fill("lab-router")
+    expect(page.locator('fieldset[data-group="Router Network"]')).to_be_visible()  # generated from the OVA
+    page.get_by_label("Management IP", exact=True).fill("192.0.2.150")
+    page.locator('[data-field="network.password"] input').fill("Example-pass1!")
+    page.get_by_label("VM Management Network").fill("Holodeck-External")
+    page.get_by_role("button", name="Create").click()
+    row = page.locator('tr[data-profile="lab-router"]')
+    expect(row).to_contain_text("HoloRouter")
+    expect(row).to_contain_text("1 stored")
+
+    row.get_by_role("link", name="lab-router").click()
+    expect(page.get_by_label("Management IP", exact=True)).to_have_value("192.0.2.150")
+    expect(page.locator('[data-field="network.password"] input')).to_have_attribute(
+        "placeholder", "stored: leave blank to keep"
+    )
+    expect(page.get_by_label("VM Management Network")).to_have_value("Holodeck-External")
