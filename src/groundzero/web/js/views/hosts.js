@@ -1,5 +1,6 @@
 // Hosts list and the tabbed host page (Pipeline · Readiness · Overview · Storage · Networking · Install · Jobs).
 import { schemaForm } from "../forms.js";
+import { runPanel, runSpecDialog } from "./specs.js";
 import {
   age, api, badge, card, empty, fmtBytes, fmtTime, h, isActive, jobCard, jobLabel, maybe, mount, openDialog, pageHeader,
   showJobDrawer, showOutput, startJob, table, toast,
@@ -75,9 +76,12 @@ export async function viewHost(app, id, tab = "pipeline") {
     ({ ...o, data: await api("GET", `/hosts/${id}/outputs/${encodeURIComponent(o.kind)}`) })));
   const readiness = tab === "readiness" ? await maybe(api("GET", `/hosts/${id}/outputs/readiness`)) : null;
   const storage = tab === "storage" ? await maybe(api("GET", `/hosts/${id}/outputs/storage`)) : null;
+  const [specs, runs] = tab === "pipeline"
+    ? await Promise.all([api("GET", "/specs"), api("GET", `/hosts/${id}/runs?limit=1`)]) : [[], []];
   const active = jobs.find(isActive);
   const busy = Boolean(active);
-  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness, appliances, storage,
+  const ctx = { host, id, pre, osAccess, net, install, jobs, certs, active, busy, pipeline, readiness, appliances, storage, specs,
+    lastRun: runs[0] || null,
     lastInstallJob: jobs.find((j) => j.task === "os.custom" || j.task === "os.reimage") };
 
   const tabs = h("nav", { class: "tabs", "aria-label": "Host sections" }, TABS.map(([key, label]) =>
@@ -204,10 +208,14 @@ function flowRow(ctx, task) {
 
 function taskRow(ctx, task) {
   const last = task.last_job;
-  return h("li", { class: `task ${task.state}`, "data-task": task.id, "data-state": task.state },
+  const outside = task.in_spec === false;
+  return h("li", { class: `task ${task.state}${outside ? " not-in-spec" : ""}`, "data-task": task.id, "data-state": task.state,
+    "data-in-spec": task.in_spec === null ? null : String(task.in_spec) },
     h("div", { class: "row" },
       h("strong", {}, task.title),
-      task.conditional ? h("span", { class: "chip" }, "if needed")
+      task.in_spec ? h("span", { class: "chip spec-chip" }, "in spec")
+        : task.in_spec === false ? null
+        : task.conditional ? h("span", { class: "chip" }, "if needed")
         : task.optional ? h("span", { class: "chip" }, "optional") : null,
       task.destructive ? h("span", { class: "chip danger-chip" }, "changes the server") : null,
       stateBadge(task.state), h("span", { class: "spacer" }), optionsButton(ctx, task), taskButton(ctx, task)),
@@ -228,11 +236,41 @@ function taskRow(ctx, task) {
     last ? lastRun(ctx, last) : null);
 }
 
+// The spec this host follows (its own, or its cluster's), picking its own, and running it.
+function specBar(ctx) {
+  const { pipeline, specs, id, lastRun } = ctx;
+  const spec = pipeline.spec;
+  const own = spec?.source === "host" ? spec.id : "";
+  const select = h("select", { id: "host-spec", "aria-label": "This server's own spec", onchange: async () => {
+    try {
+      await api("PUT", `/hosts/${id}/spec`, { spec_id: select.value || null });
+      refresh();
+    } catch (e) { toast(e.message, "error"); }
+  } }, h("option", { value: "" }, spec?.source === "cluster" ? `Cluster's spec (${spec.name})` : "No spec: every task"),
+    specs.map((s) => h("option", { value: s.id, selected: s.id === own }, s.name)));
+  const running = lastRun?.status === "running";
+  return card({ class: "panel spec-bar", "data-role": "spec-bar" },
+    h("div", { class: "row" },
+      h("div", { class: "grow" }, h("p", { class: "eyebrow" }, "Spec"),
+        spec ? h("h2", {}, h("a", { href: `#/specs/${spec.id}` }, spec.name), h("span", { class: "muted small-text" },
+          spec.source === "cluster" ? " · from its cluster" : " · this server's own"))
+          : h("p", { class: "muted" }, "No spec: the pipeline recommends every step. Pick one to choose the jobs this server runs."),
+        lastRun && !running ? h("p", { class: "small-text muted", "data-role": "last-run" }, "Last run: ",
+          badge({ succeeded: "pass", failed: "fail", cancelled: "warn" }[lastRun.status] || "none", lastRun.status), " · ", age(lastRun.created_at),
+          lastRun.error ? h("span", { class: "error" }, ` · ${lastRun.error}`) : null) : null),
+      h("label", { class: "visually-hidden", for: select.id }, "This server's own spec"), select,
+      spec ? h("button", { class: "primary", disabled: ctx.busy || running, "data-run-spec": "",
+        onclick: () => runSpecDialog(id).catch((e) => toast(e.message, "error")) }, "Run spec…") : null),
+    specs.length ? null : h("p", { class: "help" }, "No specs yet: ", h("a", { href: "#/specs/new" }, "create one"), "."));
+}
+
 function pipelineTab(ctx) {
   const { pipeline } = ctx;
   const next = pipeline.next;
   const nextTask = next.task ? pipelineTasks(pipeline)[next.task] : null;
   return [
+    specBar(ctx),
+    ctx.lastRun?.status === "running" ? runPanel(ctx.lastRun) : null,
     // While a job runs, the Running card above already says what is happening: no "next step" until it ends.
     ctx.active ? null : card({ class: "panel next-step", "data-role": "next-step" },
       h("div", { class: "row" },

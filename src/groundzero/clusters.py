@@ -33,6 +33,9 @@ class ClusterWrite(BaseModel):
         title="Require a passing DNS check before install",
         description="Off: run Verify DNS when you want. On: members are installed only once it passes.",
     )
+    spec_id: str | None = Field(
+        default=None, title="Spec", description="The jobs every member runs (a member's own spec wins)"
+    )
 
     @field_validator("ip_first", "ip_last")
     @classmethod

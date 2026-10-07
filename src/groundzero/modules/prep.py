@@ -154,7 +154,8 @@ class Prep(Module):
         for action in selected:
             if action.destructive and confirm != action.confirm_phrase:
                 raise ConfirmationError(
-                    f'“{action.title}” erases a disk: confirm with exactly "{action.confirm_phrase}"'
+                    f'“{action.title}” erases a disk: confirm with exactly "{action.confirm_phrase}"',
+                    action.confirm_phrase,
                 )
 
         async def run(ctx: JobContext) -> dict[str, Any]:

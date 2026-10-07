@@ -679,6 +679,158 @@ def config_delete(name: str) -> None:
     console.print(f"Deleted config set {escape(cs['name'])}")
 
 
+# ── specs: the jobs picked for a server or a cluster, run as one ─────────
+spec_app = typer.Typer(help="Specs: the jobs you pick for a server or cluster.", no_args_is_help=True)
+app.add_typer(spec_app, name="spec")
+_STEP_STYLE = {"succeeded": "green", "skipped": "dim", "failed": "red", "cancelled": "yellow",
+               "running": "cyan", "pending": "white", "run": "white", "skip": "dim",
+               "blocked": "red"}  # fmt: skip
+
+
+def _resolve_spec(ref: str) -> dict[str, Any]:
+    for spec in _call("GET", "/specs"):
+        if ref in (spec["id"], spec["name"]):
+            return dict(spec)
+    _fail(f"no spec matches '{ref}' (see `groundzero spec list`)")
+
+
+def _resolve_cluster(ref: str) -> dict[str, Any]:
+    for cluster in _call("GET", "/clusters"):
+        if ref in (cluster["id"], cluster["name"]):
+            return dict(cluster)
+    _fail(f"no cluster matches '{ref}'")
+
+
+@spec_app.command("list")
+def spec_list() -> None:
+    table = Table("Name", "Steps", "Updated")
+    for spec in _call("GET", "/specs"):
+        table.add_row(Text(spec["name"]), Text(" → ".join(s["task"] for s in spec["steps"])),
+                      Text(spec["updated_at"][:16]))  # fmt: skip
+    console.print(table)
+
+
+@spec_app.command("show")
+def spec_show(name: str) -> None:
+    console.print_json(data=_resolve_spec(name))
+
+
+@spec_app.command("save")
+def spec_save(
+    file: Annotated[
+        Path, typer.Argument(help='JSON: {"name", "description", "steps": [{"task", "params"}]}')
+    ],
+) -> None:
+    """Create a spec from a JSON file, or replace the spec of the same name."""
+    body = json.loads(file.read_text())
+    existing = next((s for s in _call("GET", "/specs") if s["name"] == body.get("name")), None)
+    spec = (
+        _call("PUT", f"/specs/{existing['id']}", json=body)
+        if existing
+        else _call("POST", "/specs", json=body)
+    )
+    console.print(f"{'Updated' if existing else 'Created'} spec {escape(spec['name'])}: "
+                  + " → ".join(s["task"] for s in spec["steps"]))  # fmt: skip
+
+
+@spec_app.command("delete")
+def spec_delete(name: str) -> None:
+    spec = _resolve_spec(name)
+    _call("DELETE", f"/specs/{spec['id']}")
+    console.print(f"Deleted spec {escape(spec['name'])}")
+
+
+@spec_app.command("assign")
+def spec_assign(
+    host: str,
+    spec: Annotated[str | None, typer.Argument(help="Spec name; leave out with --clear")] = None,
+    clear: Annotated[bool, typer.Option(help="Drop the server's own spec (its cluster's applies)")] = False,
+) -> None:
+    """Give a server its own spec. It overrides the spec of the cluster it's in."""
+    if (spec is None) != clear:
+        _fail("give a spec name, or --clear")
+    h = _resolve_host(host)
+    spec_id = None if clear else _resolve_spec(spec or "")["id"]
+    effective = _call("PUT", f"/hosts/{h['id']}/spec", json={"spec_id": spec_id})
+    if effective:
+        console.print(
+            f"{escape(h['name'])} runs {escape(effective['spec']['name'])} (from its {effective['source']})"
+        )
+    else:
+        console.print(f"{escape(h['name'])} has no spec")
+
+
+def _print_preview(preview: dict[str, Any]) -> None:
+    table = Table("Step", "Action", "Why")
+    for step in preview["steps"]:
+        action = step["action"] + (" (changes the server)" if step["destructive"] else "")
+        table.add_row(Text(step["task"]), Text(action, style=_STEP_STYLE.get(step["action"], "")),
+                      Text(step["reason"] or ""))  # fmt: skip
+    console.print(
+        f"{escape(preview['host_name'])}: {escape(preview['spec_name'])} (from its {preview['source']})"
+    )
+    console.print(table)
+
+
+def _follow_runs(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: dict[tuple[str, str], str] = {}
+    while True:
+        runs = [_call("GET", f"/runs/{r['id']}") for r in runs]
+        for run in runs:
+            for step in run["steps"]:
+                key = (run["id"], step["task"])
+                if seen.get(key) != step["status"] and step["status"] != "pending":
+                    seen[key] = step["status"]
+                    console.print(Text(f"{run['host_name']}: {step['task']} {step['status']}"
+                                       + (f" ({step['reason']})" if step["reason"] else ""),
+                                       style=_STEP_STYLE.get(step["status"], "")))  # fmt: skip
+        if all(r["status"] != "running" for r in runs):
+            return runs
+        time.sleep(1)
+
+
+@app.command("run-spec")
+def run_spec(
+    host: Annotated[str | None, typer.Argument(help="Server to run its spec on")] = None,
+    cluster: Annotated[str | None, typer.Option(help="Run every member of this cluster at once")] = None,
+    confirm: Annotated[
+        str | None, typer.Option(help="The phrase the preview shows; approves every step")
+    ] = None,
+    wait: Annotated[bool, typer.Option(help="Follow the run until it finishes")] = True,
+) -> None:
+    """Run a server's spec (or every member of a cluster). Without --confirm it only shows what would run."""
+    if (host is None) == (cluster is None):
+        _fail("give a server, or --cluster")
+    if cluster is not None:
+        c = _resolve_cluster(cluster)
+        preview = _call("GET", f"/clusters/{c['id']}/runs/preview")
+        for p in preview["hosts"]:
+            _print_preview(p)
+        if preview["without_spec"]:
+            console.print(f"No spec, not run: {', '.join(preview['without_spec'])}", style="yellow")
+        path = f"/clusters/{c['id']}/runs"
+    else:
+        h = _resolve_host(host or "")
+        preview = _call("GET", f"/hosts/{h['id']}/runs/preview")
+        _print_preview(preview)
+        path = f"/hosts/{h['id']}/runs"
+    if confirm is None:
+        console.print(f'Start it with --confirm "{preview["phrase"]}"')
+        raise typer.Exit(1)
+    started = _call("POST", path, json={"confirm": confirm})
+    runs = started if isinstance(started, list) else [started]
+    console.print(f"Started {len(runs)} run(s): {', '.join(r['id'] for r in runs)}")
+    if not wait:
+        return
+    finished = _follow_runs(runs)
+    failed = [r for r in finished if r["status"] != "succeeded"]
+    for run in failed:
+        console.print(f"{run['host_name']}: {run['status']}: {run['error'] or ''}", style="red")
+    if failed:
+        raise typer.Exit(2)
+    console.print(f"Done: {len(finished)} run(s) succeeded")
+
+
 @images_app.command("show")
 def images_show(
     image: Annotated[str, typer.Argument(help="Image id or filename (see `images list`)")],

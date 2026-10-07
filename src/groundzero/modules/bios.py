@@ -41,7 +41,7 @@ class ConfigureBios(Module):
     destructive = True
     Params = BiosParams
 
-    def satisfied(self, outputs: dict[str, dict[str, Any]]) -> str | None:
+    def satisfied(self, outputs: dict[str, dict[str, Any]], params: dict[str, Any]) -> str | None:
         inventory = outputs.get("inventory")
         if inventory is None:
             return None
@@ -102,7 +102,7 @@ class ConfigureBios(Module):
         if changes and confirm != phrase:
             listed = ", ".join(f"{c.attribute} → {c.after}" for c in changes)
             raise ConfirmationError(
-                f'This sets {listed} and reboots {host.name}: confirm with exactly "{phrase}"'
+                f'This sets {listed} and reboots {host.name}: confirm with exactly "{phrase}"', phrase
             )
         s = deps.settings
 

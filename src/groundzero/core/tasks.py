@@ -109,13 +109,13 @@ def params_schema(task_id: str) -> dict[str, Any]:
     return module.params_schema() if module else {}
 
 
-def satisfied(task_id: str, outputs: dict[str, dict[str, Any]]) -> str | None:
+def satisfied(task_id: str, outputs: dict[str, dict[str, Any]], params: dict[str, Any]) -> str | None:
     """Why a task has nothing to do on this host (the module's own judgement), or None."""
     from groundzero.modules import REGISTRY
 
     module = REGISTRY.get(task_id)
     try:
-        return module.satisfied(outputs) if module else None
+        return module.satisfied(outputs, params) if module else None
     except (KeyError, TypeError, AttributeError):
         return None
 
@@ -202,6 +202,12 @@ class TaskState(TaskInfo):
     not_needed: str | None = Field(
         default=None, description="Why there is nothing to do (state not_needed), from the task's inputs"
     )
+    in_spec: bool | None = Field(
+        default=None, description="Whether the host's spec includes this task (null: the host has no spec)"
+    )
+    spec_params: dict[str, Any] | None = Field(
+        default=None, description="The parameters the spec runs this task with"
+    )
     last_job: JobRef | None = None
     output: OutputInfo | None = None
 
@@ -219,11 +225,21 @@ class NextStep(BaseModel):
     reason: str
 
 
+class PipelineSpec(BaseModel):
+    """The spec a host follows: its own, or its cluster's."""
+
+    id: str
+    name: str
+    source: Literal["host", "cluster"]
+    tasks: list[str] = Field(description="The spec's tasks, in pipeline order")
+
+
 class Pipeline(BaseModel):
     host_id: str
     os_epoch: int
     stages: list[PipelineStage]
     next: NextStep
+    spec: PipelineSpec | None = Field(default=None, description="null: every task, recommended path")
 
 
 class TaskRun(BaseModel):
@@ -259,8 +275,14 @@ def evaluate_pipeline(
     jobs: list[Job],
     outputs: dict[str, OutputMeta | None],
     has_os_access: bool,
+    chosen: PipelineSpec | None = None,
+    spec_params: dict[str, dict[str, Any]] | None = None,
 ) -> Pipeline:
-    """Pure function: the state of every task for one host, and the recommended next step."""
+    """Pure function: the state of every task for one host, and the recommended next step.
+
+    With a spec, the next step follows the spec's tasks only; the others stay runnable by hand."""
+    in_spec = set(chosen.tasks) if chosen else None
+    spec_params = spec_params or {}
     specs = catalog()
     tasks_by_id = {t.id: t for t in specs}
     producer_of = producers(specs)
@@ -340,7 +362,7 @@ def evaluate_pipeline(
             state = "blocked"
         else:
             state = "ready"
-        reason = satisfied(spec.id, current) if state == "ready" else None
+        reason = satisfied(spec.id, current, spec_params.get(spec.id, {})) if state == "ready" else None
         if reason:
             state = "not_needed"
         states[spec.id] = TaskState(
@@ -350,6 +372,8 @@ def evaluate_pipeline(
             feeds=_feeds(spec, specs),
             blocked_by=blocked,
             not_needed=reason,
+            in_spec=None if in_spec is None else spec.id in in_spec,
+            spec_params=spec_params.get(spec.id) if in_spec is not None and spec.id in in_spec else None,
             last_job=ref,
             output=output,
         )
@@ -360,9 +384,10 @@ def evaluate_pipeline(
         stages.append(
             PipelineStage(id=stage, title=STAGE_TITLES[stage], state=_stage_state(tasks), tasks=tasks)
         )
-    return Pipeline(
-        host_id=host_id, os_epoch=os_epoch, stages=stages, next=_next(specs, states, has_os_access)
+    following = (
+        _next_in_spec(chosen, states, has_os_access) if chosen else _next(specs, states, has_os_access)
     )
+    return Pipeline(host_id=host_id, os_epoch=os_epoch, stages=stages, next=following, spec=chosen)
 
 
 def _inputs(
@@ -420,6 +445,15 @@ def _stage_state(tasks: list[TaskState]) -> TaskStateName:
     available = [t for t in tasks if t.available]
     if not available:
         return "planned"
+    if any(t.in_spec is not None for t in available):  # a spec: its tasks are what this stage has to do
+        picked = [t for t in available if t.in_spec]
+        if not picked:
+            return "done" if any(t.state == "done" for t in available) else "ready"
+        worst: tuple[TaskStateName, ...] = ("failed", "stale", "blocked", "ready")
+        for state in worst:
+            if any(t.state == state for t in picked):
+                return state
+        return "done"
     # Conditional tasks count once they have something to do (a BIOS that needs changing).
     core = [t for t in available if not t.optional or (t.conditional and t.state in ("ready", "failed"))]
     if not core:
@@ -434,6 +468,30 @@ def _stage_state(tasks: list[TaskState]) -> TaskStateName:
         if any(t.state == state for t in core):
             return state
     return "done"
+
+
+def _next_in_spec(spec: PipelineSpec, states: dict[str, TaskState], has_os_access: bool) -> NextStep:
+    running = [s for s in states.values() if s.state == "running"]
+    if running:
+        return NextStep(task=None, title=running[0].title, reason=f"{running[0].title} is running")
+    for task_id in spec.tasks:
+        s = states.get(task_id)
+        if s is None or not s.available:
+            continue
+        if s.state == "ready":
+            return NextStep(task=s.id, title=s.title, reason=f"Next in {spec.name}: {s.description}")
+        if s.state == "stale":
+            return NextStep(task=s.id, title=s.title, reason="The OS was reinstalled; read it again.")
+        if s.state == "failed":
+            error = s.last_job.error if s.last_job else None
+            return NextStep(task=s.id, title=s.title, reason=f"The last run failed: {error or 'see the job'}")
+        if s.state == "blocked":
+            if OS_ACCESS in s.requires and not has_os_access:
+                return NextStep(
+                    task=None, title=s.title, reason=f"{s.title} needs OS access: " + "; ".join(s.blocked_by)
+                )
+            return NextStep(task=None, title=s.title, reason="; ".join(s.blocked_by))
+    return NextStep(task=None, title="Done", reason=f"Every step in {spec.name} is done.")
 
 
 def _next(specs: tuple[TaskSpec, ...], states: dict[str, TaskState], has_os_access: bool) -> NextStep:

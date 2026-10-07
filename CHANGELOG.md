@@ -5,6 +5,26 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+### Added
+- **Specs:** pick the jobs a server or a cluster runs, each with its saved settings (`/specs`).
+  - Steps are kept in pipeline order and checked when you save: the task exists, its settings are valid,
+    and the images, config sets and profiles they point at exist. Secrets aren't allowed: they stay in
+    profiles and config sets.
+  - Text settings may use `{host}` or `{hostname}`, filled in per server. A Deploy OS step with no config
+    set uses the cluster's.
+  - A cluster's spec applies to every member, and a server's own spec overrides it.
+  - With a spec, the pipeline's next step follows only the spec's jobs. The rest stay runnable by hand.
+- **Runs:** run a server's spec as one, approved once with a typed phrase (`run <spec> on <server>`)
+  after a preview.
+  - The preview shows which steps run, which are skipped (done already, or not needed) and what the
+    destructive ones change.
+  - Steps start one after another and the run stops at the first failure. Each step still goes through
+    its own checks, and the run's approval stands in for each step's own phrase.
+  - **Cluster runs** (`run cluster <name>`) start every member at once; one failing doesn't stop the others.
+  - In the web UI: a Specs page with an editor that shows what each picked job needs and which earlier
+    job makes it, a spec bar and run panel on the host page, and runs on the cluster page.
+  - On the command line: `groundzero spec save|list|show|assign|delete` and `groundzero run-spec`.
+
 ## [0.8.0] - 2026-10-06
 
 Read the server's storage, and install to the boot volume it finds.

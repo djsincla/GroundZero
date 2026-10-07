@@ -15,7 +15,7 @@ from starlette.types import Scope
 from groundzero import __version__
 from groundzero.api.deps import require_token
 from groundzero.api.errors import install_error_handlers
-from groundzero.api.routers import catalog, clusters, hosts, jobs, meta
+from groundzero.api.routers import catalog, clusters, hosts, jobs, meta, specs
 from groundzero.core.config import Settings
 from groundzero.core.credentials import CredentialCipher
 from groundzero.core.jobs import JobRunner
@@ -99,6 +99,7 @@ def create_app(
             )
         store = Store(settings.db_path)
         store.mark_interrupted()
+        store.interrupt_runs()
         runner = JobRunner(store, settings.max_concurrent_jobs)
         app.state.api_token = settings.resolve_api_token()
         app.state.services = Services(
@@ -113,6 +114,7 @@ def create_app(
         try:
             yield
         finally:
+            await app.state.services.runs.shutdown()
             await runner.shutdown()
             store.close()
 
@@ -139,6 +141,6 @@ def create_app(
 
     app.include_router(meta.health_router)
     secured = [Depends(require_token)]
-    for router in (meta.router, hosts.router, jobs.router, catalog.router, clusters.router):
+    for router in (meta.router, hosts.router, jobs.router, catalog.router, clusters.router, specs.router):
         app.include_router(router, prefix=API_PREFIX, dependencies=secured)
     return app

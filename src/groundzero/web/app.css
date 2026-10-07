@@ -289,3 +289,25 @@ ul.plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .stack { display: flex; flex-direction: column; gap: 16px; }
 .stack > * { margin: 0; }
 .stack h3 { font-size: 13px; margin: 14px 0 6px; }
+/* specs: the editor, the host's spec bar, tasks outside the spec, and runs */
+.spec-stage { margin: 0 0 14px; }
+.spec-task { padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; }
+.spec-task + .spec-task { margin-top: 4px; }
+.spec-task.picked { border-color: var(--line); background: var(--panel-2); }
+.spec-task .task-desc { margin: 2px 0 0 26px; }
+.spec-task > .flow { margin: 4px 0 0 26px; display: flex; gap: 6px; flex-wrap: wrap; }
+.spec-params { margin: 8px 0 4px 26px; }
+.spec-chip { border-color: var(--accent); color: var(--accent); }
+.task.not-in-spec { opacity: .55; }
+.task.not-in-spec:hover, .task.not-in-spec:focus-within { opacity: 1; }
+.callout { border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+.callout.warn { background: var(--warn-bg); }
+.callout ul { margin: 6px 0 0; padding-left: 18px; }
+details.run-preview { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin: 8px 0; }
+details.run-preview summary { cursor: pointer; font-weight: 600; }
+.run-panel .steps { margin-top: 8px; }
+.run-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.run-grid > * { margin: 0; }
+.spec-bar select { width: auto; min-width: 220px; max-width: 320px; }
+.spec-bar .row { align-items: center; flex-wrap: wrap; gap: 12px; }
+td .chip, h2 .chip, strong + .chip { margin-left: 6px; }

@@ -6,6 +6,7 @@ import { viewCluster, viewClusters } from "./js/views/clusters.js";
 import { viewDeploy } from "./js/views/deploy.js";
 import { viewHost, viewHosts } from "./js/views/hosts.js";
 import { viewApi, viewInfo, viewJobs } from "./js/views/misc.js";
+import { viewSpec, viewSpecs } from "./js/views/specs.js";
 
 const app = document.getElementById("app");
 
@@ -18,6 +19,8 @@ const ROUTES = [
   [/^\/config-sets$/, "config-sets", "Config sets", () => viewConfigSets(app), true],
   [/^\/config-sets\/([\w-]+)$/, "config-sets", "Config set", (m, q) => viewConfigSet(app, m[1], q), false],
   [/^\/appliance-profiles\/([\w-]+)$/, "config-sets", "Appliance profile", (m) => viewApplianceProfile(app, m[1]), false],
+  [/^\/specs$/, "specs", "Specs", () => viewSpecs(app), true],
+  [/^\/specs\/([\w-]+)$/, "specs", "Spec", (m) => viewSpec(app, m[1]), false],
   [/^\/clusters$/, "clusters", "Clusters", () => viewClusters(app), true],
   [/^\/clusters\/([\w-]+)$/, "clusters", "Cluster", (m) => viewCluster(app, m[1]), true],
   [/^\/(?:images|isos)$/, "images", "Images", () => viewImages(app), false],

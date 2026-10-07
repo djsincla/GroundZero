@@ -58,7 +58,8 @@ class Holorouter(Module):
         vm_name = f"{values.instance_id}-holorouter"
         if params.replace and confirm != f"replace {vm_name}":
             raise ConfirmationError(
-                f'Replacing deletes the Holorouter first: confirm with exactly "replace {vm_name}"'
+                f'Replacing deletes the Holorouter first: confirm with exactly "replace {vm_name}"',
+                f"replace {vm_name}",
             )
         readiness = inputs.require("readiness", ReadinessReport, "Assess Holodeck readiness first")
         if not readiness.ready:

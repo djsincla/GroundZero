@@ -121,7 +121,7 @@ class _DeployOs(Module):
             )
         expected = f"install {host.name}"
         if confirm != expected:
-            raise ConfirmationError(f'Confirmation must be exactly "{expected}"')
+            raise ConfirmationError(f'Confirmation must be exactly "{expected}"', expected)
         req = InstallRequest.model_validate({**params.model_dump(), "confirm": confirm})
         req = req.model_copy(update={"iso_path": str(resolve_iso(deps, req))})
         profile = load_profile(req.profile)  # bad profile/variant is a 4xx, not a failed job

@@ -214,7 +214,8 @@ class ApplianceDeploy(Module):
 
         if params.replace and confirm != f"replace {params.vm_name}":
             raise ConfirmationError(
-                f'Replacing deletes the VM first: confirm with exactly "replace {params.vm_name}"'
+                f'Replacing deletes the VM first: confirm with exactly "replace {params.vm_name}"',
+                f"replace {params.vm_name}",
             )
         deps.os_access(host.id)  # a clear 404 before anything else
         image, path = resolve_image(deps, params.image_id)

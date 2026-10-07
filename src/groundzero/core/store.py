@@ -15,6 +15,7 @@ from typing import Any
 from groundzero.clusters import Cluster
 from groundzero.core.models import ConfigSet, Host, Job, JobError, JobStatus, JobStep, OsAccess
 from groundzero.ova.profiles import ApplianceProfile
+from groundzero.specs import Run, Spec
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS hosts (
@@ -100,6 +101,25 @@ CREATE TABLE IF NOT EXISTS clusters (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS specs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    data TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS host_specs (
+    host_id TEXT PRIMARY KEY,
+    spec_id TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS runs (
+    id TEXT PRIMARY KEY,
+    host_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    data TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS runs_host ON runs (host_id, created_at);
 CREATE TABLE IF NOT EXISTS host_values (
     host_id TEXT NOT NULL,
     os_family TEXT NOT NULL,
@@ -231,6 +251,8 @@ class Store:
             cur.execute("DELETE FROM results WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM os_access WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM host_values WHERE host_id = ?", (host_id,))
+            cur.execute("DELETE FROM host_specs WHERE host_id = ?", (host_id,))
+            cur.execute("DELETE FROM runs WHERE host_id = ?", (host_id,))
             cur.execute("DELETE FROM pins WHERE host_id = ?", (host_id,))
             cur.execute(
                 "DELETE FROM job_diagnostics WHERE job_id IN (SELECT id FROM jobs WHERE host_id = ?)",
@@ -377,6 +399,91 @@ class Store:
     def delete_cluster(self, cluster_id: str) -> bool:
         with self._tx() as cur:
             return cur.execute("DELETE FROM clusters WHERE id = ?", (cluster_id,)).rowcount > 0
+
+    # ── specs, their assignment to hosts, and runs ──────────────────────
+    def save_spec(self, spec: Spec) -> None:
+        data = spec.model_dump_json(exclude={"id", "name", "created_at", "updated_at"})
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO specs (id, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET name = excluded.name, data = excluded.data,"
+                " updated_at = excluded.updated_at",
+                (spec.id, spec.name, data, spec.created_at.isoformat(), spec.updated_at.isoformat()),
+            )
+
+    def list_specs(self) -> list[Spec]:
+        with self._tx() as cur:
+            rows = cur.execute("SELECT * FROM specs ORDER BY name").fetchall()
+        return [_row_to_spec(r) for r in rows]
+
+    def get_spec(self, spec_id: str) -> Spec | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM specs WHERE id = ?", (spec_id,)).fetchone()
+        return _row_to_spec(row) if row else None
+
+    def delete_spec(self, spec_id: str) -> bool:
+        with self._tx() as cur:
+            cur.execute("DELETE FROM host_specs WHERE spec_id = ?", (spec_id,))
+            return cur.execute("DELETE FROM specs WHERE id = ?", (spec_id,)).rowcount > 0
+
+    def set_host_spec(self, host_id: str, spec_id: str | None) -> None:
+        with self._tx() as cur:
+            if spec_id is None:
+                cur.execute("DELETE FROM host_specs WHERE host_id = ?", (host_id,))
+            else:
+                cur.execute(
+                    "INSERT INTO host_specs (host_id, spec_id) VALUES (?, ?)"
+                    " ON CONFLICT(host_id) DO UPDATE SET spec_id = excluded.spec_id",
+                    (host_id, spec_id),
+                )
+
+    def get_host_spec(self, host_id: str) -> str | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT spec_id FROM host_specs WHERE host_id = ?", (host_id,)).fetchone()
+        return row["spec_id"] if row else None
+
+    def hosts_with_spec(self, spec_id: str) -> list[str]:
+        with self._tx() as cur:
+            rows = cur.execute("SELECT host_id FROM host_specs WHERE spec_id = ?", (spec_id,)).fetchall()
+        return [r["host_id"] for r in rows]
+
+    def save_run(self, run: Run) -> None:
+        data = run.model_dump_json(exclude={"id", "host_id", "status", "created_at"})
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO runs (id, host_id, status, data, created_at) VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET status = excluded.status, data = excluded.data",
+                (run.id, run.host_id, run.status, data, run.created_at.isoformat()),
+            )
+
+    def get_run(self, run_id: str) -> Run | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+        return _row_to_run(row) if row else None
+
+    def list_runs(self, *, host_id: str | None = None, limit: int = 20) -> list[Run]:
+        query, args = "SELECT * FROM runs", []
+        if host_id:
+            query, args = query + " WHERE host_id = ?", [host_id]
+        with self._tx() as cur:
+            rows = cur.execute(query + " ORDER BY created_at DESC LIMIT ?", (*args, limit)).fetchall()
+        return [_row_to_run(r) for r in rows]
+
+    def interrupt_runs(self) -> int:
+        """Fail runs left running by a previous process (their current job was failed the same way)."""
+        count = 0
+        for run in [r for r in self.list_runs(limit=10_000) if r.status == "running"]:
+            for step in run.steps:
+                if step.status in ("pending", "running"):
+                    step.status = "cancelled"
+            run.status, run.error, run.finished_at = (
+                "failed",
+                "Server stopped while the run was in progress",
+                utcnow(),
+            )
+            self.save_run(run)
+            count += 1
+        return count
 
     # ── appliance profiles ───────────────────────────────────────────────
     def save_appliance_profile(
@@ -711,6 +818,30 @@ def _row_to_profile(row: sqlite3.Row) -> ApplianceProfile:
         source=row["source"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
+    )
+
+
+def _row_to_spec(row: sqlite3.Row) -> Spec:
+    return Spec.model_validate(
+        {
+            **json.loads(row["data"]),
+            "id": row["id"],
+            "name": row["name"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+    )
+
+
+def _row_to_run(row: sqlite3.Row) -> Run:
+    return Run.model_validate(
+        {
+            **json.loads(row["data"]),
+            "id": row["id"],
+            "host_id": row["host_id"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+        }
     )
 
 

@@ -790,6 +790,48 @@ def test_storage_tab_reads_the_layout_and_shows_the_boot_volume(page: Page, tmp_
         gz.stop()
 
 
+def test_build_a_spec_assign_it_and_run_it(page: Page, tmp_path: Path) -> None:
+    from .conftest import _simulated
+
+    gz = _simulated(tmp_path)
+    gz.start()
+    try:
+        _open(page, gz)
+        _add_host(page)
+        _main_nav(page, "Specs")
+        expect(page.get_by_text("No specs yet")).to_be_visible()
+        page.get_by_role("link", name="New spec").first.click()
+        page.locator("#spec-name").fill("Readiness")
+        page.get_by_label("Holodeck preflight").check()
+        page.get_by_label("VCF 9 readiness").check()
+        vcf = page.locator('.spec-task[data-task="vcf.readiness"]')
+        expect(vcf.locator('[data-needs="inventory"]')).to_contain_text(
+            "← Holodeck preflight"
+        )  # made earlier
+        page.get_by_role("button", name="Create").click()
+        expect(page.get_by_role("heading", name="Readiness")).to_be_visible()
+
+        _main_nav(page, "Hosts")
+        page.get_by_role("link", name="esxi1").click()
+        page.get_by_label("This server's own spec").select_option(label="Readiness")
+        bar = page.locator('[data-role="spec-bar"]')
+        expect(bar).to_contain_text("this server's own")
+        expect(page.locator('[data-task="discover"]')).to_have_attribute("data-in-spec", "false")
+        expect(page.locator('[data-task="preflight"]')).to_contain_text("in spec")
+
+        bar.get_by_role("button", name="Run spec…").click()
+        dialog = page.locator("dialog")
+        expect(dialog.locator('[data-preview-step="preflight"]')).to_have_attribute("data-action", "run")
+        start = dialog.get_by_role("button", name="Start run")
+        expect(start).to_be_disabled()
+        dialog.get_by_label('Type "run Readiness on esxi1" to start').fill("run Readiness on esxi1")
+        start.click()
+        expect(bar.locator('[data-role="last-run"]')).to_contain_text("succeeded", timeout=60_000)
+        expect(page.locator('[data-role="next-step"]')).to_contain_text("Every step in Readiness is done")
+    finally:
+        gz.stop()
+
+
 def test_a_bios_that_is_already_right_shows_as_not_needed(page: Page, tmp_path: Path) -> None:
     from .conftest import _simulated
 
@@ -844,5 +886,44 @@ def test_cluster_names_servers_from_the_bmc_and_checks_dns(page: Page, tmp_path:
         expect(row).to_contain_text("not checked")
         row.get_by_role("button", name="Verify DNS").click()
         expect(page.locator('tr[data-member="esx01"]')).to_contain_text("matches", timeout=20_000)
+    finally:
+        gz.stop()
+
+
+def test_a_cluster_runs_its_spec_on_every_member(page: Page, tmp_path: Path) -> None:
+    from .conftest import _simulated
+
+    gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_BMC_HOSTNAME="idrac-esx01")
+    gz.start()
+    try:
+        assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "rack1-u10").code == 0
+        settings = {"netmask": "255.255.255.0", "gateway": "192.0.2.1", "nameservers": ["192.0.2.53"]}
+        with gz.api() as api:
+            api.post("/api/v1/config-sets", json={"name": "lab", "os_family": "esxi", "settings": settings})
+            steps = [{"task": "discover"}, {"task": "storage.read"}]
+            api.post("/api/v1/specs", json={"name": "Survey", "steps": steps})
+        _open(page, gz)
+        _main_nav(page, "Clusters")
+        page.get_by_role("link", name="New cluster").first.click()
+        page.get_by_label("Name", exact=True).fill("lab-a")
+        page.get_by_label("First IP").fill("192.0.2.101")
+        page.get_by_label("Last IP").fill("192.0.2.103")
+        page.get_by_label("DNS domain").fill("lab.example")
+        page.get_by_label("Strip from the BMC name (prefix)").fill("idrac-")
+        page.get_by_label("Spec").select_option(label="Survey")
+        page.get_by_role("button", name="Create").click()
+        page.get_by_role("button", name="Add server").click()
+        row = page.locator('tr[data-member="esx01"]')
+        expect(row).to_contain_text("Survey")
+
+        page.get_by_role("button", name="Run on all members…").click()
+        dialog = page.locator("dialog")
+        expect(dialog.locator('[data-preview-host="rack1-u10"]')).to_contain_text("rack1-u10: Survey")
+        dialog.get_by_label('Type "run cluster lab-a" to start').fill("run cluster lab-a")
+        dialog.get_by_role("button", name="Start runs").click()
+        runs = page.locator('[data-panel="runs"]')
+        expect(runs).to_contain_text("rack1-u10")
+        expect(runs.locator(".badge").first).to_have_text("succeeded", timeout=60_000)
+        expect(runs.locator('[data-step="storage.read"]')).to_have_attribute("data-status", "succeeded")
     finally:
         gz.stop()

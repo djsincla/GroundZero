@@ -173,8 +173,9 @@ class Module:
         """One line describing this module's output, for the pipeline view."""
         return self.produces or self.id
 
-    def satisfied(self, outputs: dict[str, dict[str, Any]]) -> str | None:
-        """Why there is nothing to do, judged from this host's current outputs; None when there may be.
+    def satisfied(self, outputs: dict[str, dict[str, Any]], params: dict[str, Any]) -> str | None:
+        """Why there is nothing to do, judged from this host's current outputs and the parameters a spec
+        would run it with (empty outside a spec); None when there may be.
 
         A ready task that is satisfied is shown as "not needed" instead of waiting to be run.
         """

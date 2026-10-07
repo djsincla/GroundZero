@@ -29,8 +29,18 @@ from groundzero.core.models import (
     OsAccess,
     OsAccessSet,
 )
+from groundzero.core.runs import RunOrchestrator
 from groundzero.core.store import Store, new_id, utcnow
-from groundzero.core.tasks import OUTPUT_TITLES, Pipeline, TaskInfo, TaskRun, catalog, evaluate_pipeline, info
+from groundzero.core.tasks import (
+    OUTPUT_TITLES,
+    Pipeline,
+    PipelineSpec,
+    TaskInfo,
+    TaskRun,
+    catalog,
+    evaluate_pipeline,
+    info,
+)
 from groundzero.core.tls import PinnedCertificate, check_pin, fetch_certificate, fingerprint, pinned_context
 from groundzero.dnscheck import DnsLookup, LiveDns, StaticDns
 from groundzero.esxi.models import EsxiNetworkConfig, EsxiStorage
@@ -59,6 +69,7 @@ from groundzero.redfish.client import RedfishClient
 from groundzero.redfish.detect import detect
 from groundzero.simulator.bmc import SimulatedBmc
 from groundzero.simulator.esxi import SimulatedEsxi
+from groundzero.specs import EffectiveSpec, Spec, SpecStep, SpecWrite, fill, secret_params
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +85,14 @@ class ConflictError(ValueError):
 
 
 class ConfirmationError(ValueError):
+    """A destructive task needs its typed phrase. ``phrase`` is the exact one expected, so an approved spec
+    run can supply it (the module still checks it; nothing destructive runs without approval)."""
+
     error_type = "confirmation_required"
+
+    def __init__(self, message: str, phrase: str | None = None) -> None:
+        super().__init__(message)
+        self.phrase = phrase
 
 
 class SettingsValidationError(ValueError):
@@ -142,6 +160,7 @@ class Services:
         self.media = media or MediaRegistry()
         self.store = store
         self.runner = runner
+        self.runs = RunOrchestrator(self)
         self._cipher = cipher
         # Simulation mode (demos, black-box tests): one stateful BMC + ESXi pair shared by all clients.
         self.sim_esxi = (
@@ -432,6 +451,8 @@ class Services:
             raise ConflictError(f"A cluster named '{req.name}' already exists")
         if self.get_config_set(req.config_set_id).os_family != EsxiPlugin.family:
             raise OsConfigError("A cluster's config set must be an ESXi config set")
+        if req.spec_id is not None:
+            self.get_spec(req.spec_id)
         now = utcnow()
         members = current.members if current else []
         outside = [m.ip for m in members if not _in_range(m.ip, req.ip_first, req.ip_last)]
@@ -451,6 +472,122 @@ class Services:
         """Forget the cluster. Its members keep their hostnames and IPs as their own per-host values."""
         if not self.store.delete_cluster(cluster_id):
             raise NotFoundError(f"Cluster {cluster_id} not found")
+
+    # ── specs: the jobs picked for a server or a cluster ────────────────
+    def list_specs(self) -> list[Spec]:
+        return self.store.list_specs()
+
+    def get_spec(self, spec_id: str) -> Spec:
+        found = self.store.get_spec(spec_id)
+        if found is None:
+            raise NotFoundError(f"Spec {spec_id} not found")
+        return found
+
+    def save_spec(self, req: SpecWrite, spec_id: str | None = None) -> Spec:
+        """Check every step (task, parameters, what they refer to) and keep them in pipeline order."""
+        current = self.get_spec(spec_id) if spec_id else None
+        other = next((s for s in self.store.list_specs() if s.name == req.name), None)
+        if other is not None and other.id != spec_id:
+            raise ConflictError(f"A spec named '{req.name}' already exists")
+        order = {t.id: i for i, t in enumerate(catalog())}
+        errors: list[dict[str, object]] = []
+
+        def bad(loc: list[object], msg: str, kind: str) -> None:
+            errors.append({"loc": loc, "msg": msg, "type": kind})
+
+        seen: set[str] = set()
+        steps: list[SpecStep] = []
+        for i, step in enumerate(req.steps):
+            at: list[object] = ["steps", i]
+            module = REGISTRY.get(step.task)
+            if module is None:
+                bad([*at, "task"], f"Unknown task '{step.task}'", "unknown")
+                continue
+            if not module.available:
+                bad([*at, "task"], f"{module.title} is not available yet", "unavailable")
+                continue
+            if step.task in seen:
+                bad([*at, "task"], f"{module.title} is listed twice", "duplicate")
+                continue
+            seen.add(step.task)
+            for key in secret_params(step.params):
+                bad([*at, "params", key], "Secrets don't go in a spec: keep them in a profile", "secret")
+            try:
+                module.Params.model_validate(fill(step.params, {"host": "server", "hostname": "server"}))
+            except ValidationError as exc:
+                for e in exc.errors():
+                    bad([*at, "params", *e["loc"]], e["msg"], e["type"])
+            for key, msg in self._missing_references(step.params):
+                bad([*at, "params", key], msg, "not_found")
+            steps.append(SpecStep(task=step.task, params=step.params))
+        if errors:
+            raise SettingsValidationError("spec", errors)
+        steps.sort(key=lambda s: order[s.task])
+        now = utcnow()
+        spec = Spec(
+            **req.model_dump(exclude={"steps"}),
+            steps=steps,
+            id=current.id if current else new_id(),
+            created_at=current.created_at if current else now,
+            updated_at=now,
+        )
+        self.store.save_spec(spec)
+        return spec
+
+    def _missing_references(self, params: dict[str, Any]) -> list[tuple[str, str]]:
+        """Ids a step refers to that don't exist (ISOs and OVAs, config sets, appliance profiles)."""
+        missing = []
+        for key in ("iso_id", "image_id"):
+            if params.get(key) and self.isos.resolve(str(params[key])) is None:
+                missing.append((key, f"Image {params[key]} is not in the repository"))
+        if params.get("config_set_id") and self.store.get_config_set(str(params["config_set_id"])) is None:
+            missing.append(("config_set_id", f"Config set {params['config_set_id']} not found"))
+        if params.get("profile_id") and self.store.get_appliance_profile(str(params["profile_id"])) is None:
+            missing.append(("profile_id", f"Appliance profile {params['profile_id']} not found"))
+        return missing
+
+    def delete_spec(self, spec_id: str) -> None:
+        spec = self.get_spec(spec_id)
+        users = [c.name for c in self.store.list_clusters() if c.spec_id == spec_id]
+        if users:
+            raise ConflictError(
+                f"Spec '{spec.name}' is used by cluster {', '.join(users)}: change that first"
+            )
+        self.store.delete_spec(spec_id)
+
+    def set_host_spec(self, host_id: str, spec_id: str | None) -> EffectiveSpec | None:
+        """Give a server its own spec (it overrides its cluster's), or clear it (null)."""
+        self.get_host(host_id)
+        if spec_id is not None:
+            self.get_spec(spec_id)
+        self.store.set_host_spec(host_id, spec_id)
+        return self.effective_spec(host_id)
+
+    def effective_spec(self, host_id: str) -> EffectiveSpec | None:
+        """The spec a server runs: its own, otherwise its cluster's, otherwise none."""
+        own = self.store.get_host_spec(host_id)
+        if own is not None and (spec := self.store.get_spec(own)) is not None:
+            return EffectiveSpec(spec=spec, source="host")
+        cluster = self.cluster_for_host(host_id)
+        if cluster is not None and cluster.spec_id and (spec := self.store.get_spec(cluster.spec_id)):
+            return EffectiveSpec(spec=spec, source="cluster", cluster_id=cluster.id)
+        return None
+
+    def spec_values(self, host_id: str) -> dict[str, str]:
+        """What {host} and {hostname} become on this server."""
+        host = self.get_host(host_id)
+        values = self.store.get_host_values(host_id, EsxiPlugin.family) or {}
+        return {"host": host.name, "hostname": str(values.get("hostname") or host.name)}
+
+    def spec_params(self, host_id: str, step: SpecStep) -> dict[str, Any]:
+        """A step's parameters as they'll be sent for this server: placeholders filled, and an OS deploy
+        without a config set given its cluster's."""
+        params = fill(step.params, self.spec_values(host_id))
+        if step.task == "os.custom" and not params.get("config_set_id"):
+            cluster = self.cluster_for_host(host_id)
+            if cluster is not None:
+                params["config_set_id"] = cluster.config_set_id
+        return dict(params)
 
     async def add_cluster_member(self, cluster_id: str, host_id: str) -> ClusterMember:
         """Name the server after its BMC and give it the next free address; written as its per-host values."""
@@ -649,12 +786,22 @@ class Services:
     def pipeline(self, host_id: str) -> Pipeline:
         self.get_host(host_id)
         kinds = {t.produces for t in catalog() if t.produces}
+        effective = self.effective_spec(host_id)
+        chosen = params = None
+        if effective is not None:
+            spec = effective.spec
+            chosen = PipelineSpec(
+                id=spec.id, name=spec.name, source=effective.source, tasks=[s.task for s in spec.steps]
+            )
+            params = {s.task: self.spec_params(host_id, s) for s in spec.steps}
         return evaluate_pipeline(
             host_id=host_id,
             os_epoch=self.store.os_epoch(host_id),
             jobs=self.store.list_jobs(host_id=host_id, limit=500),
             outputs={k: self.store.latest_output(host_id=host_id, kind=k) for k in kinds},
             has_os_access=self.store.get_os_access(host_id) is not None,
+            chosen=chosen,
+            spec_params=params,
         )
 
     def start_task(self, host_id: str, task_id: str, run: TaskRun) -> Job:

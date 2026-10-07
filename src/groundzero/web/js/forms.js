@@ -1,6 +1,7 @@
 // Schema-driven forms: render an OS family's JSON Schema (from GET /os-families) as form fields, read the
 // values back as JSON, and map API 422 errors (loc = [where, ...path]) onto the matching fields.
-// Supports what the OS plugins use: objects/$ref, string, integer, boolean, enum, string arrays, nullable.
+// Supports what the OS plugins use: objects/$ref, string, integer, boolean, enum (labels in x-enum-labels),
+// string arrays, nullable.
 import { h } from "./core.js";
 
 function resolve(node, defs) {
@@ -73,7 +74,7 @@ export function schemaForm(schema, initial = {}, { idPrefix = "f", secretFields 
     if (n.enum) {
       const select = h("select", { id },
         n.nullable ? h("option", { value: "" }, "—") : null,
-        n.enum.map((v) => h("option", { value: v, selected: v === current }, v)));
+        n.enum.map((v, i) => h("option", { value: v, selected: v === current }, n["x-enum-labels"]?.[i] ?? v)));
       readInto(() => (select.value === "" ? (n.nullable ? null : undefined) : select.value));
       return fieldWrap(path, title, required, n.description, select);
     }

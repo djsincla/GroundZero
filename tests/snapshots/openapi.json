@@ -180,6 +180,18 @@
             "title": "Require a passing DNS check before install",
             "type": "boolean"
           },
+          "spec_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The jobs every member runs (a member's own spec wins)",
+            "title": "Spec"
+          },
           "strip_prefix": {
             "default": "",
             "description": "Removed from the BMC name, e.g. idrac-",
@@ -258,6 +270,45 @@
         "title": "ClusterMember",
         "type": "object"
       },
+      "ClusterRunPreview": {
+        "properties": {
+          "cluster_id": {
+            "title": "Cluster Id",
+            "type": "string"
+          },
+          "cluster_name": {
+            "title": "Cluster Name",
+            "type": "string"
+          },
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/RunPreview"
+            },
+            "title": "Hosts",
+            "type": "array"
+          },
+          "phrase": {
+            "title": "Phrase",
+            "type": "string"
+          },
+          "without_spec": {
+            "description": "Members with no spec: not run",
+            "items": {
+              "type": "string"
+            },
+            "title": "Without Spec",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cluster_id",
+          "cluster_name",
+          "phrase",
+          "hosts"
+        ],
+        "title": "ClusterRunPreview",
+        "type": "object"
+      },
       "ClusterWrite": {
         "properties": {
           "config_set_id": {
@@ -291,6 +342,18 @@
             "description": "Off: run Verify DNS when you want. On: members are installed only once it passes.",
             "title": "Require a passing DNS check before install",
             "type": "boolean"
+          },
+          "spec_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The jobs every member runs (a member's own spec wins)",
+            "title": "Spec"
           },
           "strip_prefix": {
             "default": "",
@@ -461,6 +524,39 @@
           "id"
         ],
         "title": "DeploymentOption",
+        "type": "object"
+      },
+      "EffectiveSpec": {
+        "description": "The spec a server runs, and where it comes from.",
+        "properties": {
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id"
+          },
+          "source": {
+            "enum": [
+              "host",
+              "cluster"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/Spec"
+          }
+        },
+        "required": [
+          "spec",
+          "source"
+        ],
+        "title": "EffectiveSpec",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -1721,6 +1817,17 @@
             "title": "Os Epoch",
             "type": "integer"
           },
+          "spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PipelineSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: every task, recommended path"
+          },
           "stages": {
             "items": {
               "$ref": "#/components/schemas/PipelineStage"
@@ -1736,6 +1843,43 @@
           "next"
         ],
         "title": "Pipeline",
+        "type": "object"
+      },
+      "PipelineSpec": {
+        "description": "The spec a host follows: its own, or its cluster's.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "host",
+              "cluster"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "tasks": {
+            "description": "The spec's tasks, in pipeline order",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source",
+          "tasks"
+        ],
+        "title": "PipelineSpec",
         "type": "object"
       },
       "PipelineStage": {
@@ -1776,6 +1920,398 @@
           "tasks"
         ],
         "title": "PipelineStage",
+        "type": "object"
+      },
+      "PreviewStep": {
+        "properties": {
+          "action": {
+            "enum": [
+              "run",
+              "skip",
+              "blocked"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "destructive": {
+            "default": false,
+            "title": "Destructive",
+            "type": "boolean"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "As they'll be sent, placeholders filled",
+            "title": "Params",
+            "type": "object"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "task": {
+            "title": "Task",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task",
+          "title",
+          "action"
+        ],
+        "title": "PreviewStep",
+        "type": "object"
+      },
+      "Run": {
+        "properties": {
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when started as part of a cluster run",
+            "title": "Cluster Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "host_id": {
+            "title": "Host Id",
+            "type": "string"
+          },
+          "host_name": {
+            "title": "Host Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "spec_id": {
+            "title": "Spec Id",
+            "type": "string"
+          },
+          "spec_name": {
+            "title": "Spec Name",
+            "type": "string"
+          },
+          "status": {
+            "default": "running",
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/RunStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "host_id",
+          "host_name",
+          "spec_id",
+          "spec_name",
+          "steps",
+          "created_at"
+        ],
+        "title": "Run",
+        "type": "object"
+      },
+      "RunPreview": {
+        "properties": {
+          "destructive": {
+            "description": "What may change or be lost, in words, for the confirmation dialog",
+            "items": {
+              "type": "string"
+            },
+            "title": "Destructive",
+            "type": "array"
+          },
+          "host_id": {
+            "title": "Host Id",
+            "type": "string"
+          },
+          "host_name": {
+            "title": "Host Name",
+            "type": "string"
+          },
+          "phrase": {
+            "description": "The confirmation that starts this run",
+            "title": "Phrase",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "host",
+              "cluster"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "spec_id": {
+            "title": "Spec Id",
+            "type": "string"
+          },
+          "spec_name": {
+            "title": "Spec Name",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "host_id",
+          "host_name",
+          "spec_id",
+          "spec_name",
+          "source",
+          "phrase",
+          "steps"
+        ],
+        "title": "RunPreview",
+        "type": "object"
+      },
+      "RunStart": {
+        "properties": {
+          "confirm": {
+            "description": "Exactly \"run <spec> on <host>\" (a cluster: \"run cluster <name>\")",
+            "title": "Confirm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm"
+        ],
+        "title": "RunStart",
+        "type": "object"
+      },
+      "RunStep": {
+        "properties": {
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was skipped, or why it failed",
+            "title": "Reason"
+          },
+          "status": {
+            "default": "pending",
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed",
+              "skipped",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "task": {
+            "title": "Task",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task",
+          "title"
+        ],
+        "title": "RunStep",
+        "type": "object"
+      },
+      "Spec": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]*$",
+            "title": "Name",
+            "type": "string"
+          },
+          "steps": {
+            "description": "Kept in pipeline order, whatever order sent",
+            "items": {
+              "$ref": "#/components/schemas/SpecStep"
+            },
+            "minItems": 1,
+            "title": "Steps",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "steps",
+          "id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Spec",
+        "type": "object"
+      },
+      "SpecAssignment": {
+        "properties": {
+          "spec_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The spec for this server; null: use its cluster's, if any",
+            "title": "Spec Id"
+          }
+        },
+        "required": [
+          "spec_id"
+        ],
+        "title": "SpecAssignment",
+        "type": "object"
+      },
+      "SpecStep": {
+        "properties": {
+          "params": {
+            "additionalProperties": true,
+            "description": "The task's parameters; strings may use {host} and {hostname}",
+            "title": "Params",
+            "type": "object"
+          },
+          "task": {
+            "description": "Task id (GET /tasks)",
+            "title": "Task",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task"
+        ],
+        "title": "SpecStep",
+        "type": "object"
+      },
+      "SpecWrite": {
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]*$",
+            "title": "Name",
+            "type": "string"
+          },
+          "steps": {
+            "description": "Kept in pipeline order, whatever order sent",
+            "items": {
+              "$ref": "#/components/schemas/SpecStep"
+            },
+            "minItems": 1,
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "steps"
+        ],
+        "title": "SpecWrite",
         "type": "object"
       },
       "Stage": {
@@ -1975,6 +2511,18 @@
             "title": "Id",
             "type": "string"
           },
+          "in_spec": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the host's spec includes this task (null: the host has no spec)",
+            "title": "In Spec"
+          },
           "inputs": {
             "description": "What this task reads, and from where",
             "items": {
@@ -2042,6 +2590,19 @@
             },
             "title": "Requires",
             "type": "array"
+          },
+          "spec_params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The parameters the spec runs this task with",
+            "title": "Spec Params"
           },
           "stage": {
             "$ref": "#/components/schemas/Stage"
@@ -2710,6 +3271,115 @@
         "summary": "Remove Member",
         "tags": [
           "clusters"
+        ]
+      }
+    },
+    "/api/v1/clusters/{cluster_id}/runs": {
+      "post": {
+        "description": "Run every member's spec at once (a member's own spec, else the cluster's). A member that fails\ndoesn't stop the others.",
+        "operationId": "start_cluster_run_api_v1_clusters__cluster_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Run"
+                  },
+                  "title": "Response Start Cluster Run Api V1 Clusters  Cluster Id  Runs Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Cluster Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/clusters/{cluster_id}/runs/preview": {
+      "get": {
+        "operationId": "preview_cluster_run_api_v1_clusters__cluster_id__runs_preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterRunPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Cluster Run",
+        "tags": [
+          "runs"
         ]
       }
     },
@@ -3712,6 +4382,291 @@
         ]
       }
     },
+    "/api/v1/hosts/{host_id}/runs": {
+      "get": {
+        "operationId": "list_host_runs_api_v1_hosts__host_id__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Run"
+                  },
+                  "title": "Response List Host Runs Api V1 Hosts  Host Id  Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Host Runs",
+        "tags": [
+          "runs"
+        ]
+      },
+      "post": {
+        "description": "Run the server's spec: steps start one after another and the run stops at the first failure.\n``confirm`` approves every step, destructive ones included.",
+        "operationId": "start_run_api_v1_hosts__host_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/runs/preview": {
+      "get": {
+        "description": "What running this server's spec would do now: each step runs, is skipped (done or not needed), or\nis blocked; the destructive steps; and the phrase that starts it.",
+        "operationId": "preview_run_api_v1_hosts__host_id__runs_preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/spec": {
+      "get": {
+        "description": "The spec this server runs: its own, else its cluster's, else null.",
+        "operationId": "get_host_spec_api_v1_hosts__host_id__spec_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/EffectiveSpec"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Host Spec Api V1 Hosts  Host Id  Spec Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Host Spec",
+        "tags": [
+          "specs"
+        ]
+      },
+      "put": {
+        "description": "Give the server its own spec (it overrides its cluster's), or null to use its cluster's.",
+        "operationId": "set_host_spec_api_v1_hosts__host_id__spec_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecAssignment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/EffectiveSpec"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Set Host Spec Api V1 Hosts  Host Id  Spec Put"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Host Spec",
+        "tags": [
+          "specs"
+        ]
+      }
+    },
     "/api/v1/hosts/{host_id}/tasks/{task_id}": {
       "post": {
         "description": "Start a catalog task (GET /tasks). 409 if its inputs are missing or stale (the message says which\ntask to run first). Destructive tasks need ``confirm``.",
@@ -4257,6 +5212,317 @@
         "summary": "Output Kinds",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run_api_v1_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/cancel": {
+      "post": {
+        "description": "Stop the run: its current job is cancelled and no later step starts.",
+        "operationId": "cancel_run_api_v1_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/specs": {
+      "get": {
+        "operationId": "list_specs_api_v1_specs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Spec"
+                  },
+                  "title": "Response List Specs Api V1 Specs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Specs",
+        "tags": [
+          "specs"
+        ]
+      },
+      "post": {
+        "description": "Every step is checked: the task exists, its parameters are valid, and what they refer to (images,\nconfig sets, profiles) exists. Steps are kept in pipeline order. Secrets are refused.",
+        "operationId": "create_spec_api_v1_specs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Spec"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Spec",
+        "tags": [
+          "specs"
+        ]
+      }
+    },
+    "/api/v1/specs/{spec_id}": {
+      "delete": {
+        "description": "Servers that had it as their own spec fall back to their cluster's. Refused while a cluster uses it.",
+        "operationId": "delete_spec_api_v1_specs__spec_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "spec_id",
+            "required": true,
+            "schema": {
+              "title": "Spec Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Spec",
+        "tags": [
+          "specs"
+        ]
+      },
+      "get": {
+        "operationId": "get_spec_api_v1_specs__spec_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "spec_id",
+            "required": true,
+            "schema": {
+              "title": "Spec Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Spec"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Spec",
+        "tags": [
+          "specs"
+        ]
+      },
+      "put": {
+        "operationId": "update_spec_api_v1_specs__spec_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "spec_id",
+            "required": true,
+            "schema": {
+              "title": "Spec Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Spec"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Spec",
+        "tags": [
+          "specs"
         ]
       }
     },
