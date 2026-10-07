@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from groundzero import __version__
+from groundzero.clusters import Cluster, ClusterMember, ClusterWrite, derive_hostname, next_free_ip
 from groundzero.core import diagnostics
 from groundzero.core.config import Settings
 from groundzero.core.credentials import CredentialCipher
@@ -28,9 +29,10 @@ from groundzero.core.models import (
     OsAccess,
     OsAccessSet,
 )
-from groundzero.core.store import Store, utcnow
+from groundzero.core.store import Store, new_id, utcnow
 from groundzero.core.tasks import OUTPUT_TITLES, Pipeline, TaskInfo, TaskRun, catalog, evaluate_pipeline, info
 from groundzero.core.tls import PinnedCertificate, check_pin, fetch_certificate, fingerprint, pinned_context
+from groundzero.dnscheck import DnsLookup, LiveDns, StaticDns
 from groundzero.esxi.models import EsxiNetworkConfig, EsxiStorage
 from groundzero.esxi.ops import EsxiOps, LiveEsxiOps, OsTarget
 from groundzero.esxi.vms import VmSummary
@@ -54,6 +56,7 @@ from groundzero.preflight.evaluate import PreflightReport, load_profile
 from groundzero.readiness import ReadinessReport, assess
 from groundzero.redfish.capture import load_recording
 from groundzero.redfish.client import RedfishClient
+from groundzero.redfish.detect import detect
 from groundzero.simulator.bmc import SimulatedBmc
 from groundzero.simulator.esxi import SimulatedEsxi
 
@@ -155,6 +158,7 @@ class Services:
                 load_recording(settings.simulate_bmc_dir),
                 esxi=self.sim_esxi,
                 faults=frozenset(settings.simulate_faults),
+                hostname=settings.simulate_bmc_hostname,
             )
             if settings.simulate_bmc_dir
             else None
@@ -163,6 +167,9 @@ class Services:
         settings.ensure_home()
         self.isos = IsoRepository(settings.iso_dir, settings.home / "iso-cache.json")
         self.esxi: EsxiOps = esxi or self.sim_esxi or LiveEsxiOps()
+        self.dns: DnsLookup = (
+            StaticDns(settings.simulate_dns) if settings.simulate_dns is not None else LiveDns()
+        )
         self._migrate_holorouter_settings()
 
     def _migrate_holorouter_settings(self) -> None:
@@ -401,6 +408,114 @@ class Services:
         data = self._validate(model, values, "host_values")
         self.store.set_host_values(host_id, family, data)
         return data
+
+    # ── clusters: names from the BMC, addresses from a pool, DNS checked before install ──
+    def list_clusters(self) -> list[Cluster]:
+        return self.store.list_clusters()
+
+    def get_cluster(self, cluster_id: str) -> Cluster:
+        found = self.store.get_cluster(cluster_id)
+        if found is None:
+            raise NotFoundError(f"Cluster {cluster_id} not found")
+        return found
+
+    def cluster_for_host(self, host_id: str) -> Cluster | None:
+        return next(
+            (c for c in self.store.list_clusters() if any(m.host_id == host_id for m in c.members)), None
+        )
+
+    def save_cluster(self, req: ClusterWrite, cluster_id: str | None = None) -> Cluster:
+        current = self.get_cluster(cluster_id) if cluster_id else None
+        other = next((c for c in self.store.list_clusters() if c.name == req.name), None)
+        if other is not None and other.id != cluster_id:
+            raise ConflictError(f"A cluster named '{req.name}' already exists")
+        if self.get_config_set(req.config_set_id).os_family != EsxiPlugin.family:
+            raise OsConfigError("A cluster's config set must be an ESXi config set")
+        now = utcnow()
+        members = current.members if current else []
+        outside = [m.ip for m in members if not _in_range(m.ip, req.ip_first, req.ip_last)]
+        if outside:
+            raise OsConfigError(f"Members already use {', '.join(outside)}, outside the new range")
+        cluster = Cluster(
+            **req.model_dump(),
+            id=current.id if current else new_id(),
+            members=members,
+            created_at=current.created_at if current else now,
+            updated_at=now,
+        )
+        self.store.save_cluster(cluster)
+        return cluster
+
+    def delete_cluster(self, cluster_id: str) -> None:
+        """Forget the cluster. Its members keep their hostnames and IPs as their own per-host values."""
+        if not self.store.delete_cluster(cluster_id):
+            raise NotFoundError(f"Cluster {cluster_id} not found")
+
+    async def add_cluster_member(self, cluster_id: str, host_id: str) -> ClusterMember:
+        """Name the server after its BMC and give it the next free address; written as its per-host values."""
+        cluster = self.get_cluster(cluster_id)
+        host = self.get_host(host_id)
+        elsewhere = self.cluster_for_host(host_id)
+        if elsewhere is not None:
+            raise ConflictError(f"{host.name} is already in cluster {elsewhere.name}")
+        bmc_name = await self._bmc_hostname(host)
+        try:
+            hostname = derive_hostname(bmc_name or host.name, cluster.strip_prefix, cluster.strip_suffix)
+        except ValueError as exc:
+            raise OsConfigError(str(exc)) from exc
+        if any(m.hostname == hostname for m in cluster.members):
+            raise ConflictError(f"{hostname} is already a member of {cluster.name}")
+        used = {m.ip for c in self.store.list_clusters() for m in c.members}
+        for other in self.store.list_hosts():
+            values = self.store.get_host_values(other.id, EsxiPlugin.family) or {}
+            if other.id != host_id and values.get("ip"):
+                used.add(values["ip"])
+        ip = next_free_ip(cluster.ip_first, cluster.ip_last, used)
+        if ip is None:
+            raise ConflictError(f"No free address left in {cluster.ip_first} - {cluster.ip_last}")
+        member = ClusterMember(
+            host_id=host.id,
+            host_name=host.name,
+            bmc_hostname=bmc_name,
+            hostname=hostname,
+            ip=ip,
+            added_at=utcnow(),
+        )
+        current = self.store.get_host_values(host.id, EsxiPlugin.family) or {}
+        self.store.set_host_values(host.id, EsxiPlugin.family, {**current, "hostname": hostname, "ip": ip})
+        cluster.members.append(member)
+        cluster.updated_at = utcnow()
+        self.store.save_cluster(cluster)
+        return member
+
+    def remove_cluster_member(self, cluster_id: str, host_id: str) -> None:
+        """The server leaves the cluster; its hostname and IP stay as its own per-host values."""
+        cluster = self.get_cluster(cluster_id)
+        kept = [m for m in cluster.members if m.host_id != host_id]
+        if len(kept) == len(cluster.members):
+            raise NotFoundError(f"Host {host_id} is not in cluster {cluster.name}")
+        cluster.members = kept
+        cluster.updated_at = utcnow()
+        self.store.save_cluster(cluster)
+
+    async def _bmc_hostname(self, host: Host) -> str | None:
+        """The BMC's own DNS name: from the latest inventory, else read now (read-only)."""
+        meta = self.store.latest_output(host_id=host.id, kind="inventory")
+        if meta is not None and (name := (meta.data.get("bmc") or {}).get("hostname")):
+            return str(name)
+        async with self._client_factory(host, self.bmc_password(host.id)) as client:
+            identity = await detect(client)
+            if not identity.manager_path:
+                return None
+            manager = await client.get_json(identity.manager_path)
+            link = (manager.get("EthernetInterfaces") or {}).get("@odata.id")
+            if not link:
+                return None
+            for member in (await client.get_json(link)).get("Members", []):
+                nic = await client.get_json(member["@odata.id"])
+                if nic.get("HostName"):
+                    return str(nic["HostName"])
+        return None
 
     # ── appliance profiles (saved values for an OVA) ─────────────────────
     def list_appliance_profiles(self) -> list[ApplianceProfile]:
@@ -785,3 +900,13 @@ class Services:
             max_parallel=self.settings.redfish_max_parallel,
             transport=transport,
         )
+
+
+def _in_range(ip: str, first: str, last: str) -> bool:
+    import ipaddress
+
+    return (
+        int(ipaddress.IPv4Address(first))
+        <= int(ipaddress.IPv4Address(ip))
+        <= int(ipaddress.IPv4Address(last))
+    )

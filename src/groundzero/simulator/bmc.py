@@ -28,6 +28,7 @@ class SimulatedBmc:
         responses: dict[str, dict[str, Any]],
         esxi: SimulatedEsxi | None = None,
         faults: frozenset[str] = frozenset(),
+        hostname: str = "idrac-esxi1",
     ) -> None:
         """``faults`` injects misbehaviour seen on real BMCs, for tests:
 
@@ -53,11 +54,30 @@ class SimulatedBmc:
         self._tasks: set[asyncio.Task[None]] = set()
         system = self._system_path()
         self.responses.setdefault(system, {}).setdefault("PowerState", "On")
+        self._add_bmc_nic(hostname)
         self.pending_bios: dict[str, Any] = {}  # Bios/Settings: applied on the next reset, like the iDRAC
         if "bios-wrong" in faults and (bios := self._bios_path()):
             self.responses[bios].setdefault("Attributes", {}).update(
                 {"ProcVirtualization": "Disabled", "BootMode": "Bios"}
             )
+
+    def _add_bmc_nic(self, hostname: str) -> None:
+        """The BMC's own network interface (recordings redact it): where its DNS name is reported."""
+        manager = next(
+            (p for p in self.responses if p.rstrip("/").count("/") == 4 and "/Managers/" in p), None
+        )
+        if manager is None:
+            return
+        nics = f"{manager}/EthernetInterfaces"
+        nic = f"{nics}/NIC.1"
+        self.responses[manager].setdefault("EthernetInterfaces", {"@odata.id": nics})
+        self.responses.setdefault(nics, {"Members": [{"@odata.id": nic}], "Members@odata.count": 1})
+        self.responses[nic] = {
+            "@odata.id": nic,
+            "Id": "NIC.1",
+            "HostName": hostname,
+            "FQDN": f"{hostname}.lab.example",
+        }
 
     def _bios_path(self) -> str | None:
         return next((p for p in self.responses if p.endswith("/Bios") and "/Systems/" in p), None)

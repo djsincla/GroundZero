@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from groundzero.clusters import Cluster
 from groundzero.core.models import ConfigSet, Host, Job, JobError, JobStatus, JobStep, OsAccess
 from groundzero.ova.profiles import ApplianceProfile
 
@@ -89,6 +90,13 @@ CREATE TABLE IF NOT EXISTS appliance_profiles (
     secrets BLOB,
     secret_names TEXT NOT NULL DEFAULT '[]',
     source TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS clusters (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    data TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -338,6 +346,37 @@ class Store:
     def delete_config_set(self, set_id: str) -> bool:
         with self._tx() as cur:
             return cur.execute("DELETE FROM config_sets WHERE id = ?", (set_id,)).rowcount > 0
+
+    # ── clusters ─────────────────────────────────────────────────────────
+    def save_cluster(self, cluster: Cluster) -> None:
+        data = cluster.model_dump_json(exclude={"id", "name", "created_at", "updated_at"})
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO clusters (id, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET name = excluded.name, data = excluded.data,"
+                " updated_at = excluded.updated_at",
+                (
+                    cluster.id,
+                    cluster.name,
+                    data,
+                    cluster.created_at.isoformat(),
+                    cluster.updated_at.isoformat(),
+                ),
+            )
+
+    def list_clusters(self) -> list[Cluster]:
+        with self._tx() as cur:
+            rows = cur.execute("SELECT * FROM clusters ORDER BY name").fetchall()
+        return [_row_to_cluster(r) for r in rows]
+
+    def get_cluster(self, cluster_id: str) -> Cluster | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM clusters WHERE id = ?", (cluster_id,)).fetchone()
+        return _row_to_cluster(row) if row else None
+
+    def delete_cluster(self, cluster_id: str) -> bool:
+        with self._tx() as cur:
+            return cur.execute("DELETE FROM clusters WHERE id = ?", (cluster_id,)).rowcount > 0
 
     # ── appliance profiles ───────────────────────────────────────────────
     def save_appliance_profile(
@@ -672,4 +711,16 @@ def _row_to_profile(row: sqlite3.Row) -> ApplianceProfile:
         source=row["source"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
+    )
+
+
+def _row_to_cluster(row: sqlite3.Row) -> Cluster:
+    return Cluster.model_validate(
+        {
+            **json.loads(row["data"]),
+            "id": row["id"],
+            "name": row["name"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
     )

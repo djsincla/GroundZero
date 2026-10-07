@@ -5,6 +5,7 @@ from __future__ import annotations
 from groundzero.modules.appliances import ApplianceAdopt, ApplianceCapture, ApplianceDeploy
 from groundzero.modules.base import Module
 from groundzero.modules.bios import ConfigureBios
+from groundzero.modules.dns import VerifyDns
 from groundzero.modules.hardware import Discover, Preflight, VcfReadiness
 from groundzero.modules.holodeck import DeployHolodeck, Holorouter, StageBinaries
 from groundzero.modules.os import OsCapture, OsCustom, OsRead, OsReimage
@@ -16,6 +17,7 @@ MODULES: tuple[Module, ...] = (
     VcfReadiness(),
     ConfigureBios(),
     OsReimage(),
+    VerifyDns(),
     OsCustom(),
     OsRead(),
     OsCapture(),

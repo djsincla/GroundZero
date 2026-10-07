@@ -104,6 +104,17 @@ override and root password. The server's own **hostname and IP** stay per host. 
   ```
 - **From scratch:** in the web UI, open **Config sets → New config set**.
 
+### Several servers: a cluster
+
+If you are building more than one host, create a cluster (**Clusters → New cluster**) with the ESXi config
+set, an IP range and the DNS domain, and add the servers to it. Each one is named after its BMC, with the
+prefix or suffix you give stripped off, so `idrac-esx01` becomes `esx01`, and gets the next free address in
+the range. Those become the server's own values, so the install picks them up without any typing.
+
+**Verify DNS** asks the cluster's DNS servers for the forward and reverse records and tells you what does not
+match. It is an option: tick *Require a passing DNS check before install* on the cluster if you would rather
+not find out about a missing PTR record after vCenter has.
+
 ## 6. Install ESXi
 
 The web UI's **Install → Deploy OS…** wizard runs four steps:

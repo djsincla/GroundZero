@@ -12,6 +12,7 @@ from groundzero.core.jobs import JobContext
 from groundzero.core.models import ConfigSetWrite, Host
 from groundzero.install.job import InstallConfig, Installer, InstallRequest, InstallTimings
 from groundzero.modules.base import OS_ACCESS, Deps, Inputs, Module, Prepared, Stage
+from groundzero.modules.dns import require_dns
 from groundzero.osconfig import OsConfigError
 from groundzero.osconfig.esxi import EsxiHostValues, EsxiPlugin, EsxiSettings
 from groundzero.preflight.evaluate import UnknownProfileError, load_profile
@@ -23,6 +24,9 @@ class InstallParams(InstallRequest):
     model_config = ConfigDict(extra="ignore")
 
     confirm: str = Field(default="", exclude=True)
+    skip_dns_check: bool = Field(
+        default=False, description="Install even if the cluster requires a passing DNS check"
+    )
 
 
 def resolve_iso(deps: Deps, req: InstallRequest) -> Path:
@@ -73,6 +77,7 @@ class _DeployOs(Module):
     stage = Stage.OS
     produces = "install"
     also_produces = ("os_network",)
+    uses = ("dns",)
     optional = True
     destructive = True
     Params = InstallParams
@@ -115,6 +120,8 @@ class _DeployOs(Module):
             raise NotFoundError(
                 f"No OS access configured for host {host.id}; set it, or install with a config set"
             )
+        if config is not None and not params.skip_dns_check:
+            require_dns(deps, host, inputs, config.values.hostname, config.values.ip)
         if config is not None:
             deps.store.set_host_values(host.id, EsxiPlugin.family, config.values.model_dump(mode="json"))
         s = deps.settings

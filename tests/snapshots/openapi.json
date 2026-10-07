@@ -130,6 +130,191 @@
         "title": "ApplianceProfileWrite",
         "type": "object"
       },
+      "Cluster": {
+        "properties": {
+          "config_set_id": {
+            "description": "The ESXi config set every member is installed with",
+            "title": "Config Set Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dns_domain": {
+            "description": "e.g. lab.example: members are <hostname>.<domain>",
+            "title": "DNS domain",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ip_first": {
+            "description": "First address of the range, e.g. 192.0.2.101",
+            "title": "First IP",
+            "type": "string"
+          },
+          "ip_last": {
+            "description": "Last address of the range, e.g. 192.0.2.120",
+            "title": "Last IP",
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterMember"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "require_dns": {
+            "default": false,
+            "description": "Off: run Verify DNS when you want. On: members are installed only once it passes.",
+            "title": "Require a passing DNS check before install",
+            "type": "boolean"
+          },
+          "strip_prefix": {
+            "default": "",
+            "description": "Removed from the BMC name, e.g. idrac-",
+            "title": "Strip Prefix",
+            "type": "string"
+          },
+          "strip_suffix": {
+            "default": "",
+            "description": "Removed from the BMC name, e.g. -idrac",
+            "title": "Strip Suffix",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "config_set_id",
+          "ip_first",
+          "ip_last",
+          "dns_domain",
+          "id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Cluster",
+        "type": "object"
+      },
+      "ClusterMember": {
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "bmc_hostname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The BMC's own name the hostname came from",
+            "title": "Bmc Hostname"
+          },
+          "host_id": {
+            "title": "Host Id",
+            "type": "string"
+          },
+          "host_name": {
+            "description": "The host as registered in GroundZero",
+            "title": "Host Name",
+            "type": "string"
+          },
+          "hostname": {
+            "title": "Hostname",
+            "type": "string"
+          },
+          "ip": {
+            "title": "Ip",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host_id",
+          "host_name",
+          "hostname",
+          "ip",
+          "added_at"
+        ],
+        "title": "ClusterMember",
+        "type": "object"
+      },
+      "ClusterWrite": {
+        "properties": {
+          "config_set_id": {
+            "description": "The ESXi config set every member is installed with",
+            "title": "Config Set Id",
+            "type": "string"
+          },
+          "dns_domain": {
+            "description": "e.g. lab.example: members are <hostname>.<domain>",
+            "title": "DNS domain",
+            "type": "string"
+          },
+          "ip_first": {
+            "description": "First address of the range, e.g. 192.0.2.101",
+            "title": "First IP",
+            "type": "string"
+          },
+          "ip_last": {
+            "description": "Last address of the range, e.g. 192.0.2.120",
+            "title": "Last IP",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "require_dns": {
+            "default": false,
+            "description": "Off: run Verify DNS when you want. On: members are installed only once it passes.",
+            "title": "Require a passing DNS check before install",
+            "type": "boolean"
+          },
+          "strip_prefix": {
+            "default": "",
+            "description": "Removed from the BMC name, e.g. idrac-",
+            "title": "Strip Prefix",
+            "type": "string"
+          },
+          "strip_suffix": {
+            "default": "",
+            "description": "Removed from the BMC name, e.g. -idrac",
+            "title": "Strip Suffix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "config_set_id",
+          "ip_first",
+          "ip_last",
+          "dns_domain"
+        ],
+        "title": "ClusterWrite",
+        "type": "object"
+      },
       "ConfigSet": {
         "properties": {
           "created_at": {
@@ -1012,6 +1197,19 @@
         ],
         "title": "JobStepStatus",
         "type": "string"
+      },
+      "MemberAdd": {
+        "properties": {
+          "host_id": {
+            "title": "Host Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host_id"
+        ],
+        "title": "MemberAdd",
+        "type": "object"
       },
       "NextStep": {
         "properties": {
@@ -2163,6 +2361,329 @@
         "summary": "Update Appliance Profile",
         "tags": [
           "catalog"
+        ]
+      }
+    },
+    "/api/v1/clusters": {
+      "get": {
+        "operationId": "list_clusters_api_v1_clusters_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Cluster"
+                  },
+                  "title": "Response List Clusters Api V1 Clusters Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Clusters",
+        "tags": [
+          "clusters"
+        ]
+      },
+      "post": {
+        "operationId": "create_cluster_api_v1_clusters_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cluster"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Cluster",
+        "tags": [
+          "clusters"
+        ]
+      }
+    },
+    "/api/v1/clusters/{cluster_id}": {
+      "delete": {
+        "description": "Members keep their hostnames and IPs as their own per-host values.",
+        "operationId": "delete_cluster_api_v1_clusters__cluster_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Cluster",
+        "tags": [
+          "clusters"
+        ]
+      },
+      "get": {
+        "operationId": "get_cluster_api_v1_clusters__cluster_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cluster"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Cluster",
+        "tags": [
+          "clusters"
+        ]
+      },
+      "put": {
+        "description": "Change the cluster. Members keep their names and addresses; the range must still contain them.",
+        "operationId": "update_cluster_api_v1_clusters__cluster_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cluster"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Cluster",
+        "tags": [
+          "clusters"
+        ]
+      }
+    },
+    "/api/v1/clusters/{cluster_id}/members": {
+      "post": {
+        "description": "Add a server: its hostname comes from its BMC's name (read-only), its IP is the next free one in the\nrange, and both are written as its per-host values.",
+        "operationId": "add_member_api_v1_clusters__cluster_id__members_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberAdd"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterMember"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Member",
+        "tags": [
+          "clusters"
+        ]
+      }
+    },
+    "/api/v1/clusters/{cluster_id}/members/{host_id}": {
+      "delete": {
+        "operationId": "remove_member_api_v1_clusters__cluster_id__members__host_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Member",
+        "tags": [
+          "clusters"
         ]
       }
     },

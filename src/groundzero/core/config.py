@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     # Same idea for the installed OS: a simulated ESXi from a capture dir (network/storage/about.json).
     simulate_esxi_dir: Path | None = None
     simulate_faults: list[str] = []  # simulator fault injection, e.g. ["ignore-boot-once"]
+    simulate_bmc_hostname: str = "idrac-esxi1"  # the simulated BMC's own DNS name
+    simulate_dns: dict[str, str] | None = None  # simulated DNS: FQDN -> IPv4 (reverse records derived)
     install_poll_seconds: float = 20.0
     media_settle_seconds: float = 10.0  # extra pause after the media reports attached, before reset
     media_attach_seconds: float = 600.0  # max wait for mounted media to attach (lab preference: up to 10 min)

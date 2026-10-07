@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from groundzero.dnscheck import DnsCheck
 from groundzero.esxi.models import ChangeRecord, EsxiNetworkConfig, EsxiStorage, JumboResult
 from groundzero.install.job import InstallReport
 from groundzero.inventory.models import HostInventory
@@ -88,4 +89,5 @@ OUTPUTS: dict[str, type[BaseModel]] = {
     "holorouter": HolorouterDeployment,
     "appliance": ApplianceDeployment,
     "bios": BiosResult,
+    "dns": DnsCheck,
 }

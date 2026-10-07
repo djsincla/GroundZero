@@ -69,6 +69,8 @@ class BiosSettings(BaseModel):
 
 class BmcInfo(BaseModel):
     vendor: str
+    hostname: str | None = Field(default=None, description="The BMC's own DNS name, e.g. idrac-esx01")
+    fqdn: str | None = None
     firmware_version: str | None = None
     redfish_version: str | None = None
     license: LicenseInfo | None = None

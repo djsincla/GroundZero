@@ -23,8 +23,10 @@ from groundzero.core.store import OutputMeta, Store
 from groundzero.core.tasks import OS_ACCESS, Stage, TaskSpec
 
 if TYPE_CHECKING:
+    from groundzero.clusters import Cluster
     from groundzero.core.config import Settings
     from groundzero.core.models import ConfigSet, ConfigSetWrite
+    from groundzero.dnscheck import DnsLookup
     from groundzero.esxi.models import EsxiNetworkConfig, EsxiStorage
     from groundzero.esxi.ops import EsxiOps
     from groundzero.inventory.models import HostInventory
@@ -63,6 +65,7 @@ class Deps(Protocol):
     isos: IsoRepository
 
     media: MediaRegistry
+    dns: DnsLookup
 
     def client_factory(self, host: Host, password: str) -> RedfishClient: ...
     def bmc_password(self, host_id: str) -> str: ...
@@ -84,6 +87,7 @@ class Deps(Protocol):
     def create_config_set(self, req: ConfigSetWrite, source: str = "manual") -> ConfigSet: ...
     def get_config_set(self, set_id: str) -> ConfigSet: ...
     def get_appliance_profile(self, profile_id: str) -> ApplianceProfile: ...
+    def cluster_for_host(self, host_id: str) -> Cluster | None: ...
     def appliance_profile_secrets(self, profile_id: str) -> dict[str, str]: ...
     def save_appliance_profile(
         self, req: ApplianceProfileWrite, *, profile_id: str | None = None, source: str = "manual"

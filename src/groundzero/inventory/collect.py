@@ -161,6 +161,10 @@ async def collect_inventory(
     bios_raw = await _optional_json(client, _link(system, "Bios"))
     bios = parse_bios(bios_raw, profile, system)
 
+    # The BMC's own name (cluster mode builds server names from it)
+    bmc_nics = await _optional_members(client, _link(manager or {}, "EthernetInterfaces")) if manager else []
+    bmc_nic = next((n for n in bmc_nics if n.get("HostName")), {})
+
     report(0.85, "Reading BMC capabilities and license")
     capabilities = await discover_capabilities(client, system, manager)
     license_info = await profile.license(client, identity)
@@ -182,6 +186,8 @@ async def collect_inventory(
         bios=bios,
         bmc=BmcInfo(
             vendor=identity.vendor.value,
+            hostname=bmc_nic.get("HostName") or None,
+            fqdn=bmc_nic.get("FQDN") or None,
             firmware_version=(manager or {}).get("FirmwareVersion"),
             redfish_version=identity.redfish_version,
             license=license_info,

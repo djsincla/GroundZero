@@ -756,3 +756,41 @@ def test_configure_bios_from_the_pipeline(page: Page, tmp_path: Path) -> None:
         )
     finally:
         gz.stop()
+
+
+def test_cluster_names_servers_from_the_bmc_and_checks_dns(page: Page, tmp_path: Path) -> None:
+    from .conftest import _simulated
+
+    gz = _simulated(tmp_path, GROUNDZERO_SIMULATE_BMC_HOSTNAME="idrac-esx01",
+                    GROUNDZERO_SIMULATE_DNS='{"esx01.lab.example": "192.0.2.101"}')  # fmt: skip
+    gz.start()
+    try:
+        assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "rack1-u10").code == 0
+        settings = {"netmask": "255.255.255.0", "gateway": "192.0.2.1", "nameservers": ["192.0.2.53"],
+                    "vlan_id": 100, "install_nic": "vmnic0", "extra_uplinks": ["vmnic1"],
+                    "install_disk": {"mode": "first-match", "value": "DELLBOSS"}}  # fmt: skip
+        with gz.api() as api:
+            api.post("/api/v1/config-sets", json={"name": "lab", "os_family": "esxi", "settings": settings})
+        _open(page, gz)
+        _main_nav(page, "Clusters")
+        page.get_by_role("link", name="New cluster").first.click()
+        page.get_by_label("Name", exact=True).fill("lab-a")
+        page.get_by_label("First IP").fill("192.0.2.101")
+        page.get_by_label("Last IP").fill("192.0.2.103")
+        page.get_by_label("DNS domain").fill("lab.example")
+        page.get_by_label("Strip from the BMC name (prefix)").fill("idrac-")
+        expect(
+            page.get_by_label("Require a passing DNS check before install")
+        ).not_to_be_checked()  # an option
+        page.get_by_role("button", name="Create").click()
+
+        page.get_by_role("button", name="Add server").click()
+        expect(page.locator(".toast").last).to_contain_text("rack1-u10 is esx01 (192.0.2.101)")
+        row = page.locator('tr[data-member="esx01"]')
+        expect(row).to_contain_text("idrac-esx01")
+        expect(row).to_contain_text("esx01.lab.example")
+        expect(row).to_contain_text("not checked")
+        row.get_by_role("button", name="Verify DNS").click()
+        expect(page.locator('tr[data-member="esx01"]')).to_contain_text("matches", timeout=20_000)
+    finally:
+        gz.stop()

@@ -74,6 +74,7 @@ OUTPUT_TITLES = {
     "holorouter": "Holorouter",
     "appliance": "Appliance",
     "bios": "BIOS changes",
+    "dns": "DNS records",
     "staged": "Staged binaries",
     "holodeck": "Holodeck",
     OS_ACCESS: "OS access",
