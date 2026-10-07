@@ -33,7 +33,9 @@ _ENABLE = {"DISABLED": "ENABLED", "DISABLE": "ENABLE", "OFF": "ON", "FALSE": "TR
 
 
 class BiosChange(BaseModel):
-    setting: str = Field(description="cpu_virtualization, iommu or boot_mode")
+    setting: str | None = Field(
+        default=None, description="cpu_virtualization, iommu or boot_mode; null for a profile's own setting"
+    )
     attribute: str = Field(description="The vendor's BIOS attribute, e.g. ProcVirtualization")
     before: str | bool | int | None
     after: str | bool | int

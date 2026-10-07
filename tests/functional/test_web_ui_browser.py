@@ -927,3 +927,53 @@ def test_a_cluster_runs_its_spec_on_every_member(page: Page, tmp_path: Path) -> 
         expect(runs.locator('[data-step="storage.read"]')).to_have_attribute("data-status", "succeeded")
     finally:
         gz.stop()
+
+
+def test_capture_edit_and_apply_a_bios_profile(page: Page, tmp_path: Path) -> None:
+    from .conftest import _simulated
+
+    gz = _simulated(tmp_path, GROUNDZERO_BIOS_POLL_SECONDS="0.2")
+    gz.start()
+    try:
+        assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+        assert gz.cli("run", "esxi1", "discover", timeout=120).code == 0
+        _open(page, gz)
+        _main_nav(page, "Config sets")
+        page.get_by_role("button", name="New BIOS profile…").click()
+        dialog = page.locator("dialog")
+        dialog.get_by_label("Name").fill("lab")
+        dialog.get_by_role("button", name="Create").click()
+        expect(page.get_by_role("heading", name="lab")).to_be_visible()
+        expect(page.locator(".page-header")).to_contain_text("captured from esxi1")
+
+        logical = page.locator('[data-attribute="LogicalProc"]')
+        expect(logical).to_contain_text("Logical Processor")
+        logical.locator("select").select_option("Disabled")
+        page.locator('[data-attribute="NumLock"]').get_by_role("button", name="Remove").click()
+        expect(page.locator('[data-attribute="NumLock"]')).to_have_count(0)
+        page.get_by_label("Add a setting").fill("NumLock")
+        page.get_by_role("button", name="Add", exact=True).click()
+        expect(page.locator('[data-attribute="NumLock"]')).to_be_visible()
+        page.get_by_role("button", name="Save").click()
+        expect(page.locator(".toast").last).to_contain_text("Saved lab")
+
+        _main_nav(page, "Hosts")
+        page.get_by_role("link", name="esxi1").click()
+        page.locator('[data-task="bios.configure"]').get_by_role("button", name="Run").click()
+        dialog = page.locator("dialog")
+        dialog.get_by_label("BIOS profile").select_option(index=1)  # "lab (N settings)"
+        change = dialog.locator('[data-change="LogicalProc"]')
+        expect(change).to_contain_text("Enabled")
+        expect(change).to_contain_text("Disabled")
+        dialog.get_by_label('Type "configure bios esxi1" to confirm').fill("configure bios esxi1")
+        dialog.get_by_role("button", name="Configure and reboot").click()
+        drawer = page.locator("#drawer")
+        expect(drawer.locator('[data-step="verify"]')).to_have_attribute(
+            "data-status", "succeeded", timeout=30_000
+        )
+        page.reload()
+        expect(page.locator('[data-task="bios.configure"] [data-role="output"]')).to_contain_text(
+            "LogicalProc Enabled → Disabled"
+        )
+    finally:
+        gz.stop()

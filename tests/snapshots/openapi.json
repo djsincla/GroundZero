@@ -130,6 +130,291 @@
         "title": "ApplianceProfileWrite",
         "type": "object"
       },
+      "BiosCapture": {
+        "properties": {
+          "attributes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which settings to keep; default: every settable choice (lists, numbers, on/off), leaving out free text such as asset tags and iSCSI names, which belong to one server",
+            "title": "Attributes"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BiosCapture",
+        "type": "object"
+      },
+      "BiosChange": {
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "After"
+          },
+          "attribute": {
+            "description": "The vendor's BIOS attribute, e.g. ProcVirtualization",
+            "title": "Attribute",
+            "type": "string"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "setting": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "cpu_virtualization, iommu or boot_mode; null for a profile's own setting",
+            "title": "Setting"
+          }
+        },
+        "required": [
+          "attribute",
+          "before",
+          "after"
+        ],
+        "title": "BiosChange",
+        "type": "object"
+      },
+      "BiosImport": {
+        "properties": {
+          "content": {
+            "description": "The file: {attribute: value}, {\"Attributes\": {...}}, or a Dell SCP JSON",
+            "title": "Content",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "registry": {
+            "description": "The registry to check the file against",
+            "title": "Registry",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "registry",
+          "content"
+        ],
+        "title": "BiosImport",
+        "type": "object"
+      },
+      "BiosPlan": {
+        "description": "What Configure BIOS would write now, judged from the latest inventory.",
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/BiosChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "inventory_at": {
+            "format": "date-time",
+            "title": "Inventory At",
+            "type": "string"
+          },
+          "unsupported": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported",
+            "type": "array"
+          }
+        },
+        "required": [
+          "changes",
+          "inventory_at"
+        ],
+        "title": "BiosPlan",
+        "type": "object"
+      },
+      "BiosProfile": {
+        "properties": {
+          "attributes": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "description": "BIOS attribute \u2192 value; only these are written, the rest are left alone",
+            "minProperties": 1,
+            "title": "Attributes",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The server model the registry came from",
+            "title": "Model"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "registry": {
+            "description": "The registry the profile is checked against (GET /bios-registries)",
+            "title": "Registry",
+            "type": "string"
+          },
+          "source": {
+            "default": "manual",
+            "description": "manual, imported, or captured from <host>",
+            "title": "Source",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "registry",
+          "attributes",
+          "id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "BiosProfile",
+        "type": "object"
+      },
+      "BiosProfileWrite": {
+        "properties": {
+          "attributes": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "description": "BIOS attribute \u2192 value; only these are written, the rest are left alone",
+            "minProperties": 1,
+            "title": "Attributes",
+            "type": "object"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "registry": {
+            "description": "The registry the profile is checked against (GET /bios-registries)",
+            "title": "Registry",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "registry",
+          "attributes"
+        ],
+        "title": "BiosProfileWrite",
+        "type": "object"
+      },
       "Cluster": {
         "properties": {
           "config_set_id": {
@@ -1972,6 +2257,77 @@
         "title": "PreviewStep",
         "type": "object"
       },
+      "RegistryInfo": {
+        "description": "A cached registry, as the editor reads it: settable attributes only, in BIOS setup order.",
+        "properties": {
+          "attributes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Attributes",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "description": "Cache key: <model>|<registry id>",
+            "title": "Key",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "required": [
+          "key",
+          "id",
+          "model",
+          "attributes"
+        ],
+        "title": "RegistryInfo",
+        "type": "object"
+      },
+      "RegistrySummary": {
+        "properties": {
+          "fetched_at": {
+            "title": "Fetched At",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "required": [
+          "key",
+          "model",
+          "fetched_at"
+        ],
+        "title": "RegistrySummary",
+        "type": "object"
+      },
       "Run": {
         "properties": {
           "cluster_id": {
@@ -2951,6 +3307,346 @@
         ]
       }
     },
+    "/api/v1/bios-profiles": {
+      "get": {
+        "operationId": "list_bios_profiles_api_v1_bios_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BiosProfile"
+                  },
+                  "title": "Response List Bios Profiles Api V1 Bios Profiles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Bios Profiles",
+        "tags": [
+          "bios"
+        ]
+      },
+      "post": {
+        "description": "Every value is checked against the registry: allowed values, bounds, read-only. No passwords.",
+        "operationId": "create_bios_profile_api_v1_bios_profiles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiosProfileWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiosProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Bios Profile",
+        "tags": [
+          "bios"
+        ]
+      }
+    },
+    "/api/v1/bios-profiles/import": {
+      "post": {
+        "description": "From a file: {attribute: value}, {\"Attributes\": {...}}, or a Dell Server Configuration Profile JSON.\nSettings the BIOS won't take (read-only, passwords) are left out.",
+        "operationId": "import_bios_profile_api_v1_bios_profiles_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiosImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiosProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Import Bios Profile",
+        "tags": [
+          "bios"
+        ]
+      }
+    },
+    "/api/v1/bios-profiles/{profile_id}": {
+      "delete": {
+        "description": "Refused while a spec's Configure BIOS step uses it.",
+        "operationId": "delete_bios_profile_api_v1_bios_profiles__profile_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Bios Profile",
+        "tags": [
+          "bios"
+        ]
+      },
+      "get": {
+        "operationId": "get_bios_profile_api_v1_bios_profiles__profile_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiosProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bios Profile",
+        "tags": [
+          "bios"
+        ]
+      },
+      "put": {
+        "operationId": "update_bios_profile_api_v1_bios_profiles__profile_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiosProfileWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiosProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Bios Profile",
+        "tags": [
+          "bios"
+        ]
+      }
+    },
+    "/api/v1/bios-registries": {
+      "get": {
+        "operationId": "list_bios_registries_api_v1_bios_registries_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RegistrySummary"
+                  },
+                  "title": "Response List Bios Registries Api V1 Bios Registries Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Bios Registries",
+        "tags": [
+          "bios"
+        ]
+      }
+    },
+    "/api/v1/bios-registries/{key}": {
+      "get": {
+        "operationId": "get_bios_registry_api_v1_bios_registries__key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Bios Registry",
+        "tags": [
+          "bios"
+        ]
+      }
+    },
     "/api/v1/clusters": {
       "get": {
         "operationId": "list_clusters_api_v1_clusters_get",
@@ -3754,6 +4450,186 @@
         "summary": "Get Host",
         "tags": [
           "hosts"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/bios-plan": {
+      "get": {
+        "description": "What Configure BIOS would write now, with or without a profile (from the inventory; no BMC calls).",
+        "operationId": "bios_plan_api_v1_hosts__host_id__bios_plan_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "profile_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Profile Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiosPlan"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bios Plan",
+        "tags": [
+          "bios"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/bios-profiles/capture": {
+      "post": {
+        "description": "A profile from the server's current BIOS settings (its latest inventory). Reads the registry from the\nBMC if it isn't cached yet (read-only).",
+        "operationId": "capture_bios_profile_api_v1_hosts__host_id__bios_profiles_capture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BiosCapture"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BiosProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Capture Bios Profile",
+        "tags": [
+          "bios"
+        ]
+      }
+    },
+    "/api/v1/hosts/{host_id}/bios-registry": {
+      "get": {
+        "description": "The settable BIOS attributes of this server, in setup order. Cached per model and BIOS version;\nread from the BMC (read-only) the first time or with ``refresh``.",
+        "operationId": "host_bios_registry_api_v1_hosts__host_id__bios_registry_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "host_id",
+            "required": true,
+            "schema": {
+              "title": "Host Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Host Bios Registry",
+        "tags": [
+          "bios"
         ]
       }
     },

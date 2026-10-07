@@ -34,12 +34,15 @@ if TYPE_CHECKING:
     from groundzero.media.registry import MediaRegistry
     from groundzero.ova.profiles import ApplianceProfile, ApplianceProfileWrite
     from groundzero.readiness import ReadinessReport
+    from groundzero.redfish.bios_profiles import BiosProfile
     from groundzero.redfish.client import RedfishClient
 
 __all__ = ["OS_ACCESS", "Deps", "Inputs", "Module", "NoParams", "Prepared", "Stage"]
 
 M = TypeVar("M", bound=BaseModel)
 RunFunc = Callable[[JobContext], Awaitable[dict[str, Any]]]
+# What a module's parameters point at, for judging "not needed" (e.g. a BIOS profile by id); None if gone.
+Lookup = Callable[[str, str], Any]
 
 
 class NoParams(BaseModel):
@@ -87,6 +90,7 @@ class Deps(Protocol):
     def create_config_set(self, req: ConfigSetWrite, source: str = "manual") -> ConfigSet: ...
     def get_config_set(self, set_id: str) -> ConfigSet: ...
     def get_appliance_profile(self, profile_id: str) -> ApplianceProfile: ...
+    def get_bios_profile(self, profile_id: str) -> BiosProfile: ...
     def cluster_for_host(self, host_id: str) -> Cluster | None: ...
     def appliance_profile_secrets(self, profile_id: str) -> dict[str, str]: ...
     def save_appliance_profile(
@@ -173,7 +177,9 @@ class Module:
         """One line describing this module's output, for the pipeline view."""
         return self.produces or self.id
 
-    def satisfied(self, outputs: dict[str, dict[str, Any]], params: dict[str, Any]) -> str | None:
+    def satisfied(
+        self, outputs: dict[str, dict[str, Any]], params: dict[str, Any], lookup: Lookup | None = None
+    ) -> str | None:
         """Why there is nothing to do, judged from this host's current outputs and the parameters a spec
         would run it with (empty outside a spec); None when there may be.
 

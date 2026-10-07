@@ -15,6 +15,8 @@ from typing import Any
 from groundzero.clusters import Cluster
 from groundzero.core.models import ConfigSet, Host, Job, JobError, JobStatus, JobStep, OsAccess
 from groundzero.ova.profiles import ApplianceProfile
+from groundzero.redfish.bios_profiles import BiosProfile
+from groundzero.redfish.bios_registry import BiosRegistry
 from groundzero.specs import Run, Spec
 
 _SCHEMA = """
@@ -102,6 +104,19 @@ CREATE TABLE IF NOT EXISTS clusters (
     updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS specs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    data TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bios_registries (
+    key TEXT PRIMARY KEY,
+    model TEXT,
+    data TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bios_profiles (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     data TEXT NOT NULL,
@@ -485,6 +500,56 @@ class Store:
             count += 1
         return count
 
+    # ── BIOS registries (cached per model and version) and BIOS profiles ─
+    def save_bios_registry(self, key: str, model: str | None, registry: BiosRegistry) -> None:
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO bios_registries (key, model, data, fetched_at) VALUES (?, ?, ?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at",
+                (key, model, registry.model_dump_json(), utcnow().isoformat()),
+            )
+
+    def get_bios_registry(self, key: str) -> tuple[BiosRegistry, str | None] | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT data, model FROM bios_registries WHERE key = ?", (key,)).fetchone()
+        return (BiosRegistry.model_validate_json(row["data"]), row["model"]) if row else None
+
+    def list_bios_registries(self) -> list[tuple[str, str | None, str]]:
+        """(key, model, fetched_at) of every cached registry."""
+        with self._tx() as cur:
+            rows = cur.execute("SELECT key, model, fetched_at FROM bios_registries ORDER BY key").fetchall()
+        return [(r["key"], r["model"], r["fetched_at"]) for r in rows]
+
+    def save_bios_profile(self, profile: BiosProfile) -> None:
+        data = profile.model_dump_json(exclude={"id", "name", "created_at", "updated_at"})
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO bios_profiles (id, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET name = excluded.name, data = excluded.data,"
+                " updated_at = excluded.updated_at",
+                (
+                    profile.id,
+                    profile.name,
+                    data,
+                    profile.created_at.isoformat(),
+                    profile.updated_at.isoformat(),
+                ),
+            )
+
+    def list_bios_profiles(self) -> list[BiosProfile]:
+        with self._tx() as cur:
+            rows = cur.execute("SELECT * FROM bios_profiles ORDER BY name").fetchall()
+        return [_row_to_bios_profile(r) for r in rows]
+
+    def get_bios_profile(self, profile_id: str) -> BiosProfile | None:
+        with self._tx() as cur:
+            row = cur.execute("SELECT * FROM bios_profiles WHERE id = ?", (profile_id,)).fetchone()
+        return _row_to_bios_profile(row) if row else None
+
+    def delete_bios_profile(self, profile_id: str) -> bool:
+        with self._tx() as cur:
+            return cur.execute("DELETE FROM bios_profiles WHERE id = ?", (profile_id,)).rowcount > 0
+
     # ── appliance profiles ───────────────────────────────────────────────
     def save_appliance_profile(
         self,
@@ -818,6 +883,18 @@ def _row_to_profile(row: sqlite3.Row) -> ApplianceProfile:
         source=row["source"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
+    )
+
+
+def _row_to_bios_profile(row: sqlite3.Row) -> BiosProfile:
+    return BiosProfile.model_validate(
+        {
+            **json.loads(row["data"]),
+            "id": row["id"],
+            "name": row["name"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
     )
 
 

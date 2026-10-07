@@ -123,6 +123,7 @@ def parse_bios(raw: dict[str, Any], profile: VendorProfile, system: dict[str, An
         cpu_virtualization=profile.cpu_virtualization(attributes),
         iommu=profile.iommu(attributes),
         attributes=attributes,
+        registry_id=raw.get("AttributeRegistry"),
     )
 
 

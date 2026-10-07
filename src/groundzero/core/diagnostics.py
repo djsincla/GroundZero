@@ -23,10 +23,11 @@ MAX_EVENTS = 4000
 MAX_BODY_CHARS = 16_000
 REDACTED = "«redacted»"
 
-# Whole key names (or their last _-./ separated part): "Password", "root_password", "X-Auth-Token".
+# Whole key names (or their last _-./ separated part): "Password", "root_password", "X-Auth-Token"; and any
+# key ending in password or secret, as BIOS attributes are named ("SetupPassword", "...ChapSecret").
 _SENSITIVE_KEY = re.compile(
-    r"(?:^|[_\-.])(?:pass(?:word|wd|phrase)?|secret|token|authorization|cookie|api[-_]?key|private[-_]?key"
-    r"|credentials?)$",
+    r"(?:password|passwd|passphrase|secret)$"
+    r"|(?:^|[_\-.])(?:pass|token|authorization|cookie|api[-_]?key|private[-_]?key|credentials?)$",
     re.IGNORECASE,
 )
 _MEDIA_TOKEN = re.compile(r"(/media/)[^/\s\"']+(/)")

@@ -679,6 +679,75 @@ def config_delete(name: str) -> None:
     console.print(f"Deleted config set {escape(cs['name'])}")
 
 
+# ── BIOS profiles ────────────────────────────────────────────────────────
+bios_app = typer.Typer(
+    help="BIOS profiles: saved BIOS settings that Configure BIOS applies.", no_args_is_help=True
+)
+app.add_typer(bios_app, name="bios-profile")
+
+
+def _resolve_bios_profile(ref: str) -> dict[str, Any]:
+    for profile in _call("GET", "/bios-profiles"):
+        if ref in (profile["id"], profile["name"]):
+            return dict(profile)
+    _fail(f"no BIOS profile matches '{ref}' (see `groundzero bios-profile list`)")
+
+
+def _settings(profile: dict[str, Any]) -> str:
+    n = len(profile["attributes"])
+    return f"{n} setting{'' if n == 1 else 's'}"
+
+
+@bios_app.command("list")
+def bios_list() -> None:
+    table = Table("Name", "Model", "Settings", "Source", "Updated")
+    for p in _call("GET", "/bios-profiles"):
+        cells = (p["name"], p["model"] or "-", str(len(p["attributes"])), p["source"], p["updated_at"][:16])
+        table.add_row(*(Text(c) for c in cells))
+    console.print(table)
+
+
+@bios_app.command("show")
+def bios_show(name: str) -> None:
+    console.print_json(data=_resolve_bios_profile(name))
+
+
+@bios_app.command("capture")
+def bios_capture(
+    host: str,
+    name: Annotated[str, typer.Option(help="Name for the new profile")],
+    keep: Annotated[list[str] | None, typer.Option(help="Only these attributes (repeatable)")] = None,
+) -> None:
+    """A profile from the server's current BIOS settings (its latest inventory; run discover first)."""
+    h = _resolve_host(host)
+    profile = _call(
+        "POST", f"/hosts/{h['id']}/bios-profiles/capture", json={"name": name, "attributes": keep}
+    )
+    console.print(f"Captured {_settings(profile)} from {escape(h['name'])} as {escape(name)}")
+
+
+@bios_app.command("import")
+def bios_import(
+    file: Annotated[
+        Path, typer.Argument(help="JSON: {attribute: value}, or a Dell Server Configuration Profile")
+    ],
+    name: Annotated[str, typer.Option(help="Name for the new profile")],
+    host: Annotated[str, typer.Option(help="A server whose BIOS the file is checked against")],
+) -> None:
+    h = _resolve_host(host)
+    registry = _call("GET", f"/hosts/{h['id']}/bios-registry")
+    body = {"name": name, "registry": registry["key"], "content": file.read_text()}
+    profile = _call("POST", "/bios-profiles/import", json=body)
+    console.print(f"Imported {_settings(profile)} as {escape(name)}")
+
+
+@bios_app.command("delete")
+def bios_delete(name: str) -> None:
+    profile = _resolve_bios_profile(name)
+    _call("DELETE", f"/bios-profiles/{profile['id']}")
+    console.print(f"Deleted BIOS profile {escape(profile['name'])}")
+
+
 # ── specs: the jobs picked for a server or a cluster, run as one ─────────
 spec_app = typer.Typer(help="Specs: the jobs you pick for a server or cluster.", no_args_is_help=True)
 app.add_typer(spec_app, name="spec")
@@ -977,6 +1046,7 @@ def dev_capture(
 ) -> None:
     """Record sanitized, read-only Redfish responses for test fixtures (talks to the BMC directly)."""
     from groundzero.inventory.collect import collect_inventory
+    from groundzero.redfish.bios_registry import fetch_registry
     from groundzero.redfish.capture import Recorder
     from groundzero.redfish.client import RedfishClient
     from groundzero.redfish.detect import detect
@@ -992,6 +1062,10 @@ def dev_capture(
             console.print("Reading the storage layout", style="dim")
             identity = await detect(client)
             await read_storage_layout(client, identity.system_path, dell=identity.vendor.value == "dell")
+            console.print("Reading the BIOS attribute registry", style="dim")
+            system = await client.get_json(identity.system_path)
+            bios_path = (system.get("Bios") or {}).get("@odata.id") or f"{identity.system_path}/Bios"
+            await fetch_registry(client, await client.get_json(bios_path))
         return [(r.method, r.path, r.status) for r in client.request_log]
 
     log = asyncio.run(run())

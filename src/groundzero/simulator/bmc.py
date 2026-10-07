@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from groundzero.redfish.bios_registry import BiosRegistry, parse_registry
 from groundzero.simulator.esxi import SimulatedEsxi
 
 logger = logging.getLogger(__name__)
@@ -132,12 +133,21 @@ class SimulatedBmc:
             )
         return httpx.Response(200, json=data)
 
+    def _bios_registry(self, bios_path: str) -> BiosRegistry | None:
+        body = self.responses.get(f"{bios_path}/BiosRegistry")
+        return parse_registry(body) if body else None
+
     def _patch(self, path: str, body: dict[str, Any]) -> httpx.Response:
         if path.endswith("/Bios/Settings"):
             current = self.responses.get(path.removesuffix("/Settings"), {}).get("Attributes", {})
             unknown = sorted(k for k in body.get("Attributes", {}) if k not in current)
             if unknown:
                 return _error(400, f"Unknown BIOS attribute(s): {', '.join(unknown)}")
+            registry = self._bios_registry(path.removesuffix("/Settings"))
+            if registry is not None:  # as the iDRAC does: read-only and out-of-range values are refused
+                problems = registry.check(body.get("Attributes", {}))
+                if problems:
+                    return _error(400, "; ".join(f"{name}: {message}" for name, message, _ in problems))
             self.pending_bios.update(body.get("Attributes", {}))
             return httpx.Response(202, json={})
         if path.endswith("/Attributes"):

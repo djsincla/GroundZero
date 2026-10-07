@@ -546,6 +546,7 @@ async function applianceDialog(ctx, prefill = {}) {
 async function biosDialog(ctx) {
   const inv = await maybe(api("GET", `/hosts/${ctx.id}/outputs/inventory`));
   const b = inv?.bios || {};
+  const profiles = (await api("GET", "/bios-profiles")).filter((p) => !p.model || !ctx.host.model || p.model === ctx.host.model);
   const rows = [
     ["cpu_virtualization", "Processor virtualization (VT-x / AMD-V)", b.cpu_virtualization, b.cpu_virtualization === false],
     ["iommu", "IOMMU (VT-d / AMD-Vi)", b.iommu, b.iommu === false],
@@ -555,8 +556,26 @@ async function biosDialog(ctx) {
   const shown = (v) => (v === true ? "on" : v === false ? "off" : v || "not reported");
   const phrase = `configure bios ${ctx.host.name}`;
   const input = h("input", { id: "bios-confirm", autocomplete: "off" });
+  const profileSelect = h("select", { id: "bios-profile" }, h("option", { value: "" }, "None: only the Holodeck basics below"),
+    profiles.map((p) => h("option", { value: p.id }, `${p.name} (${Object.keys(p.attributes).length} settings)`)));
+  const planBox = h("div", { "data-role": "bios-plan" });
+  async function showPlan() {
+    if (!profileSelect.value) { planBox.replaceChildren(); return; }
+    try {
+      const plan = await api("GET", `/hosts/${ctx.id}/bios-plan?profile_id=${profileSelect.value}`);
+      planBox.replaceChildren(plan.changes.length
+        ? table(["Setting", "Now", "After"], plan.changes.map((c) => h("tr", { "data-change": c.attribute },
+            h("td", { class: "mono" }, c.attribute), h("td", {}, String(c.before ?? "—")), h("td", {}, h("strong", {}, String(c.after))))))
+        : h("p", { class: "muted" }, "The server already matches this profile: nothing to write."));
+    } catch (e) { planBox.replaceChildren(h("p", { class: "error" }, e.message)); }
+  }
+  profileSelect.addEventListener("change", showPlan);
   const { submit } = openDialog(`Configure BIOS on ${ctx.host.name}`, [
-    h("p", { class: "muted" }, "Writes the settings to the BIOS as pending changes, restarts the server once and waits until the BIOS reports them. Only what is wrong is changed."),
+    h("p", { class: "muted" }, "Writes the settings to the BIOS as pending changes, restarts the server once and waits until the BIOS reports them. Only what differs is changed."),
+    h("label", { for: profileSelect.id }, "BIOS profile"), profileSelect,
+    profiles.length ? null : h("p", { class: "help" }, "No BIOS profiles for this model yet: make one on the Config sets page."),
+    planBox,
+    h("p", { class: "eyebrow" }, "Holodeck basics (ticked where the inventory shows them off)"),
     h("ul", { class: "plan" }, rows.map(([key, title, now, wrong]) => {
       const box = h("input", { type: "checkbox", checked: wrong, "aria-label": title });
       boxes[key] = box;
@@ -566,10 +585,11 @@ async function biosDialog(ctx) {
     h("div", { class: "notice" }, `${ctx.host.name} reboots. Anything running on it, including the Holorouter and other VMs, goes down with it and comes back only if it is set to start automatically.`),
     h("label", { for: "bios-confirm" }, `Type "${phrase}" to confirm`), input,
   ], {
-    submitLabel: "Configure and reboot", submitClass: "danger",
+    submitLabel: "Configure and reboot", submitClass: "danger", wide: true,
     onSubmit: async () => {
       const settings = Object.entries(boxes).filter(([, box]) => box.checked).map(([k]) => k);
-      const job = await api("POST", `/hosts/${ctx.id}/tasks/bios.configure`, { params: { settings }, confirm: input.value });
+      const params = { settings, profile_id: profileSelect.value || null };
+      const job = await api("POST", `/hosts/${ctx.id}/tasks/bios.configure`, { params, confirm: input.value });
       showJobDrawer(job, { title: `Configure BIOS on ${ctx.host.name}`, onDone: refresh });
     },
   });

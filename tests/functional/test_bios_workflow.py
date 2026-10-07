@@ -105,3 +105,129 @@ def test_a_bios_that_never_applies_the_change_fails_clearly(bios_job_fails: Grou
     run = gz.cli("run", "esxi1", "bios.configure", "--confirm", "configure bios esxi1", timeout=120)
     assert run.code != 0
     assert "did not apply the change" in run.output and "Job Queue" in run.output
+
+
+def test_capture_a_bios_profile_change_it_and_apply_it(simulated_r740xd: GroundZero) -> None:
+    gz = simulated_r740xd
+    assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+    with gz.api() as api:
+        host = api.get("/api/v1/hosts").json()[0]["id"]
+        early = api.post(f"/api/v1/hosts/{host}/bios-profiles/capture", json={"name": "lab"})
+        assert early.status_code == 409 and "Discover the hardware first" in early.text
+    assert gz.cli("run", "esxi1", "discover", timeout=120).code == 0
+    with gz.api() as api:
+        captured = api.post(f"/api/v1/hosts/{host}/bios-profiles/capture", json={"name": "lab"})
+        assert captured.status_code == 201, captured.text
+        profile = captured.json()
+        assert profile["source"] == "captured from esxi1" and profile["model"] == "PowerEdge R740xd"
+        assert profile["attributes"]["LogicalProc"] == "Enabled" and "AssetTag" not in profile["attributes"]
+        registry = api.get(f"/api/v1/hosts/{host}/bios-registry").json()
+        assert (
+            registry["key"] == profile["registry"]
+            and registry["key"] == "PowerEdge R740xd|BiosAttributeRegistry.v1_0_3"
+        )
+        assert all(not a["read_only"] for a in registry["attributes"])  # the editor only offers settable ones
+
+        body = {**profile, "attributes": {"LogicalProc": "Maybe", "SystemModelName": "x"}}
+        refused = api.put(f"/api/v1/bios-profiles/{profile['id']}", json=body)
+        assert refused.status_code == 422
+        assert {tuple(e["loc"]) for e in refused.json()["errors"]} == {
+            ("attributes", "LogicalProc"),
+            ("attributes", "SystemModelName"),
+        }
+
+        lean = {
+            "name": "No HT",
+            "registry": profile["registry"],
+            "attributes": {"LogicalProc": "Disabled", "NumLock": "On"},
+        }
+        no_ht = api.post("/api/v1/bios-profiles", json=lean).json()
+        plan = api.get(f"/api/v1/hosts/{host}/bios-plan", params={"profile_id": no_ht["id"]}).json()
+        assert [(c["attribute"], c["before"], c["after"]) for c in plan["changes"]] == [
+            ("LogicalProc", "Enabled", "Disabled")
+        ]
+
+    run = gz.cli(
+        "run",
+        "esxi1",
+        "bios.configure",
+        "-p",
+        f"profile_id={no_ht['id']}",
+        "--confirm",
+        "configure bios esxi1",
+        timeout=120,
+    )
+    assert run.code == 0, run.output
+    job_id = run.output.split("as job ")[1].split()[0]
+    assert _writes(gz, job_id) == [
+        "PATCH /redfish/v1/Systems/System.Embedded.1/Bios/Settings",
+        "POST /redfish/v1/Systems/System.Embedded.1/Actions/ComputerSystem.Reset",
+    ]
+    with gz.api() as api:
+        assert api.get(f"/api/v1/hosts/{host}/outputs/bios").json()["applied"] == {"LogicalProc": "Disabled"}
+        spec = api.post(
+            "/api/v1/specs",
+            json={
+                "name": "No HT",
+                "steps": [{"task": "bios.configure", "params": {"profile_id": no_ht["id"]}}],
+            },
+        ).json()
+        api.put(f"/api/v1/hosts/{host}/spec", json={"spec_id": spec["id"]})
+        state = next(
+            t
+            for s in api.get(f"/api/v1/hosts/{host}/pipeline").json()["stages"]
+            for t in s["tasks"]
+            if t["id"] == "bios.configure"
+        )
+        assert state["state"] == "done"  # applied, and the inventory read afterwards still matches
+        changed = {**lean, "attributes": {"LogicalProc": "Disabled", "NumLock": "Off"}}
+        assert api.put(f"/api/v1/bios-profiles/{no_ht['id']}", json=changed).status_code == 200
+        state = next(
+            t
+            for s in api.get(f"/api/v1/hosts/{host}/pipeline").json()["stages"]
+            for t in s["tasks"]
+            if t["id"] == "bios.configure"
+        )
+        assert state["state"] == "ready"  # the profile moved on: due again
+        in_use = api.delete(f"/api/v1/bios-profiles/{no_ht['id']}")
+        assert in_use.status_code == 409 and "spec No HT" in in_use.text
+
+
+def test_import_a_dell_scp_as_a_bios_profile(simulated_r740xd: GroundZero) -> None:
+    gz = simulated_r740xd
+    assert gz.cli("hosts", "add", "--bmc", "198.51.100.11", "--name", "esxi1").code == 0
+    assert gz.cli("run", "esxi1", "discover", timeout=120).code == 0
+    scp = {
+        "SystemConfiguration": {
+            "Components": [
+                {
+                    "FQDD": "BIOS.Setup.1-1",
+                    "Attributes": [
+                        {"Name": "SysProfile", "Value": "PerfOptimized"},
+                        {"Name": "SystemModelName", "Value": "PowerEdge R740xd"},
+                        {"Name": "ControlledTurboMinusBin", "Value": "1"},
+                    ],
+                }
+            ]
+        }
+    }
+    with gz.api() as api:
+        host = api.get("/api/v1/hosts").json()[0]["id"]
+        key = api.get(f"/api/v1/hosts/{host}/bios-registry").json()["key"]
+        imported = api.post(
+            "/api/v1/bios-profiles/import", json={"name": "perf", "registry": key, "content": json.dumps(scp)}
+        )
+        assert imported.status_code == 201, imported.text
+        assert imported.json()["attributes"] == {"SysProfile": "PerfOptimized", "ControlledTurboMinusBin": 1}
+        assert imported.json()["source"] == "imported"  # the read-only model name was left out
+        bad = api.post("/api/v1/bios-profiles/import", json={"name": "x", "registry": key, "content": "nope"})
+        assert bad.status_code == 422 and "Not JSON" in bad.text
+
+    path = gz.home / "scp.json"
+    path.write_text(json.dumps(scp))
+    cli = gz.cli("bios-profile", "import", str(path), "--name", "perf-cli", "--host", "esxi1")
+    assert cli.code == 0 and "Imported 2 settings as perf-cli" in cli.output
+    captured = gz.cli("bios-profile", "capture", "esxi1", "--name", "vt", "--keep", "ProcVirtualization")
+    assert captured.code == 0 and "Captured 1 setting from esxi1" in captured.output
+    listing = gz.cli("bios-profile", "list").output
+    assert "perf-cli" in listing and "captured from esxi1" in listing

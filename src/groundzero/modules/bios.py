@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,9 +10,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from groundzero.core.jobs import JobContext
 from groundzero.core.models import Host
 from groundzero.inventory.models import BiosSettings, HostInventory
-from groundzero.modules.base import Deps, Inputs, Module, Prepared, Stage
+from groundzero.modules.base import Deps, Inputs, Lookup, Module, Prepared, Stage
 from groundzero.modules.outputs import BiosResult
 from groundzero.redfish import bios
+from groundzero.redfish.bios import BiosChange
+from groundzero.redfish.bios_profiles import BiosProfile
 from groundzero.redfish.capabilities import discover_capabilities
 from groundzero.redfish.detect import Vendor, detect
 from groundzero.redfish.oem import profile_for
@@ -23,6 +26,35 @@ class BiosParams(BaseModel):
     settings: list[bios.Setting] | None = Field(
         default=None, description="What to turn on; default: whatever the latest inventory shows as wrong"
     )
+    profile_id: str | None = Field(
+        default=None,
+        description="A BIOS profile to apply as well: its settings that differ from now are written",
+    )
+
+
+def plan_bios(
+    vendor: str | None, current: BiosSettings, settings: Sequence[str] | None, profile: BiosProfile | None
+) -> tuple[list[BiosChange], list[str]]:
+    """What Configure BIOS would write: the baseline (virtualization, IOMMU, UEFI) where it's off, and a
+    profile's settings where they differ. A profile's own value wins for an attribute both touch."""
+    wanted = (
+        [str(x) for x in settings]
+        if settings is not None
+        else bios.wanted_from_inventory(current.cpu_virtualization, current.iommu, current.boot_mode)
+    )
+    try:
+        oem = profile_for(Vendor(vendor or "generic"))
+    except ValueError:
+        oem = profile_for(Vendor.GENERIC)
+    changes, unsupported = bios.plan_changes(current.attributes, oem, wanted)
+    if profile is not None:
+        changes = [c for c in changes if c.attribute not in profile.attributes]
+        changes += [
+            BiosChange(attribute=name, before=current.attributes.get(name), after=value)
+            for name, value in profile.attributes.items()
+            if current.attributes.get(name) != value
+        ]
+    return changes, unsupported
 
 
 class ConfigureBios(Module):
@@ -30,8 +62,9 @@ class ConfigureBios(Module):
     title = "Configure BIOS"
     stage = Stage.HARDWARE
     description = (
-        "Turn on processor virtualization, the IOMMU and UEFI boot mode where the inventory shows them off. "
-        "Reboots the server once: anything running on it goes down with it."
+        "Turn on processor virtualization, the IOMMU and UEFI boot mode where the inventory shows them off, "
+        "and apply a BIOS profile if one is given. Reboots the server once: anything running on it goes "
+        "down with it."
     )
     produces = "bios"
     requires = ("inventory",)
@@ -41,13 +74,20 @@ class ConfigureBios(Module):
     destructive = True
     Params = BiosParams
 
-    def satisfied(self, outputs: dict[str, dict[str, Any]], params: dict[str, Any]) -> str | None:
+    def satisfied(
+        self, outputs: dict[str, dict[str, Any]], params: dict[str, Any], lookup: Lookup | None = None
+    ) -> str | None:
         inventory = outputs.get("inventory")
         if inventory is None:
             return None
         b = BiosSettings.model_validate(inventory.get("bios") or {})
         if bios.wanted_from_inventory(b.cpu_virtualization, b.iommu, b.boot_mode):
             return None
+        profile = None
+        if params.get("profile_id"):
+            profile = lookup("bios_profile", str(params["profile_id"])) if lookup else None
+            if profile is None or any(b.attributes.get(k) != v for k, v in profile.attributes.items()):
+                return None  # the profile's settings aren't all there yet (or it's gone: let the run say so)
         right = [
             title
             for title, ok in (
@@ -67,6 +107,8 @@ class ConfigureBios(Module):
             if value is None
         ]
         said = f"Already on: {', '.join(right)}" if right else "Nothing to change"
+        if profile is not None:
+            said += f"; matches {profile.name} ({len(profile.attributes)} settings)"
         if unknown:
             said += f" (the BIOS doesn't report {', '.join(unknown)})"
         return said
@@ -75,34 +117,29 @@ class ConfigureBios(Module):
         changes = data.get("changes") or []
         if not changes:
             return "Nothing to change: the BIOS settings were already right"
-        return "Changed " + ", ".join(f"{c['attribute']} {c['before']} → {c['after']}" for c in changes)
+        shown = ", ".join(f"{c['attribute']} {c['before']} → {c['after']}" for c in changes[:4])
+        return "Changed " + shown + (f" and {len(changes) - 4} more" if len(changes) > 4 else "")
 
     def prepare(
         self, deps: Deps, host: Host, params: BiosParams, inputs: Inputs, confirm: str | None
     ) -> Prepared:
-        from groundzero.core.services import ConfirmationError  # avoid an import cycle
+        from groundzero.core.services import ConfirmationError, ConflictError  # avoid an import cycle
 
         inventory = inputs.require(
             "inventory", HostInventory, "Discover the hardware first (inventory or preflight)"
         )
-        b = inventory.bios
-        wanted: list[str] = (
-            [str(x) for x in params.settings]
-            if params.settings is not None
-            else bios.wanted_from_inventory(b.cpu_virtualization, b.iommu, b.boot_mode)
-        )
-
-        try:
-            vendor = Vendor(host.vendor or "generic")
-        except ValueError:
-            vendor = Vendor.GENERIC
-        profile = profile_for(vendor)
-        changes, unsupported = bios.plan_changes(b.attributes, profile, wanted)
+        profile = deps.get_bios_profile(params.profile_id) if params.profile_id else None
+        if profile is not None and profile.model and host.model and profile.model != host.model:
+            raise ConflictError(
+                f"BIOS profile '{profile.name}' was made for a {profile.model}; {host.name} is a {host.model}"
+            )
+        changes, unsupported = plan_bios(host.vendor, inventory.bios, params.settings, profile)
         phrase = f"configure bios {host.name}"
         if changes and confirm != phrase:
-            listed = ", ".join(f"{c.attribute} → {c.after}" for c in changes)
+            listed = ", ".join(f"{c.attribute} → {c.after}" for c in changes[:6])
+            more = f" and {len(changes) - 6} more" if len(changes) > 6 else ""
             raise ConfirmationError(
-                f'This sets {listed} and reboots {host.name}: confirm with exactly "{phrase}"', phrase
+                f'This sets {listed}{more} and reboots {host.name}: confirm with exactly "{phrase}"', phrase
             )
         s = deps.settings
 
@@ -148,4 +185,5 @@ class ConfigureBios(Module):
             deps.save_output(host.id, "bios", ctx.job.id, result)
             return {"bios": result.model_dump(mode="json")}
 
-        return Prepared(run, {"settings": wanted, "changes": [c.attribute for c in changes]})
+        recorded = {"settings": params.settings, "profile_id": params.profile_id}
+        return Prepared(run, recorded | {"changes": [c.attribute for c in changes]})

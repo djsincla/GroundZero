@@ -54,19 +54,37 @@ def pseudonymize(value: Any, pseudo: Pseudonymizer) -> Any:
     return pseudo.text(value) if isinstance(value, str) else value
 
 
-def sanitize(value: Any, key: str = "", pseudo: Pseudonymizer | None = None) -> Any:
+_VERSION_KEY = re.compile(r"version|build|release|firmware|revision", re.IGNORECASE)
+
+
+def sanitize(
+    value: Any, key: str = "", pseudo: Pseudonymizer | None = None, settings: frozenset[str] = frozenset()
+) -> Any:
+    """``settings``: values a BIOS attribute registry lists as allowed (Enabled, OnConRedirAuto, ...). They
+    are choices, not identifiers, so they're kept even under a key that sounds sensitive (SerialComm)."""
     pseudo = pseudo or Pseudonymizer()
     if isinstance(value, dict):
-        return {k: sanitize(v, k, pseudo) for k, v in value.items()}
+        return {k: sanitize(v, k, pseudo, settings) for k, v in value.items()}
     if isinstance(value, list):
-        return [sanitize(v, key, pseudo) for v in value]
+        return [sanitize(v, key, pseudo, settings) for v in value]
     if isinstance(value, str):
+        if value in settings:
+            return value
         if key not in _KEEP_KEYS and _SENSITIVE_KEY.search(key) and value:
             return "REDACTED"
-        if "version" in key.lower():  # firmware versions like 7.10.70.00 look like IPv4 addresses
+        if _VERSION_KEY.search(key):  # versions like 7.10.70.00 or 9.0.1.0 look like IPv4 addresses
             return value
         return pseudo.text(value)
     return value
+
+
+def registry_values(responses: dict[str, dict[str, Any]]) -> frozenset[str]:
+    """Every allowed value named by any attribute registry among the recorded responses."""
+    found: set[str] = set()
+    for body in responses.values():
+        for attr in (body.get("RegistryEntries") or {}).get("Attributes") or []:
+            found.update(str(v["ValueName"]) for v in attr.get("Value") or [] if "ValueName" in v)
+    return frozenset(found)
 
 
 def _filename(path: str) -> str:
@@ -84,10 +102,11 @@ class Recorder:
         directory.mkdir(parents=True, exist_ok=True)
         index: dict[str, str] = {}
         pseudo = Pseudonymizer()
+        settings = registry_values(self.responses)
         for path, body in sorted(self.responses.items()):
             name = _filename(path)
             index[path] = name
-            clean = sanitize(body, pseudo=pseudo)
+            clean = sanitize(body, pseudo=pseudo, settings=settings)
             (directory / name).write_text(json.dumps(clean, indent=2, sort_keys=True) + "\n")
         (directory / "index.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
         return len(index)

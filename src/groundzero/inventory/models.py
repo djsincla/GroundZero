@@ -65,6 +65,7 @@ class BiosSettings(BaseModel):
     cpu_virtualization: bool | None = None
     iommu: bool | None = None
     attributes: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    registry_id: str | None = Field(default=None, description="The attribute registry the BIOS names")
 
 
 class BmcInfo(BaseModel):

@@ -54,6 +54,7 @@ from groundzero.isos import Image, IsoRepository
 from groundzero.media.registry import MediaRegistry
 from groundzero.modules import REGISTRY
 from groundzero.modules.base import Inputs
+from groundzero.modules.bios import plan_bios
 from groundzero.modules.os import install_config
 from groundzero.modules.outputs import OUTPUTS
 from groundzero.modules.prep import current_jumbo
@@ -64,6 +65,17 @@ from groundzero.ova.descriptor import OvfDescriptor, descriptor_schema, read_ova
 from groundzero.ova.profiles import ApplianceProfile, ApplianceProfileWrite, check_values
 from groundzero.preflight.evaluate import PreflightReport, load_profile
 from groundzero.readiness import ReadinessReport, assess
+from groundzero.redfish.bios_profiles import (
+    BiosCapture,
+    BiosImport,
+    BiosPlan,
+    BiosProfile,
+    BiosProfileWrite,
+    RegistryInfo,
+    capture_defaults,
+    parse_import,
+)
+from groundzero.redfish.bios_registry import BiosRegistry, fetch_registry
 from groundzero.redfish.capture import load_recording
 from groundzero.redfish.client import RedfishClient
 from groundzero.redfish.detect import detect
@@ -473,6 +485,154 @@ class Services:
         if not self.store.delete_cluster(cluster_id):
             raise NotFoundError(f"Cluster {cluster_id} not found")
 
+    # ── BIOS registries (what each setting accepts) and BIOS profiles ────
+    async def bios_registry_for_host(self, host_id: str, *, refresh: bool = False) -> RegistryInfo:
+        """The registry this server's BIOS names: from the cache when the inventory says which one, else
+        read from the BMC (read-only) and cached for every server of the same model and BIOS version."""
+        host = self.get_host(host_id)
+        inventory = Inputs(self.store, host_id).get("inventory", HostInventory)
+        named = inventory.bios.registry_id if inventory else None
+        if named and not refresh:
+            key = _registry_key(host.model, named)
+            if (cached := self.store.get_bios_registry(key)) is not None:
+                return _registry_info(key, cached[0], cached[1])
+        async with self._client_factory(host, self.bmc_password(host.id)) as client:
+            identity = await detect(client)
+            system = await client.get_json(identity.system_path)
+            bios_path = (system.get("Bios") or {}).get("@odata.id") or f"{identity.system_path}/Bios"
+            bios = await client.get_json(bios_path)
+            registry = await fetch_registry(client, bios)
+        if registry is None:
+            raise NotFoundError(f"{host.name}'s BMC doesn't publish a BIOS attribute registry")
+        key = _registry_key(host.model, str(bios.get("AttributeRegistry") or registry.id))
+        self.store.save_bios_registry(key, host.model, registry)
+        return _registry_info(key, registry, host.model)
+
+    def bios_plan(self, host_id: str, profile_id: str | None) -> BiosPlan:
+        """What Configure BIOS would write now (from the latest inventory; nothing is read or changed)."""
+        host = self.get_host(host_id)
+        inventory = Inputs(self.store, host_id).require(
+            "inventory", HostInventory, "Discover the hardware first (inventory or preflight)"
+        )
+        profile = self.get_bios_profile(profile_id) if profile_id else None
+        changes, unsupported = plan_bios(host.vendor, inventory.bios, None, profile)
+        meta = Inputs(self.store, host_id).meta("inventory")
+        return BiosPlan(
+            changes=changes, unsupported=unsupported, inventory_at=meta.created_at if meta else utcnow()
+        )
+
+    def bios_registry(self, key: str) -> RegistryInfo:
+        found = self.store.get_bios_registry(key)
+        if found is None:
+            raise NotFoundError(f"No cached BIOS registry {key}: read one from a server first")
+        return _registry_info(key, found[0], found[1])
+
+    def _registry(self, key: str) -> tuple[BiosRegistry, str | None]:
+        found = self.store.get_bios_registry(key)
+        if found is None:
+            raise SettingsValidationError(
+                "profile",
+                [{"loc": ["registry"], "msg": f"No cached BIOS registry {key}", "type": "not_found"}],
+            )
+        return found
+
+    def list_bios_profiles(self) -> list[BiosProfile]:
+        return self.store.list_bios_profiles()
+
+    def get_bios_profile(self, profile_id: str) -> BiosProfile:
+        found = self.store.get_bios_profile(profile_id)
+        if found is None:
+            raise NotFoundError(f"BIOS profile {profile_id} not found")
+        return found
+
+    def save_bios_profile(
+        self, req: BiosProfileWrite, profile_id: str | None = None, source: str | None = None
+    ) -> BiosProfile:
+        """Every value is checked against the registry: allowed values, bounds, read-only, no passwords."""
+        current = self.get_bios_profile(profile_id) if profile_id else None
+        other = next((p for p in self.store.list_bios_profiles() if p.name == req.name), None)
+        if other is not None and other.id != profile_id:
+            raise ConflictError(f"A BIOS profile named '{req.name}' already exists")
+        registry, model = self._registry(req.registry)
+        problems = registry.check(req.attributes)
+        if problems:
+            raise SettingsValidationError(
+                "profile",
+                [{"loc": ["attributes", name], "msg": msg, "type": kind} for name, msg, kind in problems],
+            )
+        now = utcnow()
+        profile = BiosProfile(
+            **req.model_dump(),
+            id=current.id if current else new_id(),
+            model=model,
+            source=source or (current.source if current else "manual"),
+            created_at=current.created_at if current else now,
+            updated_at=now,
+        )
+        self.store.save_bios_profile(profile)
+        return profile
+
+    async def capture_bios_profile(self, host_id: str, req: BiosCapture) -> BiosProfile:
+        """A profile from the server's current settings (its latest inventory), keeping the ones chosen."""
+        host = self.get_host(host_id)
+        inventory = Inputs(self.store, host_id).require(
+            "inventory", HostInventory, "Discover the hardware first: the capture reads its BIOS settings"
+        )
+        info = await self.bios_registry_for_host(host_id)
+        registry, _ = self._registry(info.key)
+        current = inventory.bios.attributes
+        keep = req.attributes if req.attributes is not None else capture_defaults(registry, current)
+        missing = [k for k in keep if current.get(k) is None]
+        if missing:
+            raise SettingsValidationError(
+                "capture",
+                [
+                    {"loc": ["attributes", k], "msg": "Not reported by this BIOS", "type": "missing"}
+                    for k in missing
+                ],
+            )
+        values = {k: v for k, v in current.items() if k in keep and isinstance(v, str | int | bool)}
+        write = BiosProfileWrite(
+            name=req.name, description=req.description, registry=info.key, attributes=values
+        )
+        return self.save_bios_profile(write, source=f"captured from {host.name}")
+
+    def import_bios_profile(self, req: BiosImport) -> BiosProfile:
+        """A profile from a file. Settings the BIOS won't take (read-only, passwords) are left out."""
+        registry, _ = self._registry(req.registry)
+        try:
+            values = parse_import(req.content, registry)
+        except ValueError as exc:
+            raise SettingsValidationError(
+                "import", [{"loc": ["content"], "msg": str(exc), "type": "invalid"}]
+            ) from exc
+        settable = {
+            k: v for k, v in values.items()
+            if not ((a := registry.attributes.get(k)) is not None and (a.read_only or a.type == "Password"))
+        }  # fmt: skip
+        if not settable:
+            raise SettingsValidationError(
+                "import",
+                [{"loc": ["content"], "msg": "No settable BIOS attributes in the file", "type": "empty"}],
+            )
+        write = BiosProfileWrite(
+            name=req.name, description=req.description, registry=req.registry, attributes=settable
+        )
+        return self.save_bios_profile(write, source="imported")
+
+    def delete_bios_profile(self, profile_id: str) -> None:
+        profile = self.get_bios_profile(profile_id)
+
+        def uses(spec: Spec) -> bool:
+            return any(
+                st.task == "bios.configure" and st.params.get("profile_id") == profile_id for st in spec.steps
+            )
+
+        users = [s.name for s in self.store.list_specs() if uses(s)]
+        if users:
+            raise ConflictError(f"BIOS profile '{profile.name}' is used by spec {', '.join(users)}")
+        self.store.delete_bios_profile(profile_id)
+
     # ── specs: the jobs picked for a server or a cluster ────────────────
     def list_specs(self) -> list[Spec]:
         return self.store.list_specs()
@@ -517,7 +677,7 @@ class Services:
             except ValidationError as exc:
                 for e in exc.errors():
                     bad([*at, "params", *e["loc"]], e["msg"], e["type"])
-            for key, msg in self._missing_references(step.params):
+            for key, msg in self._missing_references(step.task, step.params):
                 bad([*at, "params", key], msg, "not_found")
             steps.append(SpecStep(task=step.task, params=step.params))
         if errors:
@@ -534,7 +694,7 @@ class Services:
         self.store.save_spec(spec)
         return spec
 
-    def _missing_references(self, params: dict[str, Any]) -> list[tuple[str, str]]:
+    def _missing_references(self, task: str, params: dict[str, Any]) -> list[tuple[str, str]]:
         """Ids a step refers to that don't exist (ISOs and OVAs, config sets, appliance profiles)."""
         missing = []
         for key in ("iso_id", "image_id"):
@@ -542,8 +702,12 @@ class Services:
                 missing.append((key, f"Image {params[key]} is not in the repository"))
         if params.get("config_set_id") and self.store.get_config_set(str(params["config_set_id"])) is None:
             missing.append(("config_set_id", f"Config set {params['config_set_id']} not found"))
-        if params.get("profile_id") and self.store.get_appliance_profile(str(params["profile_id"])) is None:
-            missing.append(("profile_id", f"Appliance profile {params['profile_id']} not found"))
+        profile_id = str(params.get("profile_id") or "")
+        if profile_id and task == "bios.configure":
+            if self.store.get_bios_profile(profile_id) is None:
+                missing.append(("profile_id", f"BIOS profile {profile_id} not found"))
+        elif profile_id and self.store.get_appliance_profile(profile_id) is None:
+            missing.append(("profile_id", f"Appliance profile {profile_id} not found"))
         return missing
 
     def delete_spec(self, spec_id: str) -> None:
@@ -802,7 +966,12 @@ class Services:
             has_os_access=self.store.get_os_access(host_id) is not None,
             chosen=chosen,
             spec_params=params,
+            lookup=self._lookup,
         )
+
+    def _lookup(self, kind: str, ref: str) -> Any:
+        """What a task's parameters point at, for judging "not needed" (None if it's gone)."""
+        return self.store.get_bios_profile(ref) if kind == "bios_profile" else None
 
     def start_task(self, host_id: str, task_id: str, run: TaskRun) -> Job:
         """Start any catalog task: its inputs must exist and be current, its parameters valid."""
@@ -1057,4 +1226,21 @@ def _in_range(ip: str, first: str, last: str) -> bool:
         int(ipaddress.IPv4Address(first))
         <= int(ipaddress.IPv4Address(ip))
         <= int(ipaddress.IPv4Address(last))
+    )
+
+
+def _registry_key(model: str | None, registry_id: str) -> str:
+    return f"{model or 'unknown'}|{registry_id}"
+
+
+def _registry_info(key: str, registry: BiosRegistry, model: str | None) -> RegistryInfo:
+    """The settable attributes, in BIOS setup order: what an editor offers."""
+    settable = sorted(
+        (a for a in registry.attributes.values() if a.settable), key=lambda a: (a.order, a.name)
+    )
+    return RegistryInfo(
+        key=key,
+        id=registry.id,
+        model=model,
+        attributes=[a.model_dump(exclude={"help"}) | {"help": a.help} for a in settable],
     )

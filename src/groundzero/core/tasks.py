@@ -109,13 +109,18 @@ def params_schema(task_id: str) -> dict[str, Any]:
     return module.params_schema() if module else {}
 
 
-def satisfied(task_id: str, outputs: dict[str, dict[str, Any]], params: dict[str, Any]) -> str | None:
+def satisfied(
+    task_id: str,
+    outputs: dict[str, dict[str, Any]],
+    params: dict[str, Any],
+    lookup: Callable[[str, str], Any] | None = None,
+) -> str | None:
     """Why a task has nothing to do on this host (the module's own judgement), or None."""
     from groundzero.modules import REGISTRY
 
     module = REGISTRY.get(task_id)
     try:
-        return module.satisfied(outputs, params) if module else None
+        return module.satisfied(outputs, params, lookup) if module else None
     except (KeyError, TypeError, AttributeError):
         return None
 
@@ -277,6 +282,7 @@ def evaluate_pipeline(
     has_os_access: bool,
     chosen: PipelineSpec | None = None,
     spec_params: dict[str, dict[str, Any]] | None = None,
+    lookup: Callable[[str, str], Any] | None = None,
 ) -> Pipeline:
     """Pure function: the state of every task for one host, and the recommended next step.
 
@@ -362,9 +368,15 @@ def evaluate_pipeline(
             state = "blocked"
         else:
             state = "ready"
-        reason = satisfied(spec.id, current, spec_params.get(spec.id, {})) if state == "ready" else None
-        if reason:
+        params = spec_params.get(spec.id, {})
+        reason = satisfied(spec.id, current, params, lookup) if state in ("ready", "done") else None
+        if state == "ready" and reason:
             state = "not_needed"
+        elif state == "done" and spec.conditional and reason is None and spec.requires:
+            # It ran, but what it judges from has moved on (a BIOS reset, a changed profile): due again.
+            state = "ready"
+        if state == "done":
+            reason = None
         states[spec.id] = TaskState(
             **info(spec, params_schema(spec.id)).model_dump(),
             state=state,

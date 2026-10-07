@@ -5,6 +5,33 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+### Added
+- **BIOS profiles:** saved BIOS settings, checked against what the server's BIOS accepts. Configure BIOS
+  applies them: only the settings that differ are written, with one reboot, and read back afterwards.
+  - Three ways to make one:
+    - **Capture** from a server's current settings. By default it keeps the choices (lists, numbers,
+      on/off) and leaves out per-server text such as asset tags and iSCSI names.
+    - **Edit** in GroundZero, from the BIOS's own attribute registry: each setting's name, allowed
+      values, bounds and the menu it sits in.
+    - **Import** a file: a plain `{attribute: value}` map, or a Dell Server Configuration Profile export.
+  - The registry is read from the BMC once (read-only) and cached per model and BIOS version.
+  - Values are checked before anything is saved. Read-only settings and BIOS passwords never go in a
+    profile.
+  - A profile's own value wins over the Holodeck basics (virtualization, IOMMU, UEFI) for any attribute
+    both touch.
+  - The Configure BIOS dialog shows what a profile would change before you confirm. Specs can pick a
+    profile for their Configure BIOS step, which is "not needed" once the server matches it.
+  - On the command line: `groundzero bios-profile list|show|capture|import|delete`.
+
+### Changed
+- A task that judges itself from its inputs (Configure BIOS) goes back to ready when they move on, for
+  example after a BIOS reset or a profile change, instead of staying done.
+
+### Fixed
+- Recorded test fixtures no longer redact BIOS settings whose names sound sensitive (`SerialComm`,
+  `SubNumaCluster`): values the BIOS registry lists as choices are kept.
+- Job diagnostics now redact BIOS password attributes such as `SetupPassword`.
+
 ## [0.9.0] - 2026-10-07
 
 Specs: pick the jobs each server or cluster runs, and run them as one.
