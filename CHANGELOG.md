@@ -5,6 +5,10 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-07
+
+BIOS profiles: capture, edit or import saved BIOS settings, and apply them with Configure BIOS.
+
 ### Added
 - **BIOS profiles:** saved BIOS settings, checked against what the server's BIOS accepts. Configure BIOS
   applies them: only the settings that differ are written, with one reboot, and read back afterwards.
@@ -238,7 +242,8 @@ R740xd.
   - Functional, browser and live test suites.
   - A single-container bundle.
 
-[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/djsincla/GroundZero/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/djsincla/GroundZero/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/djsincla/GroundZero/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/djsincla/GroundZero/compare/v0.6.0...v0.7.0
