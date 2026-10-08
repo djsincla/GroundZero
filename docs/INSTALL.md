@@ -194,6 +194,9 @@ Give it several BMCs, or a file with one per line (`address` or `address usernam
 `index.html` comparing them, with anything that differs highlighted. Handy for spotting the one host in a
 cluster that's a BIOS release behind.
 
+Already have Node.js 20 or newer? Grab `gz-hwreport.mjs` from the same release instead: one file, no
+dependencies, the same report. Run it with `node gz-hwreport.mjs 192.0.2.50`.
+
 With GroundZero installed, `groundzero hwreport` is the same tool. Inside GroundZero itself every host
 has a **Report** button, and every cluster has one too.
 

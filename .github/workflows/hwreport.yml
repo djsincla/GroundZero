@@ -1,7 +1,7 @@
 name: hwreport
 
-# Builds gz-hwreport, the standalone hardware report, as one executable per platform and attaches them to
-# the GitHub release. Runs when a release is published, or by hand (the files are then kept as artifacts).
+# Builds gz-hwreport, the standalone hardware report, as one executable per platform, checks the Node.js
+# version, and attaches them all to the GitHub release. Runs when a release is published, or by hand (the files are then kept as artifacts).
 on:
   release:
     types: [published]
@@ -54,3 +54,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ github.event.release.tag_name }}" "dist/${{ matrix.asset }}" --clobber
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check it runs on Node 20 (a recorded R740xd, no network)
+        run: |
+          node node/gz-hwreport.mjs --version
+          node node/gz-hwreport.mjs --replay tests/fixtures/dell-r740xd 192.0.2.10 192.0.2.11 -o check
+          ls check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gz-hwreport.mjs
+          path: node/gz-hwreport.mjs
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" node/gz-hwreport.mjs --clobber

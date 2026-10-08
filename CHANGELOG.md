@@ -5,6 +5,11 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+### Added
+- **gz-hwreport for Node.js:** the hardware report as one dependency-free file (`gz-hwreport.mjs`, Node 20+),
+  attached to each release. It's a port of the Python collector, and CI replays the same recorded server
+  through both and fails if their reports differ in any field.
+
 ## [0.11.0] - 2026-10-07
 
 Configure storage from profiles, a full hardware inventory, reports, and gz-hwreport: a hardware report with nothing to set up.
