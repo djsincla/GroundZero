@@ -5,6 +5,10 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-07
+
+Configure storage from profiles, a full hardware inventory, reports, and gz-hwreport: a hardware report with nothing to set up.
+
 ### Added
 - **gz-hwreport:** a standalone hardware report, with nothing to set up. It reads one or more BMCs
   over Redfish (read-only) and writes a self-contained HTML page and a JSON file per server.
@@ -282,7 +286,8 @@ R740xd.
   - Functional, browser and live test suites.
   - A single-container bundle.
 
-[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/djsincla/GroundZero/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/djsincla/GroundZero/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/djsincla/GroundZero/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/djsincla/GroundZero/compare/v0.7.0...v0.8.0
