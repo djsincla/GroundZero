@@ -64,6 +64,7 @@
     pre { background: var(--code-bg); color: var(--code-text); border-radius: 12px; padding: 18px 20px; overflow-x: auto; font-size: 14px; line-height: 1.55; margin: 0; }
     pre .c { color: #64748b; }
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+    .two > div { min-width: 0; }  /* lets a code block scroll inside its column instead of widening the page */
     .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 99px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
     .badge.done { color: #16a34a; }
     .badge.next { color: var(--accent); }
@@ -78,6 +79,10 @@
     figcaption { padding: 12px 16px 14px; font-size: 14px; color: var(--muted); }
     figcaption strong { color: var(--text); }
     .note { font-size: 13px; color: var(--muted); margin-top: 14px; }
+    .downloads { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
+    .downloads a { display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 99px;
+      background: var(--panel); font-size: 14px; text-decoration: none; }
+    .downloads a:hover { border-color: var(--accent); }
     footer { padding: 36px 0 56px; color: var(--muted); font-size: 14px; }
     footer p { margin: 6px 0; }
     @media (max-width: 760px) {
@@ -102,6 +107,7 @@
         </a>
         <span class="links">
           <a href="#features">What it does</a>&nbsp;&nbsp;&nbsp;
+          <a href="#hwreport">Hardware report</a>&nbsp;&nbsp;&nbsp;
           <a href="#tour">Screenshots</a>&nbsp;&nbsp;&nbsp;
           <a href="#how">How it works</a>&nbsp;&nbsp;&nbsp;
           <a href="#start">Installing it</a>
@@ -159,6 +165,51 @@
           <div class="card"><h3>Credentials and certificates</h3>
             <p>Credentials are encrypted at rest and never returned by the API. BMC and ESXi certificates are
               pinned on first contact, and anything destructive asks you to type a confirmation first.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="hwreport">
+      <div class="wrap two">
+        <div>
+          <h2>gz-hwreport: the hardware report on its own</h2>
+          <p class="sub">Most of the time I just want to know what is in a box: which BIOS it is on, or which
+            firmware the PERC is running. gz-hwreport answers that without
+            installing anything. Point it at one or more BMCs and it reads them over Redfish, read-only, and writes
+            an HTML page and a JSON file for each server.</p>
+          <p>The page covers firmware versions for every component, CPUs, memory modules, drives and RAID volumes,
+            network adapters and ports, PCIe devices including HBAs and NICs, power supplies, the BIOS and the BMC.
+            It opens anywhere and prints to PDF.</p>
+          <p>Give it several BMCs and it adds a page comparing them, with anything that differs highlighted. In
+            practice that is how you find the one host in a cluster that is a BIOS release behind, before it finds
+            you during an upgrade.</p>
+          <ul class="downloads">
+            <li><a href="https://github.com/djsincla/GroundZero/releases/latest/download/gz-hwreport.mjs">Node.js (any platform)</a></li>
+            <li><a href="https://github.com/djsincla/GroundZero/releases/latest/download/gz-hwreport-macos-arm64">macOS (Apple silicon)</a></li>
+            <li><a href="https://github.com/djsincla/GroundZero/releases/latest/download/gz-hwreport-linux-x86_64">Linux x86_64</a></li>
+            <li><a href="https://github.com/djsincla/GroundZero/releases/latest/download/gz-hwreport-linux-arm64">Linux arm64</a></li>
+            <li><a href="https://github.com/djsincla/GroundZero/releases/latest/download/gz-hwreport-windows-x86_64.exe">Windows</a></li>
+          </ul>
+          <p class="note">The executables need nothing installed. The Node.js file is a single script with no
+            dependencies and needs Node 20 or newer. They report exactly the same thing: the build replays a
+            recorded server through both and fails if they disagree on a single field.</p>
+        </div>
+        <div>
+<pre><span class="c"># one server, with Node.js</span>
+GZ_BMC_PASSWORD='...' node gz-hwreport.mjs 192.0.2.50
+
+<span class="c"># or the executable for your platform</span>
+chmod +x gz-hwreport-macos-arm64
+GZ_BMC_PASSWORD='...' ./gz-hwreport-macos-arm64 192.0.2.50
+
+<span class="c"># several servers, compared</span>
+node gz-hwreport.mjs 192.0.2.50 192.0.2.51 192.0.2.52
+
+<span class="c"># from a file: "address" or "address username" per line</span>
+node gz-hwreport.mjs -f bmcs.txt -o reports</pre>
+          <p class="note">Without GZ_BMC_PASSWORD it asks for the password once. BMC certificates are usually
+            self-signed, so it doesn't check them unless you add --verify-tls. macOS will want you to allow the
+            executable the first time, since it isn't signed.</p>
         </div>
       </div>
     </section>
@@ -257,6 +308,9 @@ uv run groundzero pipeline esxi1</pre>
           <tr><td><span class="badge done">done</span></td><td>Capture a profile from a running appliance, adopt a VM you deployed by hand, correct recorded outputs</td></tr>
           <tr><td><span class="badge done">done</span></td><td>Configure BIOS: VT-x, VT-d and UEFI boot mode set over Redfish with one reboot, only where preflight found them off</td></tr>
           <tr><td><span class="badge done">done</span></td><td>Cluster mode: hostnames from iDRAC names, addresses from a pool, and an optional DNS check before anything is installed</td></tr>
+          <tr><td><span class="badge done">done</span></td><td>Specs: pick the jobs each server or cluster runs, then run them as one, approved once, with every cluster member in parallel</td></tr>
+          <tr><td><span class="badge done">done</span></td><td>BIOS profiles checked against the BIOS's own attribute registry, and storage profiles for RAID volumes, controller mode, drive state and hot spares, both planned before anything is written</td></tr>
+          <tr><td><span class="badge done">done</span></td><td>A full hardware inventory, printable server and cluster reports, and gz-hwreport on its own as an executable or a Node.js file</td></tr>
           <tr><td><span class="badge next">next</span></td><td>The Holodeck deploy itself: staging the binaries on the Holorouter and running the deployment</td></tr>
           <tr><td><span class="badge">planned</span></td><td>Windows guest customisation</td></tr>
         </table>

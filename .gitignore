@@ -33,3 +33,6 @@ GroundZero-Scans/
 # Installer media (large, licensed binaries)
 images/
 *.iso
+
+# gz-hwreport output (real server details): never commit
+hwreport-*/
