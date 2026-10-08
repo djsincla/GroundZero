@@ -5,6 +5,10 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-08
+
+The hardware report as one Node.js file.
+
 ### Added
 - **gz-hwreport for Node.js:** the hardware report as one dependency-free file (`gz-hwreport.mjs`, Node 20+),
   attached to each release. It's a port of the Python collector, and CI replays the same recorded server
@@ -291,7 +295,8 @@ R740xd.
   - Functional, browser and live test suites.
   - A single-container bundle.
 
-[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/djsincla/GroundZero/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/djsincla/GroundZero/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/djsincla/GroundZero/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/djsincla/GroundZero/compare/v0.8.0...v0.9.0

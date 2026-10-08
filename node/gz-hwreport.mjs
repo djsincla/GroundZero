@@ -20,7 +20,7 @@ import { request as httpsRequest } from "node:https";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
-const VERSION = "0.11.0";
+const VERSION = "0.11.1";
 
 // ── Redfish client: a session (or Basic auth), GETs, logout ─────────────────
 class Redfish {
