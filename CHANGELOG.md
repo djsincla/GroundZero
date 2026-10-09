@@ -5,6 +5,16 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+### Added
+- **A guide for gz-hwreport (Node.js).** `node/README.md` covers what you need, how to run it, every option,
+  the output files, exit codes, and what to check when a BMC won't answer.
+  - It ships with the file on each release, in `gz-hwreport-node.zip` and as `gz-hwreport-README.md`.
+  - A test makes sure every option the tool accepts is in the guide.
+
+### Fixed
+- The Node.js gz-hwreport accepts a BMC on another port (`192.0.2.5:8443`) and IPv6 in brackets, as the
+  Python version does.
+
 ## [0.11.1] - 2026-10-08
 
 The hardware report as one Node.js file.

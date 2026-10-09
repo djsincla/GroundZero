@@ -195,7 +195,9 @@ Give it several BMCs, or a file with one per line (`address` or `address usernam
 cluster that's a BIOS release behind.
 
 Already have Node.js 20 or newer? Grab `gz-hwreport.mjs` from the same release instead: one file, no
-dependencies, the same report. Run it with `node gz-hwreport.mjs 192.0.2.50`.
+dependencies, the same report. Run it with `node gz-hwreport.mjs 192.0.2.50`. Its
+[guide](https://github.com/djsincla/GroundZero/blob/main/node/README.md) covers the options, the output and
+what to check when a BMC won't answer, and it ships next to the file in `gz-hwreport-node.zip`.
 
 With GroundZero installed, `groundzero hwreport` is the same tool. Inside GroundZero itself every host
 has a **Report** button, and every cluster has one too.

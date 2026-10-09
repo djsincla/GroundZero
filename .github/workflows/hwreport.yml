@@ -67,12 +67,25 @@ jobs:
           node node/gz-hwreport.mjs --version
           node node/gz-hwreport.mjs --replay tests/fixtures/dell-r740xd 192.0.2.10 192.0.2.11 -o check
           ls check
+      - name: Package it with its README
+        run: |
+          mkdir -p dist/gz-hwreport-node
+          cp node/gz-hwreport.mjs node/README.md dist/gz-hwreport-node/
+          cp node/README.md dist/gz-hwreport-README.md
+          cp node/gz-hwreport.mjs dist/
+          (cd dist && zip -r gz-hwreport-node.zip gz-hwreport-node)
+          unzip -l dist/gz-hwreport-node.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: gz-hwreport.mjs
-          path: node/gz-hwreport.mjs
+          name: gz-hwreport-node
+          path: |
+            dist/gz-hwreport.mjs
+            dist/gz-hwreport-README.md
+            dist/gz-hwreport-node.zip
       - name: Attach to the release
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" node/gz-hwreport.mjs --clobber
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" --clobber \
+            dist/gz-hwreport.mjs dist/gz-hwreport-README.md dist/gz-hwreport-node.zip

@@ -106,3 +106,13 @@ def test_the_node_version_matches_groundzero() -> None:
     from groundzero import __version__
 
     assert f'const VERSION = "{__version__}";' in SCRIPT.read_text()  # bump it with pyproject.toml
+
+
+def test_the_readme_covers_every_option() -> None:
+    import re
+
+    readme = (ROOT / "node" / "README.md").read_text()
+    shown = subprocess.run(["node", str(SCRIPT), "--help"], capture_output=True, text=True, timeout=60).stdout
+    options = set(re.findall(r"(?<![\w-])(--[a-z][a-z-]+|-[a-z])\b", shown))
+    assert options and not [o for o in sorted(options) if f"`{o}" not in readme and f" {o}" not in readme]
+    assert "GZ_BMC_PASSWORD" in readme and "GZ_BMC_USERNAME" in readme

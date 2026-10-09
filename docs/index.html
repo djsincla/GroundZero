@@ -184,6 +184,7 @@
             practice that is how you find the one host in a cluster that is a BIOS release behind, before it finds
             you during an upgrade.</p>
           <ul class="downloads">
+            <li><a href="https://github.com/djsincla/GroundZero/releases/latest/download/gz-hwreport-node.zip">Node.js with its guide (zip)</a></li>
             <li><a href="https://github.com/djsincla/GroundZero/releases/latest/download/gz-hwreport.mjs">Node.js (any platform)</a></li>
             <li><a href="https://github.com/djsincla/GroundZero/releases/latest/download/gz-hwreport-macos-arm64">macOS (Apple silicon)</a></li>
             <li><a href="https://github.com/djsincla/GroundZero/releases/latest/download/gz-hwreport-linux-x86_64">Linux x86_64</a></li>
@@ -209,7 +210,9 @@ node gz-hwreport.mjs 192.0.2.50 192.0.2.51 192.0.2.52
 node gz-hwreport.mjs -f bmcs.txt -o reports</pre>
           <p class="note">Without GZ_BMC_PASSWORD it asks for the password once. BMC certificates are usually
             self-signed, so it doesn't check them unless you add --verify-tls. macOS will want you to allow the
-            executable the first time, since it isn't signed.</p>
+            executable the first time, since it isn't signed. The
+            <a href="https://github.com/djsincla/GroundZero/blob/main/node/README.md">full guide</a> covers every
+            option, the output files and what to check when a BMC won't answer.</p>
         </div>
       </div>
     </section>

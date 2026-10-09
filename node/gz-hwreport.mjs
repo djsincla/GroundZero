@@ -9,7 +9,8 @@
 // processors, memory modules, drives, RAID volumes, network adapters and ports, PCIe devices (storage
 // controllers, HBAs, NICs), power supplies, BIOS and BMC. Each server gets one self-contained HTML page and a
 // JSON file. The BMC password comes from GZ_BMC_PASSWORD, or is asked for once. BMC certificates are usually
-// self-signed, so they aren't checked unless --verify-tls is given.
+// self-signed, so they aren't checked unless --verify-tls is given. The full guide is README.md, alongside
+// this file in gz-hwreport-node.zip on each release, and at https://github.com/djsincla/GroundZero/tree/main/node
 //
 // This is a port of GroundZero's Python collector (groundzero.inventory.collect, groundzero.redfish.storage,
 // groundzero.hwreport). Its JSON matches the Python tool's field for field: CI replays the same recorded
@@ -37,7 +38,8 @@ class Redfish {
     else if (this.basic) headers.Authorization = `Basic ${Buffer.from(`${this.username}:${this.password}`).toString("base64")}`;
     for (let attempt = 0; ; attempt++) {
       const res = await new Promise((resolve, reject) => {
-        const req = httpsRequest({ host: this.host, path, method, headers, rejectUnauthorized: this.verifyTls, timeout: 60_000 }, (r) => {
+        const [, host, port] = /^\[?([^\]]+?)\]?(?::(\d+))?$/.exec(this.host) ?? [null, this.host, null]; // "bmc", "bmc:8443", "[fe80::1]:443"
+        const req = httpsRequest({ host, port: port ? Number(port) : 443, path, method, headers, rejectUnauthorized: this.verifyTls, timeout: 60_000 }, (r) => {
           const chunks = [];
           r.on("data", (c) => chunks.push(c));
           r.on("end", () => resolve({ status: r.statusCode, headers: r.headers, text: Buffer.concat(chunks).toString("utf8") }));
