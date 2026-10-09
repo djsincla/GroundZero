@@ -5,6 +5,10 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-10-09
+
+The Node.js hardware report now comes with its guide.
+
 ### Added
 - **A guide for gz-hwreport (Node.js).** `node/README.md` covers what you need, how to run it, every option,
   the output files, exit codes, and what to check when a BMC won't answer.
@@ -305,7 +309,8 @@ R740xd.
   - Functional, browser and live test suites.
   - A single-container bundle.
 
-[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/djsincla/GroundZero/compare/v0.11.2...HEAD
+[0.11.2]: https://github.com/djsincla/GroundZero/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/djsincla/GroundZero/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/djsincla/GroundZero/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/djsincla/GroundZero/compare/v0.9.0...v0.10.0
