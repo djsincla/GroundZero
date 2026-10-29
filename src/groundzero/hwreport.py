@@ -87,7 +87,7 @@ async def read_all(
 
     async def one(target: Target) -> Result:
         async with gate:
-            _say(f"Reading {target.address} …", err=True)
+            _say(f"Reading {target.address} ...")
             return await read_one(target, password, verify_tls=verify_tls, replay=replay)
 
     return list(await asyncio.gather(*(one(t) for t in targets)))

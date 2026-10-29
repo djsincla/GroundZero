@@ -83,6 +83,8 @@ def test_node_writes_the_pages_and_compares(tmp_path: Path) -> None:
         timeout=120,
     )
     assert run.returncode == 0 and "2 of 2 servers read" in run.stdout
+    # Windows PowerShell shows any stderr as an error, so a clean run writes none, and the console gets ASCII.
+    assert run.stderr == "" and run.stdout.isascii()
     page = next(tmp_path.glob("*.11_.html")).read_text()
     for section in ("system", "memory", "storage", "drives", "adapters", "pcie", "psu", "firmware"):
         assert f'data-section="{section}"' in page

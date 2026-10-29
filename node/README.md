@@ -119,6 +119,7 @@ other inventory export, and keep it out of public repositories.
 |---|---|
 | `ECONNREFUSED`, or a timeout after a minute | The BMC isn't reachable on 443 from where you're running it. Try `curl -k https://<bmc>/redfish/v1` from the same machine. |
 | `BMC login refused (401)` | The username or password is wrong, or the account is locked after too many attempts. Some BMCs lock for a few minutes. |
+| A red `NativeCommandError` in Windows PowerShell | That's PowerShell 5.1 (the ISE, or a script with `2>&1`) wrapping anything a program writes to stderr as an error, and the only things gz-hwreport writes there are servers it couldn't read. The line underneath says which one and why. Up to 0.11.2 the "Reading ..." progress lines went there too, so older copies show this on every run. |
 | `certificate` errors | You added `--verify-tls` and the BMC's certificate isn't trusted by this machine. Drop the flag, or trust the CA. |
 | A section is missing from a page | That BMC doesn't publish it over Redfish (older firmware often has no firmware inventory or power supply details). The rest of the report is still complete. |
 | Odd values on a non-Dell server | It's been run end to end on Dell iDRAC9. Other Redfish BMCs go through the generic path, so expect to find something, and an issue with the JSON file attached is the quickest way to get it fixed. |

@@ -486,7 +486,7 @@ async function main(argv) {
   await Promise.all(Array.from({ length: Math.min(opts.parallel, targets.length) }, async () => {
     while (next < targets.length) {
       const i = next++;
-      process.stderr.write(`Reading ${targets[i].address} …\n`);
+      process.stdout.write(`Reading ${targets[i].address} ...\n`);
       const replay = opts.replay && existsSync(join(opts.replay, "index.json")) ? opts.replay : null;
       results[i] = opts.replay && !replay
         ? { address: targets[i].address, name: targets[i].address, inventory: null, storage: null, error: `FileNotFoundError: ${opts.replay}` }

@@ -27,7 +27,9 @@ def test_one_server_gets_a_page_and_json(tmp_path: Path, capsys: pytest.CaptureF
     assert data["bmc"] == "198.51.100.11" and len(data["inventory"]["firmware"]) == 33
     assert data["storage"]["controllers"]
     assert not (tmp_path / "index.html").exists()  # one server: no comparison page
-    assert "1 of 1 servers read" in capsys.readouterr().out
+    said = capsys.readouterr()
+    assert "1 of 1 servers read" in said.out
+    assert said.err == "" and said.out.isascii()  # Windows PowerShell shows any stderr as an error
 
 
 def test_several_servers_are_compared_and_a_failure_is_reported(tmp_path: Path) -> None:
