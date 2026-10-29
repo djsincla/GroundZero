@@ -5,6 +5,18 @@ until 1.0, a minor version (0.x) may change the API, and the release notes say h
 
 ## [Unreleased]
 
+## [0.11.3] - 2026-10-29
+
+gz-hwreport behaves itself in Windows PowerShell.
+
+### Fixed
+- **No more red `NativeCommandError` on every run.** The "Reading ..." progress lines went to stderr, and
+  Windows PowerShell 5.1 (the ISE, or a script with `2>&1`) shows anything there as an error, even when every
+  server was read. Progress now goes to stdout, so stderr only carries servers that couldn't be read. This is
+  in both the Node.js and Python versions, and the guide explains the message for anyone on an older copy.
+- The progress line ended in a Unicode ellipsis that the Windows console garbled into `â€¦`. Everything printed
+  to the console is now plain ASCII, and a test holds it to that.
+
 ## [0.11.2] - 2026-10-09
 
 The Node.js hardware report now comes with its guide.
